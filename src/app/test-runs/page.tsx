@@ -374,8 +374,8 @@ export default function TestRunsPage() {
             {/* Case List Details */}
             <div className="space-y-3 pt-2">
               <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">Test Cases execution logs</h4>
-              <div className="rounded-xl border border-border bg-card overflow-hidden max-h-[35vh] overflow-y-auto">
-                <table className="w-full border-collapse text-left text-xs">
+              <div className="rounded-xl border border-border bg-card overflow-hidden max-h-[35vh] overflow-auto">
+                <table className="w-full border-collapse text-left text-xs min-w-[750px]">
                   <thead>
                     <tr className="border-b border-border bg-muted/40 font-semibold text-muted-foreground text-[10px] uppercase">
                       <th className="p-3">Case Code</th>

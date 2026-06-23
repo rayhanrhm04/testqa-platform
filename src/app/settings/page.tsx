@@ -259,7 +259,8 @@ CREATE TABLE public.users (
           </div>
 
           <div className="rounded-xl border border-border bg-card overflow-hidden">
-            <table className="w-full border-collapse text-left text-sm text-foreground">
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left text-sm text-foreground min-w-[600px]">
               <thead>
                 <tr className="border-b border-border bg-muted/30 font-semibold text-muted-foreground text-xs">
                   <th className="p-4">Name</th>
@@ -320,6 +321,7 @@ CREATE TABLE public.users (
               </tbody>
             </table>
           </div>
+        </div>
         </div>
       )}
 
@@ -469,7 +471,8 @@ CREATE TABLE public.users (
             <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">Current Collaborators</h4>
             {currentShares.length > 0 ? (
               <div className="rounded-xl border border-border bg-card overflow-hidden">
-                <table className="w-full border-collapse text-left text-xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-left text-xs min-w-[500px]">
                   <thead>
                     <tr className="border-b border-border bg-muted/30 font-semibold text-muted-foreground text-[10px] uppercase">
                       <th className="p-3">User</th>
@@ -523,6 +526,7 @@ CREATE TABLE public.users (
                   </tbody>
                 </table>
               </div>
+            </div>
             ) : (
               <div className="text-center py-6 text-xs text-muted-foreground border border-dashed border-border rounded-xl">
                 This project has not been shared yet. Anyone can see it, and standard permissions apply.

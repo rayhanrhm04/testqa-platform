@@ -246,7 +246,7 @@ export default function FeedbackPage() {
       {/* Feedbacks Grid List */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left text-sm text-foreground">
+          <table className="w-full border-collapse text-left text-sm text-foreground min-w-[800px]">
             <thead>
               <tr className="border-b border-border bg-muted/30 font-semibold text-muted-foreground">
                 <th className="p-4 w-24">Code</th>

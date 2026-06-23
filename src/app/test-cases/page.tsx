@@ -490,7 +490,8 @@ export default function TestCasesPage() {
 
           {/* Cases Datatable card */}
           <div className="rounded-xl border border-border bg-card overflow-hidden">
-            <table className="w-full border-collapse text-left text-sm text-foreground">
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left text-sm text-foreground min-w-[900px]">
               <thead>
                 <tr className="border-b border-border bg-muted/30 font-semibold text-muted-foreground text-xs">
                   <th className="p-3 w-10 text-center">
@@ -618,6 +619,7 @@ export default function TestCasesPage() {
                 )}
               </tbody>
             </table>
+          </div>
           </div>
         </div>
       </div>

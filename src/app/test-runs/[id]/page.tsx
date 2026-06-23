@@ -12,17 +12,28 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input, Textarea, FormGroup } from '@/components/ui/input';
+import { Dialog } from '@/components/ui/dialog';
 import Link from 'next/link';
 
 export default function TestRunExecutionPage() {
   const pathname = usePathname();
   const router = useRouter();
   
-  const { testRuns, testCases, testRunResults, updateTestRunResult, updateTestRunStatus, logActivity, projects, projectShares, resetTestRun } = useDataStore();
+  const { 
+    testRuns, testCases, testRunResults, updateTestRunResult, 
+    updateTestRunStatus, logActivity, projects, projectShares, 
+    resetTestRun, addFeedback 
+  } = useDataStore();
   const { currentUser, activeRole, mockUsers } = useAuthStore();
   const { addToast } = useUIStore();
 
   const [activeCaseId, setActiveCaseId] = React.useState<string | null>(null);
+  
+  // Failure popup state
+  const [isFailModalOpen, setIsFailModalOpen] = React.useState(false);
+  const [failTitle, setFailTitle] = React.useState('');
+  const [failDescription, setFailDescription] = React.useState('');
+  const [failNotes, setFailNotes] = React.useState('');
   
   // Execution details inputs
   const [actualResult, setActualResult] = React.useState('');
@@ -147,7 +158,12 @@ export default function TestRunExecutionPage() {
   }, [activeCase, canModifyProject]);
 
   // Handle saving result
-  const handleLogResult = async (resultType: 'Pass' | 'Fail' | 'Blocked') => {
+  const handleLogResult = async (
+    resultType: 'Pass' | 'Fail' | 'Blocked',
+    customActual?: string,
+    customNotes?: string,
+    createFeedbackTitle?: string
+  ) => {
     if (!activeCaseId || !activeCase) return;
     if (!canModifyProject(activeCase.project_id)) {
       addToast('Permissions denied. You must be an Editor on this project to submit results.', 'error');
@@ -160,19 +176,42 @@ export default function TestRunExecutionPage() {
         await updateTestRunStatus(run.id, 'In Progress');
       }
 
+      const finalActual = resultType === 'Pass'
+        ? 'Expected outcome matches.'
+        : (customActual || actualResult || 'Test failed.');
+      const finalNotes = customNotes !== undefined ? customNotes : executionNotes;
+
       // 2. Submit test result
       await updateTestRunResult(
         run.id, 
         activeCaseId, 
         resultType, 
-        resultType === 'Pass' ? 'Expected outcome matches.' : actualResult, 
-        executionNotes,
+        finalActual, 
+        finalNotes,
         currentUser?.id
       );
 
-      addToast(`Logged test case result as ${resultType}`, 'success');
+      // 3. Auto-create internal feedback if failed
+      if (resultType === 'Fail') {
+        const titleText = createFeedbackTitle || `Test Fail: ${activeCase.code} - ${activeCase.title}`;
+        await addFeedback({
+          title: titleText,
+          description: `Logged automatically from Test Run execution: "${run.title}".\n\nIssue Description:\n${finalActual}\n\nNotes:\n${finalNotes || 'None'}`,
+          project_id: activeCase.project_id,
+          reporter_id: currentUser?.id || null,
+          priority: 'High',
+          status: 'Open'
+        });
+        addToast(`Logged test case as Fail and successfully created internal feedback entry!`, 'success');
+      } else {
+        addToast(`Logged test case result as ${resultType}`, 'success');
+      }
 
-      // 3. Auto advance to the next "Not Run" test case
+      // Clear local states
+      setActualResult('');
+      setExecutionNotes('');
+
+      // 4. Auto advance to the next "Not Run" test case
       const currentIndex = runCases.findIndex(c => c.id === activeCaseId);
       const nextCases = [
         ...runCases.slice(currentIndex + 1),
@@ -471,7 +510,17 @@ export default function TestRunExecutionPage() {
                       Mark Pass
                     </Button>
                     <Button 
-                      onClick={() => handleLogResult('Fail')} 
+                      onClick={() => {
+                        if (!activeCase) return;
+                        if (!canModifyProject(activeCase.project_id)) {
+                          addToast('Permissions denied. You must be an Editor on this project to submit results.', 'error');
+                          return;
+                        }
+                        setFailTitle(`Test Fail: ${activeCase.code} - ${activeCase.title}`);
+                        setFailDescription(actualResult || '');
+                        setFailNotes(executionNotes || '');
+                        setIsFailModalOpen(true);
+                      }} 
                       variant="destructive"
                       className="cursor-pointer font-bold text-xs bg-red-600 hover:bg-red-700"
                     >
@@ -506,6 +555,71 @@ export default function TestRunExecutionPage() {
           )}
         </div>
       </div>
+
+      {/* Fail Modal Dialog */}
+      <Dialog
+        isOpen={isFailModalOpen}
+        onClose={() => setIsFailModalOpen(false)}
+        title="Log Test Case Failure"
+        footer={
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setIsFailModalOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={() => {
+                if (!failDescription.trim()) {
+                  addToast('Description/Actual Result is mandatory on failure.', 'warning');
+                  return;
+                }
+                handleLogResult('Fail', failDescription, failNotes, failTitle);
+                setIsFailModalOpen(false);
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white font-bold cursor-pointer"
+            >
+              Submit Failure & Create Feedback
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4 text-xs text-left">
+          <div className="p-3 bg-red-500/5 border border-red-500/10 rounded-lg text-red-500 flex items-start gap-2">
+            <AlertTriangle className="h-4.5 w-4.5 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold">Marking test case as FAILED</p>
+              <p className="text-[10px] mt-0.5 leading-relaxed text-muted-foreground">
+                This will log a failure for this test case execution and automatically create a corresponding ticket in the **internal Feedback board** for tracking.
+              </p>
+            </div>
+          </div>
+
+          <FormGroup label="Feedback Summary / Title">
+            <Input 
+              value={failTitle} 
+              onChange={(e) => setFailTitle(e.target.value)} 
+              placeholder="e.g. Test Fail: TC-GEO-001 - Title" 
+              className="h-8.5 text-xs"
+            />
+          </FormGroup>
+
+          <FormGroup label="Actual Result / Issue Description (Mandatory)">
+            <textarea
+              value={failDescription}
+              onChange={(e) => setFailDescription(e.target.value)}
+              placeholder="Describe exactly what failed, steps to reproduce, or error messages..."
+              className="w-full min-h-[100px] p-3 text-xs bg-card border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary text-foreground resize-none leading-relaxed"
+              rows={4}
+            />
+          </FormGroup>
+
+          <FormGroup label="Execution Notes (Optional)">
+            <Input 
+              value={failNotes} 
+              onChange={(e) => setFailNotes(e.target.value)} 
+              placeholder="Tested on Chrome / OS / specific environment details..." 
+              className="h-8.5 text-xs"
+            />
+          </FormGroup>
+        </div>
+      </Dialog>
     </div>
   );
 }

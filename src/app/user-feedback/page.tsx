@@ -196,7 +196,7 @@ export default function UserFeedbackPage() {
       {/* Main Table Layout */}
       <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="border-b border-border bg-muted/30 text-xs font-bold text-muted-foreground uppercase tracking-wider">
                 <th className="p-4 w-[20%]">Pengirim (Sender)</th>

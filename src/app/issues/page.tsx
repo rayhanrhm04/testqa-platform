@@ -408,7 +408,8 @@ export default function IssuesPage() {
       {/* Main Content Layout */}
       {activeTab === 'kanban' ? (
         /* KANBAN BOARD VIEW */
-        <div className="grid gap-4 md:grid-cols-5 overflow-x-auto min-w-[900px] pb-4">
+        <div className="overflow-x-auto w-full pb-4">
+          <div className="grid gap-4 grid-cols-5 min-w-[1000px]">
           {kanbanColumns.map((col) => {
             const colIssues = filteredIssues.filter((i) => i.status === col.id);
             return (
@@ -506,12 +507,13 @@ export default function IssuesPage() {
               </div>
             );
           })}
+          </div>
         </div>
       ) : (
         /* LIST VIEW */
         <div className="rounded-xl border border-border bg-card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left text-sm text-foreground">
+            <table className="w-full border-collapse text-left text-sm text-foreground min-w-[850px]">
               <thead>
                 <tr className="border-b border-border bg-muted/30 font-semibold text-muted-foreground">
                   <th className="p-4">Code</th>
