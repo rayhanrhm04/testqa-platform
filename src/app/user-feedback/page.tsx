@@ -7,44 +7,21 @@ import { useUIStore } from '@/store/useUIStore';
 import { UserFeedbackTopic, USER_FEEDBACK_TOPICS } from '@/lib/validators';
 import { 
   MessageCircle, Search, Trash2, Filter, Mail, Globe, 
-  Clock, Plus, Check, ShieldAlert, Sparkles, Smile, Info
+  Clock, CheckCircle, AlertTriangle, HelpCircle, Layers, MapPin, Inbox
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { FormGroup, Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
 
 export default function UserFeedbackPage() {
-  const router = useRouter();
-  const { userFeedbacks, projects, projectShares, addUserFeedback, deleteUserFeedback } = useDataStore();
+  const { userFeedbacks, projects, projectShares, deleteUserFeedback } = useDataStore();
   const { currentUser, activeRole } = useAuthStore();
   const { addToast } = useUIStore();
-
-  // Widget states
-  const [targetProjectId, setTargetProjectId] = React.useState('');
-  const [selectedTopic, setSelectedTopic] = React.useState<UserFeedbackTopic | null>(null);
-  const [message, setMessage] = React.useState('');
-  const [email, setEmail] = React.useState('');
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   // Filter states
   const [search, setSearch] = React.useState('');
   const [topicFilter, setTopicFilter] = React.useState('all');
   const [projectFilter, setProjectFilter] = React.useState('all');
-
-  // Initialize target project id
-  React.useEffect(() => {
-    if (projects.length > 0) {
-      setTargetProjectId(projects[0].id);
-    }
-  }, [projects]);
-
-  // Sync email input if user logged in
-  React.useEffect(() => {
-    if (currentUser) {
-      setEmail(currentUser.email);
-    }
-  }, [currentUser]);
 
   // Permissions helper
   const canDeleteFeedback = React.useCallback((projId: string) => {
@@ -58,53 +35,17 @@ export default function UserFeedbackPage() {
     return userShare?.role === 'Editor';
   }, [activeRole, projectShares, currentUser]);
 
-  const handleSubmitFeedback = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentUser) {
-      addToast('Harap masuk terlebih dahulu untuk mengirimkan feedback!', 'warning');
-      router.push('/login');
-      return;
-    }
-
-    if (!targetProjectId) {
-      addToast('Pilih proyek tujuan terlebih dahulu.', 'warning');
-      return;
-    }
-
-    if (!selectedTopic) {
-      addToast('Harap pilih topik feedback terlebih dahulu.', 'warning');
-      return;
-    }
-
-    if (!message.trim() || message.length < 3) {
-      addToast('Feedback harus terdiri dari minimal 3 karakter.', 'warning');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await addUserFeedback(targetProjectId, selectedTopic, message, email || undefined);
-      addToast('User feedback berhasil dikirim!', 'success');
-      setMessage('');
-      setSelectedTopic(null);
-    } catch (err: any) {
-      addToast(err.message || 'Gagal mengirim feedback.', 'error');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const handleDeleteFeedback = async (id: string, projId: string) => {
     if (!canDeleteFeedback(projId)) {
       addToast('Akses ditolak. Anda tidak memiliki izin menghapus feedback di proyek ini.', 'error');
       return;
     }
-    if (confirm('Hapus feedback pengguna ini?')) {
+    if (confirm('Hapus log feedback pengguna ini?')) {
       try {
         await deleteUserFeedback(id);
-        addToast('Feedback berhasil dihapus.', 'success');
+        addToast('Log feedback berhasil dihapus.', 'success');
       } catch (err: any) {
-        addToast('Gagal menghapus feedback.', 'error');
+        addToast('Gagal menghapus log feedback.', 'error');
       }
     }
   };
@@ -120,7 +61,7 @@ export default function UserFeedbackPage() {
     });
   }, [userFeedbacks, search, topicFilter, projectFilter]);
 
-  // Stats calculation
+  // Statistics calculation
   const stats = React.useMemo(() => {
     const total = filteredFeedbacks.length;
     const byTopic = USER_FEEDBACK_TOPICS.reduce((acc, topic) => {
@@ -130,8 +71,28 @@ export default function UserFeedbackPage() {
     return { total, byTopic };
   }, [filteredFeedbacks]);
 
+  // Topic Color Mapping
+  const getTopicBadgeStyle = (topic: UserFeedbackTopic) => {
+    switch (topic) {
+      case 'Site Selection':
+        return 'bg-blue-500/10 border-blue-500/30 text-blue-500 dark:text-blue-400';
+      case 'Site Analysis':
+        return 'bg-indigo-500/10 border-indigo-500/30 text-indigo-500 dark:text-indigo-400';
+      case 'GIS Tool':
+        return 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500 dark:text-emerald-400';
+      case 'Import Data':
+        return 'bg-amber-500/10 border-amber-500/30 text-amber-500 dark:text-amber-400';
+      case 'Maps':
+        return 'bg-purple-500/10 border-purple-500/30 text-purple-500 dark:text-purple-400';
+      case 'UX Improvement':
+        return 'bg-pink-500/10 border-pink-500/30 text-pink-500 dark:text-pink-400';
+      default:
+        return 'bg-slate-500/10 border-slate-500/30 text-slate-500 dark:text-slate-400';
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between border-b border-border pb-5">
         <div>
@@ -139,243 +100,193 @@ export default function UserFeedbackPage() {
             <MessageCircle className="h-7 w-7 text-primary" /> User Feedback Dashboard
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
-            Pantau dan analisis masukan pengguna langsung dari platform <strong>GEO MAPID</strong>.
+            Daftar laporan masukan, perbaikan UX, dan keluhan data yang diinput oleh pengguna luar di platform <strong>GEO MAPID</strong>.
           </p>
         </div>
       </div>
 
-      {/* Main Grid */}
-      <div className="grid gap-6 md:grid-cols-12 items-start">
-        
-        {/* Left Column: Simulation Widget (GEO MAPID Style) */}
-        <div className="md:col-span-5 space-y-4">
-          <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
-            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-              <Sparkles className="h-4 w-4 text-primary" /> Simulation Widget
-            </h3>
-            <p className="text-[11px] text-muted-foreground mb-4 leading-relaxed">
-              Formulir di bawah ini mensimulasikan widget masukan pengguna yang disematkan langsung pada aplikasi <strong>GEO MAPID</strong>.
-            </p>
-
-            <form onSubmit={handleSubmitFeedback} className="space-y-4">
-              {/* Project Target Selector (Mocking host system) */}
-              <FormGroup label="Select Platform Project">
-                <Select 
-                  value={targetProjectId} 
-                  onChange={(e) => setTargetProjectId(e.target.value)}
-                  className="text-xs"
-                >
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </Select>
-              </FormGroup>
-
-              {/* Email Address */}
-              <FormGroup label="Sender Email (Optional)">
-                <div className="relative">
-                  <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="guest@example.com"
-                    className="pl-9 text-xs"
-                  />
-                </div>
-              </FormGroup>
-
-              {/* Simulated Modal Box */}
-              <div className="border border-border/80 rounded-2xl bg-muted/10 p-5 space-y-4 shadow-inner relative overflow-hidden">
-                <div className="absolute right-3 top-3 h-5 w-5 rounded-full bg-muted flex items-center justify-center text-muted-foreground text-[10px] font-bold">
-                  ✕
-                </div>
-
-                <div>
-                  <h4 className="text-xl font-bold flex items-center gap-1.5 text-foreground">
-                    Hello 👋
-                  </h4>
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Help us become better, report user issues or missing data
-                  </p>
-                </div>
-
-                {/* Choose Topic Tag Board */}
-                <div className="bg-muted/30 border border-border/40 rounded-xl p-3.5 space-y-2">
-                  <span className="text-[10px] font-bold text-muted-foreground block uppercase">
-                    Choose topic
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {USER_FEEDBACK_TOPICS.map((topic) => {
-                      const isSelected = selectedTopic === topic;
-                      return (
-                        <button
-                          key={topic}
-                          type="button"
-                          onClick={() => setSelectedTopic(topic)}
-                          className={`px-3 py-1 rounded-full text-[10px] font-semibold border transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-primary border-primary text-primary-foreground shadow-sm'
-                              : 'bg-card border-border hover:border-primary/30 hover:bg-primary/5 text-muted-foreground hover:text-foreground'
-                          }`}
-                        >
-                          {topic}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Textarea feedback */}
-                <div className="space-y-1">
-                  <textarea
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value.slice(0, 200))}
-                    placeholder="Write your feedback here"
-                    className="w-full min-h-[100px] p-3 text-xs bg-card border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary text-foreground resize-none leading-relaxed"
-                  />
-                  <div className="flex justify-between items-center text-[10px] text-muted-foreground px-1">
-                    <span className="hover:underline cursor-pointer">Hide feedback button</span>
-                    <span>{message.length}/200</span>
-                  </div>
-                </div>
-
-                {/* Send Button */}
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs hover:bg-primary/90 transition-all shadow-sm cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
-                >
-                  <Plus className="h-4 w-4" /> Send Feedback
-                </button>
-              </div>
-            </form>
+      {/* Statistics Cards Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Feedbacks */}
+        <div className="bg-card rounded-xl border border-border p-4 shadow-sm flex items-center gap-4">
+          <div className="rounded-lg p-3 bg-primary/10 text-primary border border-primary/15">
+            <Inbox className="h-6 w-6" />
+          </div>
+          <div>
+            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">Total Feedbacks</span>
+            <span className="text-2xl font-black text-foreground">{stats.total}</span>
           </div>
         </div>
 
-        {/* Right Column: Feedback List Dashboard */}
-        <div className="md:col-span-7 space-y-4">
-          
-          {/* Stats Bar */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-card rounded-xl border border-border p-3 shadow-xs">
-              <span className="text-[10px] text-muted-foreground font-bold uppercase block">Total Feedbacks</span>
-              <span className="text-xl font-black text-foreground">{stats.total}</span>
-            </div>
-            <div className="bg-card rounded-xl border border-border p-3 shadow-xs">
-              <span className="text-[10px] text-muted-foreground font-bold uppercase block">Site Selection</span>
-              <span className="text-xl font-black text-primary">{stats.byTopic['Site Selection'] || 0}</span>
-            </div>
-            <div className="bg-card rounded-xl border border-border p-3 shadow-xs">
-              <span className="text-[10px] text-muted-foreground font-bold uppercase block">GIS Tools</span>
-              <span className="text-xl font-black text-emerald-500">{stats.byTopic['GIS Tool'] || 0}</span>
-            </div>
+        {/* Site Selection */}
+        <div className="bg-card rounded-xl border border-border p-4 shadow-sm flex items-center gap-4">
+          <div className="rounded-lg p-3 bg-blue-500/10 text-blue-500 border border-blue-500/15">
+            <MapPin className="h-6 w-6" />
+          </div>
+          <div>
+            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">Site Selection</span>
+            <span className="text-2xl font-black text-foreground">{stats.byTopic['Site Selection'] || 0}</span>
+          </div>
+        </div>
+
+        {/* GIS Tool */}
+        <div className="bg-card rounded-xl border border-border p-4 shadow-sm flex items-center gap-4">
+          <div className="rounded-lg p-3 bg-emerald-500/10 text-emerald-500 border border-emerald-500/15">
+            <Layers className="h-6 w-6" />
+          </div>
+          <div>
+            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">GIS Tools</span>
+            <span className="text-2xl font-black text-foreground">{stats.byTopic['GIS Tool'] || 0}</span>
+          </div>
+        </div>
+
+        {/* UX Improvement */}
+        <div className="bg-card rounded-xl border border-border p-4 shadow-sm flex items-center gap-4">
+          <div className="rounded-lg p-3 bg-pink-500/10 text-pink-500 border border-pink-500/15">
+            <MessageCircle className="h-6 w-6" />
+          </div>
+          <div>
+            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">UX Improvements</span>
+            <span className="text-2xl font-black text-foreground">{stats.byTopic['UX Improvement'] || 0}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter Board */}
+      <div className="bg-card rounded-xl border border-border p-4 shadow-sm space-y-4">
+        <div className="flex items-center gap-1.5 border-b border-border/40 pb-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <span className="text-xs font-bold text-foreground">Filter & Pencarian</span>
+        </div>
+        
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-12">
+          {/* Search bar */}
+          <div className="relative sm:col-span-6">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input 
+              value={search} 
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Cari kata kunci masukan atau email pengirim..."
+              className="pl-9 text-xs w-full"
+            />
           </div>
 
-          {/* Filter Board */}
-          <div className="bg-card rounded-xl border border-border p-4 shadow-sm space-y-3">
-            <div className="flex items-center gap-1.5 border-b border-border/40 pb-2">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              <span className="text-xs font-bold text-foreground">Filter Feedbacks</span>
-            </div>
-            
-            <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
-              {/* Search input */}
-              <div className="relative">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  value={search} 
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Cari pesan atau email..."
-                  className="pl-9 text-xs"
-                />
-              </div>
-
-              {/* Topic filter */}
-              <Select value={topicFilter} onChange={(e) => setTopicFilter(e.target.value)} className="text-xs">
-                <option value="all">Semua Topik</option>
-                {USER_FEEDBACK_TOPICS.map(t => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </Select>
-
-              {/* Project filter */}
-              <Select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} className="text-xs">
-                <option value="all">Semua Proyek</option>
-                {projects.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </Select>
-            </div>
+          {/* Topic selector */}
+          <div className="sm:col-span-3">
+            <Select value={topicFilter} onChange={(e) => setTopicFilter(e.target.value)} className="text-xs">
+              <option value="all">Semua Kategori/Topik</option>
+              {USER_FEEDBACK_TOPICS.map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </Select>
           </div>
 
-          {/* Feed list */}
-          <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
-            {filteredFeedbacks.length > 0 ? (
-              filteredFeedbacks.map((ufb) => {
-                const proj = projects.find(p => p.id === ufb.project_id);
-                const hasDeleteAccess = canDeleteFeedback(ufb.project_id);
-                return (
-                  <div 
-                    key={ufb.id}
-                    className="bg-card rounded-xl border border-border p-4 hover:border-primary/20 hover:shadow-xs transition-all space-y-3"
-                  >
-                    {/* Header */}
-                    <div className="flex items-start justify-between">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {/* Topic badge */}
-                        <span className="px-2 py-0.5 rounded-full border border-primary/20 bg-primary/5 text-primary text-[10px] font-bold">
+          {/* Project selector */}
+          <div className="sm:col-span-3">
+            <Select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} className="text-xs">
+              <option value="all">Semua Proyek Platform</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </Select>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Table Layout */}
+      <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-border bg-muted/30 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                <th className="p-4 w-[20%]">Pengirim (Sender)</th>
+                <th className="p-4 w-[15%]">Kategori (Topic)</th>
+                <th className="p-4 w-[15%]">Proyek Target</th>
+                <th className="p-4 w-[35%]">Pesan Masukan (Feedback)</th>
+                <th className="p-4 w-[10%]">Tanggal</th>
+                <th className="p-4 w-[5%] text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border text-xs">
+              {filteredFeedbacks.length > 0 ? (
+                filteredFeedbacks.map((ufb) => {
+                  const proj = projects.find(p => p.id === ufb.project_id);
+                  const hasDeleteAccess = canDeleteFeedback(ufb.project_id);
+                  return (
+                    <tr key={ufb.id} className="hover:bg-muted/10 transition-all group">
+                      {/* Sender */}
+                      <td className="p-4 font-semibold text-foreground">
+                        <div className="flex items-center gap-2">
+                          <div className="h-6 w-6 rounded-full bg-primary/10 text-primary font-bold text-[10px] flex items-center justify-center shrink-0">
+                            {ufb.email ? ufb.email.charAt(0).toUpperCase() : 'A'}
+                          </div>
+                          <span className="truncate max-w-[150px]" title={ufb.email || 'Anonymous Guest'}>
+                            {ufb.email || 'Anonymous Guest'}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Topic Badge */}
+                      <td className="p-4">
+                        <span className={`px-2.5 py-1 rounded-full border text-[10px] font-semibold tracking-wide inline-block ${getTopicBadgeStyle(ufb.topic)}`}>
                           {ufb.topic}
                         </span>
-                        {/* Project badge */}
-                        <span className="px-2 py-0.5 rounded-md bg-muted text-muted-foreground text-[9px] font-bold uppercase tracking-wider">
-                          {proj ? proj.name : 'Unknown Project'}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        <span>{new Date(ufb.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span>
-                      </div>
+                      </td>
+
+                      {/* Project Name */}
+                      <td className="p-4 text-muted-foreground font-medium">
+                        {proj ? proj.name : 'Unknown Project'}
+                      </td>
+
+                      {/* Message Content */}
+                      <td className="p-4 text-foreground font-medium leading-relaxed max-w-sm">
+                        <div className="line-clamp-2 hover:line-clamp-none transition-all duration-300">
+                          {ufb.message}
+                        </div>
+                      </td>
+
+                      {/* Submission Date */}
+                      <td className="p-4 text-muted-foreground whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5" />
+                          <span>{new Date(ufb.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        </div>
+                      </td>
+
+                      {/* Delete Action */}
+                      <td className="p-4 text-center">
+                        {hasDeleteAccess ? (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteFeedback(ufb.id, ufb.project_id)}
+                            className="text-red-500 hover:text-red-600 hover:bg-red-500/10 p-1.5 rounded-lg transition-all cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 inline-flex items-center"
+                            title="Hapus log feedback"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground/30 font-medium">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={6} className="text-center py-16 text-muted-foreground border-dashed border-t border-border">
+                    <div className="max-w-xs mx-auto space-y-2">
+                      <Inbox className="h-10 w-10 mx-auto text-muted-foreground/25 animate-pulse" />
+                      <p className="font-bold text-foreground/80">Log feedback kosong</p>
+                      <p className="text-[10px] leading-relaxed">
+                        Tidak ada log data feedback pengguna yang sesuai dengan filter pencarian aktif.
+                      </p>
                     </div>
-
-                    {/* Content Message */}
-                    <p className="text-xs text-foreground font-medium leading-relaxed bg-muted/10 p-3 rounded-lg border border-border/30">
-                      "{ufb.message}"
-                    </p>
-
-                    {/* Footer */}
-                    <div className="flex items-center justify-between pt-1 text-[11px] text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="font-semibold">{ufb.email || 'Anonymous Guest'}</span>
-                      </div>
-
-                      {hasDeleteAccess && (
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteFeedback(ufb.id, ufb.project_id)}
-                          className="text-red-500 hover:text-red-600 hover:bg-red-500/10 p-1.5 rounded-lg transition-all cursor-pointer"
-                          title="Hapus feedback"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="text-center py-12 bg-card rounded-xl border border-dashed border-border">
-                <MessageCircle className="h-10 w-10 mx-auto text-muted-foreground/20 mb-2" />
-                <p className="text-xs font-bold text-foreground/80">Belum ada feedback yang cocok</p>
-                <p className="text-[10px] text-muted-foreground mt-1">Coba sesuaikan pencarian atau filter Anda.</p>
-              </div>
-            )}
-          </div>
-
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-
       </div>
     </div>
   );
