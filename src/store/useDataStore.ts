@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { 
   Project, Feedback, Issue, Release, TestSuite, TestCase, TestRun, TestRunResult, Comment, ActivityLog,
   FeedbackPriority, FeedbackStatus, IssueType, IssueSeverity, IssueStatus, ReleaseStatus, TestRunStatus, TestResultValue,
-  ProjectShare, User, UserRole
+  ProjectShare, User, UserRole, UserFeedback, UserFeedbackTopic
 } from '@/lib/validators';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
@@ -25,6 +25,7 @@ interface DataState {
   activityLogs: ActivityLog[];
   users: User[];
   projectShares: ProjectShare[];
+  userFeedbacks: UserFeedback[];
   isLoading: boolean;
 
   // Actions
@@ -85,6 +86,10 @@ interface DataState {
   
   // Activity Logging
   logActivity: (userId: string, action: string, details?: string) => Promise<void>;
+
+  // User Feedbacks
+  addUserFeedback: (project_id: string, topic: UserFeedbackTopic, message: string, email?: string) => Promise<void>;
+  deleteUserFeedback: (id: string) => Promise<void>;
 }
 
 // ----------------------------------------------------
@@ -149,6 +154,14 @@ const seedActivityLogs: ActivityLog[] = [
   { id: 'l-2', user_id: 'user-qa-1', action: 'Created feedback FB-001', details: 'Export date format issue in GEO MAPID', created_at: new Date('2026-06-01T11:20:00Z').toISOString() },
 ];
 
+const seedUserFeedbacks: UserFeedback[] = [
+  { id: 'ufb-1', project_id: 'p-1', topic: 'Site Selection', message: 'Sangat terbantu menggunakan fitur site selection untuk mencari area prospek ruko baru di Bandung. Saran kalau bisa ditambahkan data kepadatan penduduk terbaru.', email: 'budi.hartono@gmail.com', created_at: new Date('2026-06-20T08:30:00Z').toISOString() },
+  { id: 'ufb-2', project_id: 'p-1', topic: 'GIS Tool', message: 'Fitur buffer radius 1km kadang loading-nya agak lama kalau titiknya banyak. Tolong dioptimasi kembali.', email: 'anita.sari@corporate.id', created_at: new Date('2026-06-21T10:15:00Z').toISOString() },
+  { id: 'ufb-3', project_id: 'p-1', topic: 'Import Data', message: 'Sukses import file GeoJSON sebesar 12MB. Sangat lancar dibanding platform sebelah!', email: 'hendra.wijaya@spatial.org', created_at: new Date('2026-06-22T14:45:00Z').toISOString() },
+  { id: 'ufb-4', project_id: 'p-1', topic: 'UX Improvement', message: 'Tampilan dark mode-nya keren sekali, tapi kontras warna teks legenda peta di sebelah kiri agak sulit dibaca.', email: 'rizky.ramadhan@uxdesign.net', created_at: new Date('2026-06-23T09:20:00Z').toISOString() },
+  { id: 'ufb-5', project_id: 'p-1', topic: 'Maps', message: 'Basemap satelit resolusi tinggi sangat detail! Apakah ada opsi untuk offline basemap?', email: 'dewi.lestari@agri-tech.co.id', created_at: new Date('2026-06-23T11:05:00Z').toISOString() }
+];
+
 // ----------------------------------------------------
 // STATE STORE IMPLEMENTATION
 // ----------------------------------------------------
@@ -190,6 +203,7 @@ export const useDataStore = create<DataState>((set, get) => {
     activityLogs: [],
     users: [],
     projectShares: [],
+    userFeedbacks: [],
     isLoading: true,
 
     fetchData: async () => {
@@ -229,6 +243,16 @@ export const useDataStore = create<DataState>((set, get) => {
           } catch (e) {
             console.warn("Table project_shares does not exist or fetch failed:", e);
           }
+
+          let userFbs: any[] = [];
+          try {
+            const { data } = await supabase!.from('user_feedbacks').select('*').order('created_at', { ascending: false });
+            userFbs = data || [];
+          } catch (e) {
+            console.warn("Table user_feedbacks does not exist or fetch failed, loading fallback:", e);
+            const local = localStorage.getItem('qa_userFeedbacks');
+            userFbs = local ? JSON.parse(local) : seedUserFeedbacks;
+          }
  
            set({
              projects: p || [],
@@ -243,6 +267,7 @@ export const useDataStore = create<DataState>((set, get) => {
              activityLogs: act || [],
              users: u || [],
              projectShares: shares,
+             userFeedbacks: userFbs,
              isLoading: false,
            });
         } catch (e) {
@@ -286,6 +311,7 @@ export const useDataStore = create<DataState>((set, get) => {
             activityLogs: getLocal('activityLogs', seedActivityLogs),
             users: allUsers,
             projectShares: getLocal('projectShares', []),
+            userFeedbacks: getLocal('userFeedbacks', seedUserFeedbacks),
             isLoading: false,
           });
         }, 300);
@@ -1133,6 +1159,68 @@ export const useDataStore = create<DataState>((set, get) => {
           const next = [newLog, ...state.activityLogs];
           persist({ activityLogs: next });
           return { activityLogs: next };
+        });
+      }
+    },
+
+    // ----------------------------------------------------
+    // USER FEEDBACKS CRUD
+    // ----------------------------------------------------
+    addUserFeedback: async (project_id, topic, message, email) => {
+      const newUfb: UserFeedback = {
+        id: isSupabaseConfigured() ? undefined : `ufb-${Date.now()}` as any,
+        project_id,
+        topic,
+        message,
+        email,
+        created_at: new Date().toISOString(),
+      };
+
+      if (isSupabaseConfigured()) {
+        try {
+          const { data, error } = await supabase!.from('user_feedbacks').insert(newUfb).select();
+          if (error) throw error;
+          if (data) {
+            set((state) => ({ userFeedbacks: [data[0], ...state.userFeedbacks] }));
+          }
+        } catch (e) {
+          console.warn("Table user_feedbacks write failed, saving to localStorage:", e);
+          set((state) => {
+            const next = [newUfb, ...state.userFeedbacks];
+            persist({ userFeedbacks: next });
+            return { userFeedbacks: next };
+          });
+        }
+      } else {
+        set((state) => {
+          const next = [newUfb, ...state.userFeedbacks];
+          persist({ userFeedbacks: next });
+          return { userFeedbacks: next };
+        });
+      }
+    },
+
+    deleteUserFeedback: async (id) => {
+      if (isSupabaseConfigured()) {
+        try {
+          const { error } = await supabase!.from('user_feedbacks').delete().eq('id', id);
+          if (error) throw error;
+          set((state) => ({
+            userFeedbacks: state.userFeedbacks.filter((ufb) => ufb.id !== id),
+          }));
+        } catch (e) {
+          console.warn("Table user_feedbacks delete failed, deleting from localStorage:", e);
+          set((state) => {
+            const next = state.userFeedbacks.filter((ufb) => ufb.id !== id);
+            persist({ userFeedbacks: next });
+            return { userFeedbacks: next };
+          });
+        }
+      } else {
+        set((state) => {
+          const next = state.userFeedbacks.filter((ufb) => ufb.id !== id);
+          persist({ userFeedbacks: next });
+          return { userFeedbacks: next };
         });
       }
     },

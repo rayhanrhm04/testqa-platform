@@ -132,6 +132,18 @@ export interface ProjectShare {
   created_at?: string;
 }
 
+export const USER_FEEDBACK_TOPICS = ['Site Selection', 'Site Analysis', 'GIS Tool', 'Import Data', 'Maps', 'UX Improvement', 'Other'] as const;
+export type UserFeedbackTopic = typeof USER_FEEDBACK_TOPICS[number];
+
+export interface UserFeedback {
+  id: string;
+  topic: UserFeedbackTopic;
+  message: string;
+  project_id: string;
+  email?: string;
+  created_at: string;
+}
+
 
 export interface TestRun {
   id: string;
@@ -237,6 +249,13 @@ export const projectShareSchema = z.object({
   project_id: z.string().min(1, 'Project is required'),
   user_id: z.string().min(1, 'User is required'),
   role: z.enum(['Editor', 'Viewer']),
+});
+
+export const userFeedbackSchema = z.object({
+  project_id: z.string().min(1, 'Project is required'),
+  topic: z.enum(USER_FEEDBACK_TOPICS),
+  message: z.string().min(3, 'Feedback must be at least 3 characters').max(200, 'Feedback cannot exceed 200 characters'),
+  email: z.string().email('Must be a valid email').optional().or(z.literal('')),
 });
 
 

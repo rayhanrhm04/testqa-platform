@@ -8,7 +8,7 @@ import { useUIStore } from '@/store/useUIStore';
 import { 
   LayoutDashboard, MessageSquare, Bug, Rocket, FolderHeart, 
   FileSpreadsheet, PlayCircle, FileText, BarChart3, Settings, 
-  ChevronLeft, ChevronRight, UserCheck, LogOut
+  ChevronLeft, ChevronRight, UserCheck, LogOut, MessageCircle
 } from 'lucide-react';
 import { Button } from './ui/button';
 
@@ -22,6 +22,7 @@ export const Sidebar: React.FC = () => {
   const navItems = [
     { name: 'Dashboard', path: '/', icon: <LayoutDashboard className="h-4.5 w-4.5" /> },
     { name: 'Feedback', path: '/feedback', icon: <MessageSquare className="h-4.5 w-4.5" /> },
+    { name: 'User Feedback', path: '/user-feedback', icon: <MessageCircle className="h-4.5 w-4.5" /> },
     { name: 'Issues', path: '/issues', icon: <Bug className="h-4.5 w-4.5" /> },
     { name: 'Releases', path: '/releases', icon: <Rocket className="h-4.5 w-4.5" /> },
     { name: 'Test Suites', path: '/test-suites', icon: <FolderHeart className="h-4.5 w-4.5" /> },
@@ -32,7 +33,7 @@ export const Sidebar: React.FC = () => {
     { name: 'Settings', path: '/settings', icon: <Settings className="h-4.5 w-4.5" /> },
   ].filter((item) => {
     if (currentUser && activeRole === 'Reporter') {
-      return item.name === 'Reports' || item.name === 'Analytics' || item.name === 'Feedback';
+      return item.name === 'Reports' || item.name === 'Analytics' || item.name === 'Feedback' || item.name === 'User Feedback';
     }
     return true;
   });

@@ -82,6 +82,7 @@ export const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ childre
                                pathname !== '/reports' && 
                                pathname !== '/analytics' &&
                                pathname !== '/feedback' &&
+                               pathname !== '/user-feedback' &&
                                !pathname.startsWith('/feedback/');
 
   return (

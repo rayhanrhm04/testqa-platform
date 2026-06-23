@@ -319,5 +319,29 @@ CREATE POLICY "Allow admins and QA to write project shares" ON public.project_sh
     WHERE users.id = auth.uid() AND users.role IN ('Admin', 'QA Engineer')
   )
 );
+
+CREATE TABLE IF NOT EXISTS public.user_feedbacks (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
+  topic TEXT NOT NULL,
+  message VARCHAR(200) NOT NULL,
+  email TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.user_feedbacks ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read to user feedbacks" ON public.user_feedbacks FOR SELECT USING (true);
+CREATE POLICY "Allow anyone to insert user feedbacks" ON public.user_feedbacks FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow admins, QA, and project editors to delete user feedbacks" ON public.user_feedbacks FOR DELETE USING (
+  EXISTS (
+    SELECT 1 FROM public.users 
+    WHERE users.id = auth.uid() AND users.role IN ('Admin', 'QA Engineer')
+  ) OR EXISTS (
+    SELECT 1 FROM public.project_shares
+    WHERE project_shares.project_id = user_feedbacks.project_id 
+      AND project_shares.user_id = auth.uid() 
+      AND project_shares.role = 'Editor'
+  )
+);
 */
 
