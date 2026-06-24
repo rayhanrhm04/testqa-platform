@@ -248,6 +248,72 @@ export default function TestSuitesPage() {
     addToast(`Suite "${suite.name}" exported to Excel successfully!`, 'success');
   };
 
+  const handleExportAll = () => {
+    const activeSuites = testSuites.filter((suite) => {
+      const matchProject = projectFilter === 'all' || suite.project_id === projectFilter;
+      const matchSearch = suite.name.toLowerCase().includes(search.toLowerCase()) || 
+                          (suite.description && suite.description.toLowerCase().includes(search.toLowerCase()));
+      return matchProject && matchSearch;
+    });
+
+    if (activeSuites.length === 0) {
+      addToast('No test suites found to export.', 'warning');
+      return;
+    }
+
+    const exportData = activeSuites.map((suite) => {
+      const suiteCases = testCases.filter((tc) => tc.suite_id === suite.id);
+      const cleanCases = suiteCases.map((tc) => ({
+        title: tc.title,
+        objective: tc.objective,
+        precondition: tc.precondition,
+        post_condition: tc.post_condition,
+        test_data: tc.test_data,
+        steps: tc.steps,
+        expected_result: tc.expected_result,
+        tags: tc.tags,
+        is_automated: tc.is_automated,
+        automation_link: tc.automation_link,
+        status: tc.status,
+        description: tc.description,
+        severity: tc.severity,
+        priority: tc.priority,
+        type: tc.type,
+        layer: tc.layer,
+        is_flaky: tc.is_flaky,
+        behavior: tc.behavior,
+        is_muted: tc.is_muted
+      }));
+
+      return {
+        suite: {
+          name: suite.name,
+          description: suite.description
+        },
+        testCases: cleanCases
+      };
+    });
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    
+    let filename = 'all_suites_export.json';
+    if (projectFilter !== 'all') {
+      const projName = projects.find(p => p.id === projectFilter)?.name;
+      if (projName) {
+        filename = `${projName.toLowerCase().replace(/\s+/g, '_')}_suites_export.json`;
+      }
+    }
+
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    addToast(`Exported ${activeSuites.length} test suites successfully!`, 'success');
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -257,18 +323,36 @@ export default function TestSuitesPage() {
     reader.onload = (event) => {
       try {
         const parsed = JSON.parse(event.target?.result as string);
-        if (!parsed.suite || !parsed.suite.name) {
-          addToast('Invalid file format. JSON must contain suite metadata.', 'error');
-          setImportPreview(null);
-          setImportFile(null);
-          return;
+        if (Array.isArray(parsed)) {
+          if (parsed.length === 0 || !parsed[0].suite || !parsed[0].suite.name) {
+            addToast('Invalid file format. JSON array must contain suite objects.', 'error');
+            setImportPreview(null);
+            setImportFile(null);
+            return;
+          }
+          const totalCases = parsed.reduce((sum, s) => sum + (Array.isArray(s.testCases) ? s.testCases.length : 0), 0);
+          setImportPreview({
+            name: `${parsed.length} Test Suites`,
+            description: `Importing ${parsed.length} suites with a total of ${totalCases} test cases.`,
+            casesCount: totalCases,
+            raw: parsed,
+            isMultiple: true
+          });
+        } else {
+          if (!parsed.suite || !parsed.suite.name) {
+            addToast('Invalid file format. JSON must contain suite metadata.', 'error');
+            setImportPreview(null);
+            setImportFile(null);
+            return;
+          }
+          setImportPreview({
+            name: parsed.suite.name,
+            description: parsed.suite.description || '',
+            casesCount: Array.isArray(parsed.testCases) ? parsed.testCases.length : 0,
+            raw: parsed,
+            isMultiple: false
+          });
         }
-        setImportPreview({
-          name: parsed.suite.name,
-          description: parsed.suite.description || '',
-          casesCount: Array.isArray(parsed.testCases) ? parsed.testCases.length : 0,
-          raw: parsed
-        });
       } catch (err) {
         addToast('Failed to parse JSON file.', 'error');
         setImportPreview(null);
@@ -291,44 +375,53 @@ export default function TestSuitesPage() {
     setIsImporting(true);
     try {
       const data = importPreview.raw;
-      // 1. Create the suite
-      const newSuite = await addTestSuite(importProjectId, data.suite.name, data.suite.description);
-      if (!newSuite) {
-        throw new Error('Failed to create suite in the database.');
-      }
-
-      // 2. Insert test cases sequentially
-      if (Array.isArray(data.testCases) && data.testCases.length > 0) {
-        for (const tc of data.testCases) {
-          const payload = {
-            project_id: importProjectId,
-            suite_id: newSuite.id,
-            title: tc.title,
-            objective: tc.objective || '',
-            precondition: tc.precondition || '',
-            post_condition: tc.post_condition || '',
-            test_data: tc.test_data || '',
-            steps: tc.steps || '[]',
-            expected_result: tc.expected_result || '',
-            tags: Array.isArray(tc.tags) ? tc.tags : ['Functional'],
-            is_automated: !!tc.is_automated,
-            automation_link: tc.automation_link || '',
-            status: tc.status || 'Actual',
-            description: tc.description || '',
-            severity: tc.severity || 'Normal',
-            priority: tc.priority || 'Not set',
-            type: tc.type || 'Other',
-            layer: tc.layer || 'Not set',
-            is_flaky: !!tc.is_flaky,
-            behavior: tc.behavior || 'Not set',
-            is_muted: !!tc.is_muted,
-            created_by: currentUser?.id || 'user-qa-1'
-          };
-          await addTestCase(payload);
+      
+      const importSingleSuite = async (suiteData: any) => {
+        const newSuite = await addTestSuite(importProjectId, suiteData.suite.name, suiteData.suite.description);
+        if (!newSuite) {
+          throw new Error('Failed to create suite in the database.');
         }
-      }
 
-      addToast(`Suite "${data.suite.name}" with ${importPreview.casesCount} test cases imported successfully!`, 'success');
+        if (Array.isArray(suiteData.testCases) && suiteData.testCases.length > 0) {
+          for (const tc of suiteData.testCases) {
+            const payload = {
+              project_id: importProjectId,
+              suite_id: newSuite.id,
+              title: tc.title,
+              objective: tc.objective || '',
+              precondition: tc.precondition || '',
+              post_condition: tc.post_condition || '',
+              test_data: tc.test_data || '',
+              steps: tc.steps || '[]',
+              expected_result: tc.expected_result || '',
+              tags: Array.isArray(tc.tags) ? tc.tags : ['Functional'],
+              is_automated: !!tc.is_automated,
+              automation_link: tc.automation_link || '',
+              status: tc.status || 'Actual',
+              description: tc.description || '',
+              severity: tc.severity || 'Normal',
+              priority: tc.priority || 'Not set',
+              type: tc.type || 'Other',
+              layer: tc.layer || 'Not set',
+              is_flaky: !!tc.is_flaky,
+              behavior: tc.behavior || 'Not set',
+              is_muted: !!tc.is_muted,
+              created_by: currentUser?.id || 'user-qa-1'
+            };
+            await addTestCase(payload);
+          }
+        }
+      };
+
+      if (importPreview.isMultiple && Array.isArray(data)) {
+        for (const suiteEntry of data) {
+          await importSingleSuite(suiteEntry);
+        }
+        addToast(`Successfully imported ${data.length} test suites with ${importPreview.casesCount} test cases!`, 'success');
+      } else {
+        await importSingleSuite(data);
+        addToast(`Suite "${importPreview.name}" imported successfully with ${importPreview.casesCount} cases!`, 'success');
+      }
       setIsImportOpen(false);
       setImportFile(null);
       setImportPreview(null);
@@ -356,6 +449,15 @@ export default function TestSuitesPage() {
           <p className="text-sm text-muted-foreground">Organize your test cases into functional modules and suites.</p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={handleExportAll}
+            className="cursor-pointer font-semibold border-border hover:bg-muted text-foreground"
+            title="Export all suites & test cases under current filters to a single JSON file"
+          >
+            <FolderDown className="h-4 w-4 mr-1.5" />
+            Export All (JSON)
+          </Button>
           {canCreateAnySuite && (
             <Button
               variant="outline"
@@ -444,11 +546,11 @@ export default function TestSuitesPage() {
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="h-7 w-7 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer" 
+                      className="h-7 w-7 hover:bg-muted text-yellow-500 hover:text-yellow-600 cursor-pointer" 
                       onClick={() => handleExport(suite)}
                       title="Export suite & test cases (JSON)"
                     >
-                      <FolderDown className="h-3.5 w-3.5" />
+                      <FileJson className="h-3.5 w-3.5" />
                     </Button>
                     <Button 
                       variant="ghost" 
