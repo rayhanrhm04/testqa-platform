@@ -11,7 +11,9 @@ class MockQueryBuilder {
   }
 
   select(columns?: string) {
-    this.action = 'select';
+    if (this.action !== 'insert' && this.action !== 'update' && this.action !== 'delete') {
+      this.action = 'select';
+    }
     return this;
   }
 
