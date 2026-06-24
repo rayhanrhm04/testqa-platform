@@ -8,7 +8,8 @@ import { TestStep, parseSteps } from '@/lib/validators';
 import { 
   Folder, FolderOpen, Search, Filter, Plus, Edit, Trash2, 
   Copy, FolderInput, Download, CheckSquare, Square, ShieldAlert,
-  Terminal, Globe, BookOpen, AlertCircle, FileSpreadsheet, ChevronRight
+  Terminal, Globe, BookOpen, AlertCircle, FileSpreadsheet, ChevronRight,
+  GripVertical
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -71,6 +72,33 @@ export default function TestCasesPage() {
     setFormSteps((prev) =>
       prev.map((step, idx) => (idx === index ? { ...step, [field]: value } : step))
     );
+  };
+
+  // Drag and Drop steps states & handlers
+  const [draggedIndex, setDraggedIndex] = React.useState<number | null>(null);
+  const [isDragEnabled, setIsDragEnabled] = React.useState<boolean>(false);
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
+    
+    const nextSteps = [...formSteps];
+    const draggedItem = nextSteps[draggedIndex];
+    nextSteps.splice(draggedIndex, 1);
+    nextSteps.splice(index, 0, draggedItem);
+    
+    setDraggedIndex(index);
+    setFormSteps(nextSteps);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setIsDragEnabled(false);
   };
 
   // Expanded Qase fields
@@ -962,48 +990,73 @@ export default function TestCasesPage() {
           <div className="space-y-4 pt-2">
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1.5">Test Case Steps (Classic)</h3>
             <div className="space-y-3">
-              {formSteps.map((step, index) => (
-                <div key={index} className="flex gap-2 items-start bg-muted/10 p-2.5 rounded-lg border border-border/60">
-                  <span className="text-xs font-bold text-muted-foreground pt-2.5 w-5 text-center">{index + 1}</span>
-                  <div className="flex-1 grid gap-2 md:grid-cols-3">
-                    <FormGroup label="Step action" className="!mb-0">
-                      <Input
-                        value={step.action}
-                        onChange={(e) => updateFormStep(index, 'action', e.target.value)}
-                        placeholder="e.g. Buka https://geo.mapid.io/login"
-                        className="text-xs"
-                      />
-                    </FormGroup>
-                    <FormGroup label="Data (Test Data)" className="!mb-0">
-                      <Input
-                        value={step.data}
-                        onChange={(e) => updateFormStep(index, 'data', e.target.value)}
-                        placeholder="e.g. username: admin_user, password: secret_password"
-                        className="text-xs"
-                      />
-                    </FormGroup>
-                    <FormGroup label="Expected result" className="!mb-0">
-                      <Input
-                        value={step.expected_result}
-                        onChange={(e) => updateFormStep(index, 'expected_result', e.target.value)}
-                        placeholder="e.g. Halaman login terbuka"
-                        className="text-xs"
-                      />
-                    </FormGroup>
+              {formSteps.map((step, index) => {
+                const isDragging = draggedIndex === index;
+                return (
+                  <div 
+                    key={index} 
+                    draggable={isDragEnabled}
+                    onDragStart={(e) => handleDragStart(e, index)}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDragEnd={handleDragEnd}
+                    className={`flex gap-2 items-start bg-card p-2.5 rounded-lg border transition-all ${
+                      isDragging 
+                        ? 'opacity-40 border-primary border-dashed bg-primary/5' 
+                        : 'border-border/60 bg-muted/10'
+                    }`}
+                  >
+                    {/* Grip drag handle & index number */}
+                    <div className="flex items-center gap-1 pt-2.5 select-none">
+                      <div 
+                        onMouseEnter={() => setIsDragEnabled(true)}
+                        onMouseLeave={() => setIsDragEnabled(false)}
+                        className="cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground p-0.5 rounded transition-colors"
+                        title="Drag to reorder"
+                      >
+                        <GripVertical className="h-4 w-4 shrink-0" />
+                      </div>
+                      <span className="text-xs font-bold text-muted-foreground w-4 text-center">{index + 1}</span>
+                    </div>
+                    <div className="flex-1 grid gap-2 md:grid-cols-3">
+                      <FormGroup label="Step action" className="!mb-0">
+                        <Input
+                          value={step.action}
+                          onChange={(e) => updateFormStep(index, 'action', e.target.value)}
+                          placeholder="e.g. Buka https://geo.mapid.io/login"
+                          className="text-xs"
+                        />
+                      </FormGroup>
+                      <FormGroup label="Data (Test Data)" className="!mb-0">
+                        <Input
+                          value={step.data}
+                          onChange={(e) => updateFormStep(index, 'data', e.target.value)}
+                          placeholder="e.g. username: admin_user, password: secret_password"
+                          className="text-xs"
+                        />
+                      </FormGroup>
+                      <FormGroup label="Expected result" className="!mb-0">
+                        <Input
+                          value={step.expected_result}
+                          onChange={(e) => updateFormStep(index, 'expected_result', e.target.value)}
+                          placeholder="e.g. Halaman login terbuka"
+                          className="text-xs"
+                        />
+                      </FormGroup>
+                    </div>
+                    {formSteps.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="mt-5 h-8 w-8 text-muted-foreground hover:text-red-500 rounded-md"
+                        onClick={() => deleteFormStep(index)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
-                  {formSteps.length > 1 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="mt-5 h-8 w-8 text-muted-foreground hover:text-red-500 rounded-md"
-                      onClick={() => deleteFormStep(index)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              ))}
+                );
+              })}
               <Button
                 type="button"
                 variant="outline"
