@@ -80,7 +80,7 @@ export default function LoginPage() {
         {/* Main Product Info */}
         <div className="relative z-10 space-y-2 mt-auto mb-auto">
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl lg:text-4xl font-extrabold tracking-tight text-white">GEO MAPID</h1>
+            <h1 className="text-3xl lg:text-4xl font-extrabold tracking-tight text-white">MAPID QA</h1>
             <button className="text-gray-400 hover:text-white transition-colors" title="Info">
               <Info className="h-5 w-5" />
             </button>
@@ -113,10 +113,20 @@ export default function LoginPage() {
       {/* Right Pane: Login Form */}
       <div className="w-full md:w-[58%] lg:w-[62%] bg-white flex flex-col justify-between p-8 sm:p-12 lg:p-16 relative overflow-y-auto">
         
-        {/* Header Right: Logo text */}
-        <div className="flex items-center justify-end w-full mb-8 sm:mb-0">
+        {/* Header: Mobile Logo and Connected Future */}
+        <div className="flex items-center justify-between w-full mb-8 sm:mb-0">
+          {/* Mobile Logo & Brand (Only visible on mobile screens) */}
+          <div className="flex md:hidden items-center gap-2.5">
+            <svg className="w-6 h-6" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 20L14 4L9 20H4Z" fill="#00D2FF" />
+              <path d="M9 20L14 4L19 20H9Z" fill="#2979FF" />
+              <path d="M14 4L24 20H19L14 4Z" fill="#00E575" />
+            </svg>
+            <span className="text-lg font-black tracking-wider text-[#0f141d]">MAPID QA</span>
+          </div>
+
           {/* Connected Future text */}
-          <div className="text-right flex flex-col leading-none">
+          <div className="text-right flex flex-col leading-none ml-auto">
             <span className="text-[10px] font-medium tracking-[0.2em] text-gray-400 uppercase">CONNECTED</span>
             <span className="text-[11px] font-black tracking-[0.2em] text-[#0f141d] uppercase mt-0.5">FUTURE</span>
           </div>
