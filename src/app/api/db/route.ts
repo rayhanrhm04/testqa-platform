@@ -8,9 +8,7 @@ let pool: Pool;
 try {
   pool = new Pool({
     connectionString,
-    ssl: connectionString.includes('localhost') || connectionString.includes('127.0.0.1')
-      ? false
-      : { rejectUnauthorized: false } // SSL required for remote connections usually, but ignore self-signed cert checks
+    ssl: false // SumoPod db does not support SSL connections
   });
 } catch (err) {
   console.error('Error creating PostgreSQL pool', err);
