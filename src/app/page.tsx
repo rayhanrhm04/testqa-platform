@@ -3,8 +3,8 @@
 import * as React from 'react';
 import { useDataStore } from '@/store/useDataStore';
 import { 
-  MessageSquare, Bug, ClipboardList, Play, Rocket, AlertTriangle, 
-  CheckCircle, ArrowUpRight, TrendingUp, BarChart4
+  MessageSquare, Bug, Rocket, AlertTriangle, 
+  CheckCircle, ArrowUpRight, TrendingUp, BarChart4, ClipboardList
 } from 'lucide-react';
 import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, 
@@ -89,7 +89,6 @@ export default function DashboardPage() {
 
   // 4. Chart C: Feedback Trend (Last 7 Days)
   const feedbackTrendData = React.useMemo(() => {
-    // Generate dates mapping
     const last7Days = Array.from({ length: 7 }, (_, i) => {
       const d = new Date();
       d.setDate(d.getDate() - i);
@@ -110,7 +109,7 @@ export default function DashboardPage() {
       Pass: '#10b981',    // Emerald
       Fail: '#ef4444',    // Red
       Blocked: '#f59e0b', // Amber
-      'Not Run': '#71717a' // Muted Grey
+      'Not Run': '#94a3b8' // Muted Grey
     };
     
     return statuses.map(status => {
@@ -125,244 +124,111 @@ export default function DashboardPage() {
   }, [filteredIssues]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12 select-none">
       {/* Welcome Banner */}
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between border-b border-border pb-5">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between pb-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Analytics Overview</h1>
-          <p className="text-sm text-muted-foreground">Real-time indicators, testing health, and issue resolutions.</p>
+          <h1 className="text-2xl lg:text-3xl font-extrabold tracking-tight text-[#0f172a] dark:text-white">Dashboard</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Real-time indicators, testing health, and issue resolutions.</p>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/feedback">
-            <button className="inline-flex h-9 items-center justify-center rounded-lg border border-border bg-card px-4 text-xs font-semibold hover:bg-muted text-foreground cursor-pointer">
+            <button className="inline-flex h-9 items-center justify-center rounded-xl border border-border bg-card px-4 text-xs font-bold hover:bg-secondary text-foreground cursor-pointer transition-colors shadow-xs">
               View Feedbacks
             </button>
           </Link>
           <Link href="/test-runs/create">
-            <button className="inline-flex h-9 items-center justify-center rounded-lg bg-primary px-4 text-xs font-semibold text-primary-foreground hover:bg-primary/95 cursor-pointer shadow-sm shadow-primary/15">
+            <button className="inline-flex h-9 items-center justify-center rounded-xl bg-primary px-4 text-xs font-bold text-primary-foreground hover:bg-primary-hover cursor-pointer shadow-sm shadow-primary/10 transition-colors">
               Start Test Run
             </button>
           </Link>
         </div>
       </div>
 
-      {/* Stats Cards Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Total Feedbacks */}
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm hover:border-primary/20 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Feedbacks</span>
-            <div className="rounded-lg bg-primary/10 p-2 text-primary">
-              <MessageSquare className="h-4 w-4" />
+      {/* Row 1: Today's Summary & Test Execution Summary */}
+      <div className="grid gap-6 lg:grid-cols-4">
+        {/* Today's Status Cards */}
+        <div className="bg-card rounded-2xl p-6 border border-border/50 shadow-xs lg:col-span-3 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h3 className="text-base font-bold text-foreground">Today's Summary</h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5">QA & Feedback Metrics</p>
+            </div>
+            <button className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-xs font-semibold text-foreground hover:bg-secondary cursor-pointer transition-colors">
+              <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
+              Export
+            </button>
+          </div>
+          
+          {/* Sub-grid of stats */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Card 1: Total Feedback (Red theme) */}
+            <div className="bg-[#ffe2e5] dark:bg-[#ef4444]/10 rounded-2xl p-4 flex flex-col justify-between min-h-[140px] hover:scale-[1.01] transition-transform select-none">
+              <div className="h-10 w-10 rounded-full bg-[#fa5a7d] flex items-center justify-center text-white shadow-sm">
+                <MessageSquare className="h-4.5 w-4.5" />
+              </div>
+              <div className="mt-4">
+                <div className="text-2xl font-black text-[#1e293b] dark:text-white leading-none">{totalFeedback}</div>
+                <div className="text-xs font-bold text-slate-800/85 dark:text-slate-200 mt-1.5">Total Feedbacks</div>
+                <div className="text-[9px] font-bold text-[#fa5a7d] mt-1.5">+12% from yesterday</div>
+              </div>
+            </div>
+
+            {/* Card 2: Active Bugs (Orange theme) */}
+            <div className="bg-[#fff4de] dark:bg-[#f97316]/10 rounded-2xl p-4 flex flex-col justify-between min-h-[140px] hover:scale-[1.01] transition-transform select-none">
+              <div className="h-10 w-10 rounded-full bg-[#ff947a] flex items-center justify-center text-white shadow-sm">
+                <Bug className="h-4.5 w-4.5" />
+              </div>
+              <div className="mt-4">
+                <div className="text-2xl font-black text-[#1e293b] dark:text-white leading-none">{openBugs}</div>
+                <div className="text-xs font-bold text-slate-800/85 dark:text-slate-200 mt-1.5">Active Bugs</div>
+                <div className="text-[9px] font-bold text-[#ff947a] mt-1.5">Sprint-critical issues</div>
+              </div>
+            </div>
+
+            {/* Card 3: Ready for QA (Green theme) */}
+            <div className="bg-[#dcfce7] dark:bg-[#10b981]/10 rounded-2xl p-4 flex flex-col justify-between min-h-[140px] hover:scale-[1.01] transition-transform select-none">
+              <div className="h-10 w-10 rounded-full bg-[#3cd856] flex items-center justify-center text-white shadow-sm">
+                <CheckCircle className="h-4.5 w-4.5" />
+              </div>
+              <div className="mt-4">
+                <div className="text-2xl font-black text-[#1e293b] dark:text-white leading-none">{readyQa}</div>
+                <div className="text-xs font-bold text-slate-800/85 dark:text-slate-200 mt-1.5">Ready for QA</div>
+                <div className="text-[9px] font-bold text-[#3cd856] mt-1.5">Awaiting QA validation</div>
+              </div>
+            </div>
+
+            {/* Card 4: Target Version / Current Release (Purple theme) */}
+            <div className="bg-[#f3e8ff] dark:bg-[#a855f7]/10 rounded-2xl p-4 flex flex-col justify-between min-h-[140px] hover:scale-[1.01] transition-transform select-none">
+              <div className="h-10 w-10 rounded-full bg-[#bf5af2] flex items-center justify-center text-white shadow-sm">
+                <Rocket className="h-4.5 w-4.5" />
+              </div>
+              <div className="mt-4">
+                <div className="text-2xl font-black text-[#1e293b] dark:text-white leading-none truncate">{currentRelease}</div>
+                <div className="text-xs font-bold text-slate-800/85 dark:text-slate-200 mt-1.5">Target Version</div>
+                <div className="text-[9px] font-bold text-[#bf5af2] mt-1.5">Scheduled candidate</div>
+              </div>
             </div>
           </div>
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-2xl font-bold">{totalFeedback}</span>
-            <span className="text-xs font-semibold text-emerald-500 flex items-center gap-0.5">
-              <TrendingUp className="h-3 w-3" />
-              <span>+12%</span>
-            </span>
-          </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">From reporter feeds</p>
         </div>
 
-        {/* Open Bugs */}
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm hover:border-primary/20 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Active Bugs</span>
-            <div className="rounded-lg bg-red-500/10 p-2 text-red-500">
-              <Bug className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-2xl font-bold">{openBugs}</span>
-            <span className="text-xs font-semibold text-red-500 flex items-center gap-0.5">
-              <AlertTriangle className="h-3 w-3" />
-              <span>Critical</span>
-            </span>
-          </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">Assigned to active sprints</p>
-        </div>
-
-        {/* Ready QA */}
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm hover:border-primary/20 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Ready for QA</span>
-            <div className="rounded-lg bg-emerald-500/10 p-2 text-emerald-500">
-              <CheckCircle className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-2xl font-bold">{readyQa}</span>
-            <span className="text-xs font-semibold text-emerald-500 flex items-center gap-0.5">
-              <span>Ready</span>
-            </span>
-          </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">Requires engineer approval</p>
-        </div>
-
-        {/* Current Release */}
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm hover:border-primary/20 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Target Version</span>
-            <div className="rounded-lg bg-amber-500/10 p-2 text-amber-500">
-              <Rocket className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-2xl font-bold">{currentRelease}</span>
-            <span className="text-xs font-semibold text-muted-foreground">
-              <span>Sprinting</span>
-            </span>
-          </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">Scheduled release candidate</p>
-        </div>
-      </div>
-
-      {/* Test Cases Count Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-border bg-card p-4 flex items-center justify-between hover:bg-muted/35 transition-colors">
+        {/* Visitor Insights / Test Execution Summary Pie Chart */}
+        <div className="bg-card rounded-2xl p-6 border border-border/50 shadow-xs lg:col-span-1 flex flex-col justify-between">
           <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase">Test Cases</p>
-            <p className="text-xl font-bold mt-1">{totalTestCases}</p>
+            <h3 className="text-base font-bold text-foreground">Test Outcomes</h3>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Execution distribution</p>
           </div>
-          <div className="text-sm font-semibold px-2 py-1 bg-primary/10 text-primary rounded-md">Total</div>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4 flex items-center justify-between hover:bg-muted/35 transition-colors">
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase">Smoke Tags</p>
-            <p className="text-xl font-bold mt-1">{smokeCount}</p>
-          </div>
-          <div className="text-sm font-semibold px-2 py-1 bg-blue-500/10 text-blue-500 rounded-md">Smoke</div>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4 flex items-center justify-between hover:bg-muted/35 transition-colors">
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase">Regression</p>
-            <p className="text-xl font-bold mt-1">{regressionCount}</p>
-          </div>
-          <div className="text-sm font-semibold px-2 py-1 bg-purple-500/10 text-purple-500 rounded-md">Reg</div>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4 flex items-center justify-between hover:bg-muted/35 transition-colors">
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase">Functional</p>
-            <p className="text-xl font-bold mt-1">{functionalCount}</p>
-          </div>
-          <div className="text-sm font-semibold px-2 py-1 bg-amber-500/10 text-amber-500 rounded-md">Func</div>
-        </div>
-      </div>
-
-      {/* Charts Block */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Chart A: Bugs by Module */}
-        <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold tracking-tight text-foreground uppercase">Bugs & Improvements by Project</h3>
-            <BarChart4 className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={bugsByModuleData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                <XAxis dataKey="name" fontSize={11} stroke="var(--muted-foreground)" />
-                <YAxis fontSize={11} stroke="var(--muted-foreground)" />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--foreground)' }}
-                  itemStyle={{ fontSize: '12px' }}
-                />
-                <Legend wrapperStyle={{ fontSize: '11px' }} />
-                <Bar dataKey="Bugs" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Improvements" fill="#6366f1" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Chart B: Bugs by Severity */}
-        <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold tracking-tight text-foreground uppercase">Bugs by Severity</h3>
-            <span className="text-xs text-red-500 font-semibold bg-red-500/10 px-2 py-0.5 rounded-full">Alerts</span>
-          </div>
-          <div className="h-64 w-full flex items-center justify-center">
-            {bugsBySeverityData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={bugsBySeverityData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {bugsBySeverityData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--foreground)' }}
-                    itemStyle={{ fontSize: '12px' }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '11px' }} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <span className="text-xs text-muted-foreground">No active bugs to display</span>
-            )}
-          </div>
-        </div>
-
-        {/* Chart C: Feedback Trend */}
-        <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold tracking-tight text-foreground uppercase">Feedback Trend</h3>
-            <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <TrendingUp className="h-3.5 w-3.5 text-primary" />
-              Last 7 days
-            </span>
-          </div>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={feedbackTrendData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                <XAxis dataKey="date" fontSize={11} stroke="var(--muted-foreground)" />
-                <YAxis fontSize={11} stroke="var(--muted-foreground)" />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--foreground)' }}
-                  itemStyle={{ fontSize: '12px' }}
-                />
-                <Area type="monotone" dataKey="Count" stroke="var(--primary)" fillOpacity={1} fill="url(#colorCount)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Chart D: Test Execution Summary */}
-        <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold tracking-tight text-foreground uppercase">Test Run Execution Summary</h3>
-            <span className="text-xs text-emerald-500 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-full">Pass Rate</span>
-          </div>
-          <div className="h-64 w-full flex items-center justify-center">
+          <div className="h-40 w-full flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={testExecutionSummary}
                   cx="50%"
                   cy="50%"
-                  innerRadius={0}
-                  outerRadius={75}
-                  paddingAngle={0}
+                  innerRadius={30}
+                  outerRadius={50}
+                  paddingAngle={2}
                   dataKey="value"
-                  label={({ name, percent }) => `${name} ${percent !== undefined ? (percent * 100).toFixed(0) : '0'}%`}
-                  labelLine={false}
                 >
                   {testExecutionSummary.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
@@ -370,71 +236,182 @@ export default function DashboardPage() {
                 </Pie>
                 <Tooltip 
                   contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--foreground)' }}
-                  itemStyle={{ fontSize: '12px' }}
+                  itemStyle={{ fontSize: '10px' }}
                 />
               </PieChart>
+            </ResponsiveContainer>
+          </div>
+          {/* Legend indicators */}
+          <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-muted-foreground mt-2">
+            {testExecutionSummary.map((t, idx) => (
+              <div key={idx} className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
+                <span className="truncate">{t.name}: {t.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Row 2: Secondary statistics pills */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="bg-card rounded-2xl border border-border/50 p-4 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-zinc-900/30 transition-colors shadow-xs">
+          <div>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Test Cases</p>
+            <p className="text-xl font-bold mt-1 text-foreground">{totalTestCases}</p>
+          </div>
+          <div className="text-[10px] font-bold px-2 py-0.5 bg-primary/10 text-primary rounded-md">Total</div>
+        </div>
+        <div className="bg-card rounded-2xl border border-border/50 p-4 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-zinc-900/30 transition-colors shadow-xs">
+          <div>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Smoke Tags</p>
+            <p className="text-xl font-bold mt-1 text-foreground">{smokeCount}</p>
+          </div>
+          <div className="text-[10px] font-bold px-2 py-0.5 bg-blue-500/10 text-blue-500 rounded-md">Smoke</div>
+        </div>
+        <div className="bg-card rounded-2xl border border-border/50 p-4 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-zinc-900/30 transition-colors shadow-xs">
+          <div>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Regression</p>
+            <p className="text-xl font-bold mt-1 text-foreground">{regressionCount}</p>
+          </div>
+          <div className="text-[10px] font-bold px-2 py-0.5 bg-purple-500/10 text-purple-500 rounded-md">Reg</div>
+        </div>
+        <div className="bg-card rounded-2xl border border-border/50 p-4 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-zinc-900/30 transition-colors shadow-xs">
+          <div>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Functional</p>
+            <p className="text-xl font-bold mt-1 text-foreground">{functionalCount}</p>
+          </div>
+          <div className="text-[10px] font-bold px-2 py-0.5 bg-amber-500/10 text-amber-500 rounded-md">Func</div>
+        </div>
+      </div>
+
+      {/* Row 3: Charts Block */}
+      <div className="grid gap-6 md:grid-cols-3">
+        
+        {/* Chart A: Bugs & Improvements (Styled exactly like "Total Revenue" blue/green bar chart) */}
+        <div className="bg-card rounded-2xl border border-border/50 p-5 md:col-span-2 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-base font-bold text-foreground">Project Revenue Metrics</h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Bugs vs Improvements distribution</p>
+            </div>
+            <BarChart4 className="h-4.5 w-4.5 text-muted-foreground" />
+          </div>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={bugsByModuleData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                <XAxis dataKey="name" fontSize={10} fontWeight="bold" stroke="var(--muted-foreground)" />
+                <YAxis fontSize={10} fontWeight="bold" stroke="var(--muted-foreground)" />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--foreground)' }}
+                  itemStyle={{ fontSize: '11px' }}
+                />
+                <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
+                {/* Vibrant blue (#1a73e8) and green (#00e575) pills */}
+                <Bar dataKey="Bugs" name="Bugs" fill="#1a73e8" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Improvements" name="Improvements" fill="#00e575" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Chart C: Feedback Trend (Styled exactly like Customer Satisfaction area chart) */}
+        <div className="bg-card rounded-2xl border border-border/50 p-5 md:col-span-1 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-base font-bold text-foreground">Satisfaction Trend</h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Reporter feedback counts</p>
+            </div>
+            <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">Active</span>
+          </div>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={feedbackTrendData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#1a73e8" stopOpacity={0.25}/>
+                    <stop offset="95%" stopColor="#1a73e8" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                <XAxis dataKey="date" fontSize={10} fontWeight="bold" stroke="var(--muted-foreground)" />
+                <YAxis fontSize={10} fontWeight="bold" stroke="var(--muted-foreground)" />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--foreground)' }}
+                  itemStyle={{ fontSize: '11px' }}
+                />
+                {/* Smooth curves with gradient fill */}
+                <Area type="monotone" dataKey="Count" stroke="#1a73e8" fillOpacity={1} fill="url(#colorCount)" strokeWidth={2.5} />
+              </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
 
-      {/* Bottom Layout - Recent Activity and Sprints */}
+      {/* Row 4: Recent Activity, Severity and sprint modules */}
       <div className="grid gap-6 md:grid-cols-3">
         {/* Recent Issues List */}
-        <div className="rounded-xl border border-border bg-card p-5 md:col-span-2">
+        <div className="bg-card rounded-2xl border border-border/50 p-5 md:col-span-2 shadow-xs">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold tracking-tight text-foreground uppercase">Recent Issues logged</h3>
-            <Link href="/issues" className="text-xs text-primary font-semibold hover:underline flex items-center gap-0.5">
-              <span>View Board</span>
-              <ArrowUpRight className="h-3 w-3" />
+            <div>
+              <h3 className="text-base font-bold text-foreground">Recent Issues</h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Latest logs across modules</p>
+            </div>
+            <Link href="/issues" className="text-xs text-primary font-bold hover:underline flex items-center gap-0.5">
+              <span>View Kanban</span>
+              <ArrowUpRight className="h-3.5 w-3.5" />
             </Link>
           </div>
           <div className="space-y-3">
             {recentIssues.length > 0 ? (
               recentIssues.map((issue) => (
-                <div key={issue.id} className="flex items-center justify-between p-3 rounded-lg border border-border/60 hover:bg-muted/20 transition-colors">
+                <div key={issue.id} className="flex items-center justify-between p-3.5 rounded-xl border border-border/50 hover:bg-slate-50/50 dark:hover:bg-zinc-900/10 transition-all">
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                    <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${
                       issue.type === 'Bug' ? 'bg-red-500/10 text-red-500' : 'bg-indigo-500/10 text-indigo-500'
                     }`}>
                       {issue.code}
                     </span>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate text-foreground">{issue.title}</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">Severity: <span className="font-semibold text-foreground/80">{issue.severity}</span></p>
+                      <p className="text-xs font-bold truncate text-foreground">{issue.title}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Severity: <span className="font-bold text-foreground/80">{issue.severity}</span></p>
                     </div>
                   </div>
                   <div className="shrink-0">
-                    <span className="text-[11px] font-semibold bg-secondary text-secondary-foreground border border-border px-2 py-1 rounded-md">
+                    <span className="text-[10px] font-bold bg-secondary text-secondary-foreground border border-border/50 px-2.5 py-1 rounded-lg">
                       {issue.status}
                     </span>
                   </div>
                 </div>
               ))
             ) : (
-              <p className="text-xs text-muted-foreground text-center py-6">No issues logged yet</p>
+              <p className="text-xs text-muted-foreground text-center py-8">No issues logged yet</p>
             )}
           </div>
         </div>
 
-        {/* Projects / Modules Checklist */}
-        <div className="rounded-xl border border-border bg-card p-5">
-          <h3 className="text-sm font-bold tracking-tight text-foreground uppercase mb-4">Modules</h3>
-          <div className="space-y-4">
+        {/* Modules Checklist */}
+        <div className="bg-card rounded-2xl border border-border/50 p-5 shadow-xs flex flex-col justify-between">
+          <div>
+            <h3 className="text-base font-bold text-foreground">Modules Checklist</h3>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Accessible projects info</p>
+          </div>
+          <div className="space-y-4 mt-4 flex-1">
             {projects.map((proj) => {
               const projCases = testCases.filter(c => c.project_id === proj.id).length;
               const projSuites = testSuites.filter(s => s.project_id === proj.id).length;
               return (
                 <div key={proj.id} className="group border-b border-border/40 pb-3 last:border-0 last:pb-0">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">{proj.name}</p>
-                    <span className="text-[11px] font-medium text-muted-foreground">Active</span>
+                    <p className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">{proj.name}</p>
+                    <span className="text-[9px] font-bold bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded-sm">Active</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1 truncate">{proj.description}</p>
-                  <div className="flex items-center gap-3 mt-2 text-[10px] font-semibold text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground mt-1 truncate">{proj.description}</p>
+                  <div className="flex items-center gap-3 mt-2 text-[9px] font-bold text-muted-foreground">
                     <span>{projSuites} Suites</span>
                     <span>•</span>
-                    <span>{projCases} Test cases</span>
+                    <span>{projCases} Test Cases</span>
                   </div>
                 </div>
               );

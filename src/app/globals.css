@@ -1,67 +1,67 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fcfcfc;
-  --foreground: #1a1a1a;
+  --background: #f4f7fc;
+  --foreground: #1e293b;
   
   --card: #ffffff;
-  --card-foreground: #1a1a1a;
+  --card-foreground: #1e293b;
   
   --popover: #ffffff;
-  --popover-foreground: #1a1a1a;
+  --popover-foreground: #1e293b;
   
-  --primary: #4f46e5;
-  --primary-hover: #4338ca;
+  --primary: #1a73e8;
+  --primary-hover: #1557b0;
   --primary-foreground: #ffffff;
   
-  --secondary: #f4f4f5;
-  --secondary-foreground: #18181b;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
   
-  --muted: #f4f4f5;
-  --muted-foreground: #71717a;
+  --muted: #f8fafc;
+  --muted-foreground: #64748b;
   
-  --accent: #f4f4f5;
-  --accent-foreground: #18181b;
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
   
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
   
-  --border: #e4e4e7;
-  --input: #e4e4e7;
-  --ring: #a5b4fc;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #93c5fd;
   
-  --radius: 0.5rem;
+  --radius: 0.75rem;
 }
 
 .dark {
-  --background: #09090b;
-  --foreground: #fafafa;
+  --background: #0b0c10;
+  --foreground: #f8fafc;
   
-  --card: #18181b;
-  --card-foreground: #fafafa;
+  --card: #111217;
+  --card-foreground: #f8fafc;
   
-  --popover: #18181b;
-  --popover-foreground: #fafafa;
+  --popover: #111217;
+  --popover-foreground: #f8fafc;
   
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
   --primary-foreground: #ffffff;
   
-  --secondary: #27272a;
-  --secondary-foreground: #fafafa;
+  --secondary: #1e293b;
+  --secondary-foreground: #f8fafc;
   
-  --muted: #27272a;
-  --muted-foreground: #a1a1aa;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
   
-  --accent: #27272a;
-  --accent-foreground: #fafafa;
+  --accent: #1e293b;
+  --accent-foreground: #f8fafc;
   
-  --destructive: #7f1d1d;
+  --destructive: #991b1b;
   --destructive-foreground: #fca5a5;
   
-  --border: #27272a;
-  --input: #27272a;
-  --ring: #4f46e5;
+  --border: #1e293b;
+  --input: #1e293b;
+  --ring: #2563eb;
 }
 
 @theme inline {

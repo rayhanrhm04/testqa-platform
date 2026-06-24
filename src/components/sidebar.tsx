@@ -14,10 +14,8 @@ import { Button } from './ui/button';
 
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
-  const { activeRole, currentUser, mockUsers, setRole, logout } = useAuthStore();
+  const { activeRole, currentUser, logout } = useAuthStore();
   const { sidebarOpen, toggleSidebar, addToast } = useUIStore();
-
-
 
   const navItems = [
     { name: 'Dashboard', path: '/', icon: <LayoutDashboard className="h-4.5 w-4.5" /> },
@@ -45,12 +43,18 @@ export const Sidebar: React.FC = () => {
       }`}
     >
       {/* Brand Header */}
-      <div className="flex h-14 items-center justify-between px-4 border-b border-border">
+      <div className="flex h-14 items-center justify-between px-4 border-b border-border bg-white dark:bg-zinc-950">
         <Link href="/" className="flex items-center gap-2 font-bold tracking-tight">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground font-black text-sm">
-            QA
-          </div>
-          {sidebarOpen && <span className="text-sm font-semibold uppercase tracking-widest">MAPID QA</span>}
+          <svg className="w-6 h-6 shrink-0" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 20L14 4L9 20H4Z" fill="#00D2FF" />
+            <path d="M9 20L14 4L19 20H9Z" fill="#2979FF" />
+            <path d="M14 4L24 20H19L14 4Z" fill="#00E575" />
+          </svg>
+          {sidebarOpen && (
+            <span className="text-sm font-black uppercase tracking-wider text-foreground">
+              MAPID QA
+            </span>
+          )}
         </Link>
         <Button 
           variant="ghost" 
@@ -62,14 +66,23 @@ export const Sidebar: React.FC = () => {
         </Button>
       </div>
 
-      {/* Guest Prompt (Only shown when not signed in) */}
+      {/* Guest Promo / Upgrade Card (Premium Blue Gradient Card) */}
       {sidebarOpen && !currentUser && (
-        <div className="p-3 m-3 rounded-lg border border-border bg-muted/20 text-center">
-          <p className="text-[10px] text-muted-foreground font-semibold">Viewing as Guest</p>
-          <Link href="/login" className="mt-1.5 block">
-            <Button size="sm" className="w-full text-[10px] h-7 font-bold cursor-pointer">
-              Sign In to Collaborate
-            </Button>
+        <div className="p-4 m-3 rounded-xl bg-gradient-to-br from-[#1a73e8] to-[#00d2ff] text-white text-center relative overflow-hidden shadow-md shadow-[#1a73e8]/20 select-none">
+          <div className="absolute -right-6 -bottom-6 w-16 h-16 bg-white/10 rounded-full blur-xl pointer-events-none" />
+          <div className="flex justify-center mb-2">
+            <div className="h-8 w-8 rounded-lg bg-white/20 flex items-center justify-center">
+              <UserCheck className="h-4.5 w-4.5 text-white" />
+            </div>
+          </div>
+          <p className="text-[11px] font-bold tracking-wide">MAPID QA Portal</p>
+          <p className="text-[9px] text-white/85 mt-1 mb-3.5 font-medium leading-relaxed">
+            Get full access to run tests, write suites, and log developer bug reports.
+          </p>
+          <Link href="/login" className="block">
+            <button className="w-full py-1.5 px-3 bg-white hover:bg-slate-50 text-[#1a73e8] transition-colors text-[10px] font-black rounded-lg shadow-sm cursor-pointer uppercase tracking-wider">
+              Sign In Now
+            </button>
           </Link>
         </div>
       )}
@@ -82,10 +95,10 @@ export const Sidebar: React.FC = () => {
             <Link
               key={item.name}
               href={item.path}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+              className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all ${
                 isActive 
-                  ? 'bg-primary text-primary-foreground' 
-                  : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+                  ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20 font-semibold' 
+                  : 'hover:bg-secondary text-muted-foreground hover:text-foreground hover:font-medium'
               }`}
             >
               {item.icon}
@@ -96,16 +109,20 @@ export const Sidebar: React.FC = () => {
       </nav>
 
       {/* User Info Footer */}
-      <div className="border-t border-border p-3">
+      <div className="border-t border-border p-3 bg-slate-50/50 dark:bg-zinc-950/20">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-xs">
-              {currentUser ? currentUser.name.charAt(0) : 'G'}
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-white font-bold text-sm shadow-sm">
+              {currentUser ? currentUser.name.charAt(0).toUpperCase() : 'G'}
             </div>
             {sidebarOpen && (
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold">{currentUser ? currentUser.name : 'Guest Viewer'}</p>
-                <p className="truncate text-[10px] text-muted-foreground">{currentUser ? currentUser.email : 'Read-only access'}</p>
+                <p className="truncate text-xs font-bold text-foreground">
+                  {currentUser ? currentUser.name : 'Guest Viewer'}
+                </p>
+                <p className="truncate text-[10px] text-muted-foreground font-medium">
+                  {currentUser ? currentUser.email : 'Read-only access'}
+                </p>
               </div>
             )}
           </div>

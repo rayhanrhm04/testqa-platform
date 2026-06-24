@@ -26,7 +26,7 @@ export const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ childre
   React.useEffect(() => {
     // 1. Sync Theme
     const savedTheme = localStorage.getItem('qa_theme') as 'light' | 'dark' | null;
-    const initialTheme = savedTheme || 'dark';
+    const initialTheme = savedTheme || 'light';
     setTheme(initialTheme);
     document.documentElement.classList.toggle('dark', initialTheme === 'dark');
 
