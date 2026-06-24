@@ -68,7 +68,7 @@ export const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ childre
   // 1. Render Auth Pages (Full Screen)
   if (isAuthPage) {
     return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+      <div className="w-full min-h-screen bg-background text-foreground">
         {children}
         <ToastContainer />
       </div>

@@ -17,7 +17,6 @@ export default function LoginPage() {
   const [loading, setLoading] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
   const [rememberMe, setRememberMe] = React.useState(false);
-  const [lang, setLang] = React.useState<'en' | 'id'>('en');
 
   // Redirect if already logged in
   React.useEffect(() => {
@@ -54,32 +53,8 @@ export default function LoginPage() {
     }
   };
 
-  // Flag components
-  const USFlag = () => (
-    <svg className="w-4 h-3 rounded-sm shadow-sm" viewBox="0 0 74 39" xmlns="http://www.w3.org/2000/svg">
-      <rect width="74" height="39" fill="#B22234" />
-      <path d="M0 3h74M0 9h74M0 15h74M0 21h74M0 27h74M0 33h74" stroke="#FFF" strokeWidth="3" />
-      <rect width="30" height="21" fill="#3C3B6E" />
-      <circle cx="5" cy="5" r="1.2" fill="#FFF" />
-      <circle cx="15" cy="5" r="1.2" fill="#FFF" />
-      <circle cx="25" cy="5" r="1.2" fill="#FFF" />
-      <circle cx="10" cy="10" r="1.2" fill="#FFF" />
-      <circle cx="20" cy="10" r="1.2" fill="#FFF" />
-      <circle cx="5" cy="15" r="1.2" fill="#FFF" />
-      <circle cx="15" cy="15" r="1.2" fill="#FFF" />
-      <circle cx="25" cy="15" r="1.2" fill="#FFF" />
-    </svg>
-  );
-
-  const IDFlag = () => (
-    <svg className="w-4 h-3 rounded-sm shadow-sm border border-gray-200" viewBox="0 0 3 2" xmlns="http://www.w3.org/2000/svg">
-      <rect width="3" height="1" fill="#FF0000" />
-      <rect y="1" width="3" height="1" fill="#FFFFFF" />
-    </svg>
-  );
-
   return (
-    <div className="min-h-screen flex bg-white text-gray-900 font-sans antialiased">
+    <div className="min-h-screen w-full flex bg-white text-gray-900 font-sans antialiased">
       {/* Left Pane: Branding & Info */}
       <div 
         className="hidden md:flex md:w-[42%] lg:w-[38%] bg-[#0e0f11] p-12 lg:p-16 flex-col justify-between relative text-white select-none overflow-hidden"
@@ -138,39 +113,12 @@ export default function LoginPage() {
       {/* Right Pane: Login Form */}
       <div className="w-full md:w-[58%] lg:w-[62%] bg-white flex flex-col justify-between p-8 sm:p-12 lg:p-16 relative overflow-y-auto">
         
-        {/* Header Right: Logo text & Lang Switcher */}
-        <div className="flex items-center justify-between w-full mb-8 sm:mb-0">
+        {/* Header Right: Logo text */}
+        <div className="flex items-center justify-end w-full mb-8 sm:mb-0">
           {/* Connected Future text */}
           <div className="text-right flex flex-col leading-none">
             <span className="text-[10px] font-medium tracking-[0.2em] text-gray-400 uppercase">CONNECTED</span>
             <span className="text-[11px] font-black tracking-[0.2em] text-[#0f141d] uppercase mt-0.5">FUTURE</span>
-          </div>
-
-          {/* Lang Selector */}
-          <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 p-1 rounded-xl shadow-xs">
-            <button
-              onClick={() => setLang('en')}
-              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all duration-150 ${
-                lang === 'en'
-                  ? 'bg-[#627d98] text-white shadow-sm'
-                  : 'text-gray-500 hover:text-gray-800'
-              }`}
-            >
-              <USFlag />
-              EN
-            </button>
-            <div className="h-4 w-px bg-gray-200" />
-            <button
-              onClick={() => setLang('id')}
-              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all duration-150 ${
-                lang === 'id'
-                  ? 'bg-[#627d98] text-white shadow-sm'
-                  : 'text-gray-500 hover:text-gray-800'
-              }`}
-            >
-              <IDFlag />
-              ID
-            </button>
           </div>
         </div>
 
