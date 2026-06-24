@@ -59,6 +59,19 @@ const normalizeBehavior = (val?: string): 'Not set' | 'Positive' | 'Negative' | 
   return 'Not set';
 };
 
+const countCasesRecursively = (suites: any[]): number => {
+  let count = 0;
+  for (const s of suites) {
+    if (Array.isArray(s.cases)) {
+      count += s.cases.length;
+    }
+    if (Array.isArray(s.suites)) {
+      count += countCasesRecursively(s.suites);
+    }
+  }
+  return count;
+};
+
 export default function TestSuitesPage() {
   const router = useRouter();
   const { testSuites, projects, projectShares, addTestSuite, updateTestSuite, deleteTestSuite, testCases, addTestCase } = useDataStore();
@@ -188,37 +201,39 @@ export default function TestSuitesPage() {
 
   const handleExport = (suite: any) => {
     const suiteCases = testCases.filter((tc) => tc.suite_id === suite.id);
-    const cleanCases = suiteCases.map(tc => {
+    const cleanCases = suiteCases.map((tc, tcIdx) => {
       const parsedSteps = parseSteps(
         Array.isArray(tc.steps) ? JSON.stringify(tc.steps) : tc.steps,
         tc.expected_result
       ).map((s, idx) => ({
+        position: idx + 1,
         action: s.action || '',
         expected_result: s.expected_result || '',
         data: s.data || '',
-        position: idx + 1
+        steps: []
       }));
 
       return {
+        id: tcIdx + 1,
         title: tc.title,
-        description: tc.description || '',
+        description: tc.description || null,
         preconditions: tc.precondition || '',
         postconditions: tc.post_condition || '',
-        test_data: tc.test_data || '',
         steps: parsedSteps,
-        expected_result: tc.expected_result || '',
-        tags: tc.tags || [],
-        is_automated: !!tc.is_automated,
-        automation_link: tc.automation_link || '',
-        status: String(tc.status || 'Actual').toLowerCase(),
-        severity: String(tc.severity || 'Normal').toLowerCase(),
         priority: String(tc.priority || 'Not set').toLowerCase() === 'not set' ? 'undefined' : String(tc.priority).toLowerCase(),
+        severity: String(tc.severity || 'Normal').toLowerCase(),
         type: String(tc.type || 'Other').toLowerCase(),
-        layer: String(tc.layer || 'Not set').toLowerCase() === 'not set' ? 'undefined' : String(tc.layer).toLowerCase(),
-        is_flaky: !!tc.is_flaky,
         behavior: String(tc.behavior || 'Not set').toLowerCase() === 'not set' ? 'undefined' : String(tc.behavior).toLowerCase(),
-        is_muted: !!tc.is_muted,
-        suite_id: 1 // Link to the suite id defined in suites
+        automation: tc.is_automated ? 'automated' : 'is-not-automated',
+        status: String(tc.status || 'Actual').toLowerCase(),
+        is_flaky: tc.is_flaky ? 'yes' : 'no',
+        layer: String(tc.layer || 'Not set').toLowerCase() === 'not set' ? 'undefined' : String(tc.layer).toLowerCase(),
+        milestone: null,
+        custom_fields: [],
+        steps_type: 'classic',
+        tags: tc.tags || [],
+        params: [],
+        is_muted: tc.is_muted ? 'yes' : 'no'
       };
     });
 
@@ -227,11 +242,12 @@ export default function TestSuitesPage() {
         {
           id: 1,
           title: suite.name,
-          description: suite.description || '',
-          parent_id: null
+          description: suite.description || null,
+          preconditions: '',
+          suites: [],
+          cases: cleanCases
         }
-      ],
-      cases: cleanCases
+      ]
     };
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -327,62 +343,57 @@ export default function TestSuitesPage() {
       return;
     }
 
-    // Assign numeric IDs to suites for linking
-    const suiteIdMap: Record<string, number> = {};
     const suitesExport = activeSuites.map((suite, idx) => {
-      const numericId = idx + 1;
-      suiteIdMap[suite.id] = numericId;
-      return {
-        id: numericId,
-        title: suite.name,
-        description: suite.description || '',
-        parent_id: null
-      };
-    });
-
-    const casesExport: any[] = [];
-    activeSuites.forEach((suite) => {
-      const numericSuiteId = suiteIdMap[suite.id];
       const suiteCases = testCases.filter((tc) => tc.suite_id === suite.id);
       
-      suiteCases.forEach((tc) => {
+      const cleanCases = suiteCases.map((tc, tcIdx) => {
         const parsedSteps = parseSteps(
           Array.isArray(tc.steps) ? JSON.stringify(tc.steps) : tc.steps,
           tc.expected_result
-        ).map((s, idx) => ({
+        ).map((s, stepIdx) => ({
+          position: stepIdx + 1,
           action: s.action || '',
           expected_result: s.expected_result || '',
           data: s.data || '',
-          position: idx + 1
+          steps: []
         }));
 
-        casesExport.push({
+        return {
+          id: (idx * 1000) + tcIdx + 1,
           title: tc.title,
-          description: tc.description || '',
+          description: tc.description || null,
           preconditions: tc.precondition || '',
           postconditions: tc.post_condition || '',
-          test_data: tc.test_data || '',
           steps: parsedSteps,
-          expected_result: tc.expected_result || '',
-          tags: tc.tags || [],
-          is_automated: !!tc.is_automated,
-          automation_link: tc.automation_link || '',
-          status: String(tc.status || 'Actual').toLowerCase(),
-          severity: String(tc.severity || 'Normal').toLowerCase(),
           priority: String(tc.priority || 'Not set').toLowerCase() === 'not set' ? 'undefined' : String(tc.priority).toLowerCase(),
+          severity: String(tc.severity || 'Normal').toLowerCase(),
           type: String(tc.type || 'Other').toLowerCase(),
-          layer: String(tc.layer || 'Not set').toLowerCase() === 'not set' ? 'undefined' : String(tc.layer).toLowerCase(),
-          is_flaky: !!tc.is_flaky,
           behavior: String(tc.behavior || 'Not set').toLowerCase() === 'not set' ? 'undefined' : String(tc.behavior).toLowerCase(),
-          is_muted: !!tc.is_muted,
-          suite_id: numericSuiteId
-        });
+          automation: tc.is_automated ? 'automated' : 'is-not-automated',
+          status: String(tc.status || 'Actual').toLowerCase(),
+          is_flaky: tc.is_flaky ? 'yes' : 'no',
+          layer: String(tc.layer || 'Not set').toLowerCase() === 'not set' ? 'undefined' : String(tc.layer).toLowerCase(),
+          milestone: null,
+          custom_fields: [],
+          steps_type: 'classic',
+          tags: tc.tags || [],
+          params: [],
+          is_muted: tc.is_muted ? 'yes' : 'no'
+        };
       });
+
+      return {
+        id: idx + 1,
+        title: suite.name,
+        description: suite.description || null,
+        preconditions: '',
+        suites: [],
+        cases: cleanCases
+      };
     });
 
     const exportData = {
-      suites: suitesExport,
-      cases: casesExport
+      suites: suitesExport
     };
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -417,7 +428,13 @@ export default function TestSuitesPage() {
         
         // Qase.io standard format check
         if (parsed.suites && Array.isArray(parsed.suites)) {
-          const totalCases = Array.isArray(parsed.cases) ? parsed.cases.length : 0;
+          let totalCases = 0;
+          if (Array.isArray(parsed.cases) && parsed.cases.length > 0) {
+            totalCases = parsed.cases.length;
+          } else {
+            totalCases = countCasesRecursively(parsed.suites);
+          }
+
           setImportPreview({
             name: parsed.suites.length === 1 ? parsed.suites[0].title : `${parsed.suites.length} Test Suites`,
             description: parsed.suites.length === 1 
@@ -480,15 +497,70 @@ export default function TestSuitesPage() {
         // Qase.io format: array of suites and cases
         const suiteIdMapping: Record<string, string> = {};
 
-        // 1. Create all suites
-        for (const suiteData of data.suites) {
-          const newSuite = await addTestSuite(importProjectId, suiteData.title || suiteData.name, suiteData.description || '');
-          if (newSuite) {
-            suiteIdMapping[String(suiteData.id)] = newSuite.id;
+        // Helper to recursively import suites and their cases
+        const importSuiteAndCases = async (suiteData: any, parentId: string | null) => {
+          // Create the suite in our platform
+          const newSuite = await addTestSuite(
+            importProjectId, 
+            suiteData.title || suiteData.name, 
+            suiteData.description || ''
+          );
+
+          if (!newSuite) return;
+          suiteIdMapping[String(suiteData.id)] = newSuite.id;
+
+          // Import cases under this suite
+          if (Array.isArray(suiteData.cases)) {
+            for (const tc of suiteData.cases) {
+              const parsedSteps = JSON.stringify(
+                parseSteps(
+                  Array.isArray(tc.steps) ? JSON.stringify(tc.steps) : tc.steps,
+                  tc.expected_result
+                )
+              );
+
+              const payload = {
+                project_id: importProjectId,
+                suite_id: newSuite.id,
+                title: tc.title,
+                objective: tc.objective || '',
+                precondition: tc.preconditions || tc.precondition || '',
+                post_condition: tc.postconditions || tc.post_condition || '',
+                test_data: tc.test_data || '',
+                steps: parsedSteps,
+                expected_result: tc.expected_result || '',
+                tags: Array.isArray(tc.tags) ? tc.tags : ['Functional'],
+                is_automated: tc.automation === 'automated' || !!tc.is_automated,
+                automation_link: tc.automation_link || '',
+                status: normalizeStatus(tc.status),
+                description: tc.description || '',
+                severity: normalizeSeverity(tc.severity),
+                priority: normalizePriority(tc.priority),
+                type: tc.type || 'Other',
+                layer: normalizeLayer(tc.layer),
+                is_flaky: tc.is_flaky === 'yes' || !!tc.is_flaky,
+                behavior: normalizeBehavior(tc.behavior),
+                is_muted: tc.is_muted === 'yes' || !!tc.is_muted,
+                created_by: currentUser?.id || 'user-qa-1'
+              };
+              await addTestCase(payload);
+            }
           }
+
+          // Recursively import sub-suites
+          if (Array.isArray(suiteData.suites)) {
+            for (const childSuite of suiteData.suites) {
+              await importSuiteAndCases(childSuite, newSuite.id);
+            }
+          }
+        };
+
+        // 1. Process all root level suites recursively
+        for (const suiteData of data.suites) {
+          await importSuiteAndCases(suiteData, null);
         }
 
-        // 2. Import cases
+        // 2. Also handle any legacy flat cases array in the same file if present (as a fallback)
         if (Array.isArray(data.cases) && data.cases.length > 0) {
           for (const tc of data.cases) {
             const mappedSuiteId = suiteIdMapping[String(tc.suite_id)];
@@ -512,7 +584,7 @@ export default function TestSuitesPage() {
               steps: parsedSteps,
               expected_result: tc.expected_result || '',
               tags: Array.isArray(tc.tags) ? tc.tags : ['Functional'],
-              is_automated: !!tc.is_automated,
+              is_automated: tc.automation === 'automated' || !!tc.is_automated,
               automation_link: tc.automation_link || '',
               status: normalizeStatus(tc.status),
               description: tc.description || '',
@@ -520,15 +592,17 @@ export default function TestSuitesPage() {
               priority: normalizePriority(tc.priority),
               type: tc.type || 'Other',
               layer: normalizeLayer(tc.layer),
-              is_flaky: !!tc.is_flaky,
+              is_flaky: tc.is_flaky === 'yes' || !!tc.is_flaky,
               behavior: normalizeBehavior(tc.behavior),
-              is_muted: !!tc.is_muted,
+              is_muted: tc.is_muted === 'yes' || !!tc.is_muted,
               created_by: currentUser?.id || 'user-qa-1'
             };
             await addTestCase(payload);
           }
         }
-        addToast(`Successfully imported Qase.io project data (${data.suites.length} suites, ${data.cases.length} cases)!`, 'success');
+
+        const totalCases = countCasesRecursively(data.suites) + (Array.isArray(data.cases) ? data.cases.length : 0);
+        addToast(`Successfully imported Qase.io project data (${data.suites.length} suites, ${totalCases} cases)!`, 'success');
       } else if (importPreview.isLegacyArray && Array.isArray(data)) {
         // Legacy array of suites
         for (const suiteEntry of data) {
