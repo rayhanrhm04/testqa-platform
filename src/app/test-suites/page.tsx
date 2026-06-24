@@ -10,6 +10,54 @@ import { Dialog } from '@/components/ui/dialog';
 import { FormGroup, Input, Textarea } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { useRouter } from 'next/navigation';
+import { parseSteps } from '@/lib/validators';
+
+// Helper functions to normalize Qase fields to platform values
+const normalizeStatus = (val?: string): 'Actual' | 'Draft' | 'Deprecated' => {
+  if (!val) return 'Actual';
+  const lower = val.toLowerCase();
+  if (lower === 'draft') return 'Draft';
+  if (lower === 'deprecated') return 'Deprecated';
+  return 'Actual';
+};
+
+const normalizeSeverity = (val?: string): 'Normal' | 'Blocker' | 'Critical' | 'Major' | 'Minor' | 'Trivial' => {
+  if (!val) return 'Normal';
+  const lower = val.toLowerCase();
+  if (lower === 'blocker') return 'Blocker';
+  if (lower === 'critical') return 'Critical';
+  if (lower === 'major') return 'Major';
+  if (lower === 'minor') return 'Minor';
+  if (lower === 'trivial') return 'Trivial';
+  return 'Normal';
+};
+
+const normalizePriority = (val?: string): 'Not set' | 'High' | 'Medium' | 'Low' => {
+  if (!val) return 'Not set';
+  const lower = val.toLowerCase().replace('_', ' ');
+  if (lower === 'high') return 'High';
+  if (lower === 'medium') return 'Medium';
+  if (lower === 'low') return 'Low';
+  return 'Not set';
+};
+
+const normalizeLayer = (val?: string): 'Not set' | 'E2E' | 'API' | 'Unit' => {
+  if (!val) return 'Not set';
+  const lower = val.toLowerCase().replace('_', ' ');
+  if (lower === 'e2e' || lower === 'end-to-end' || lower === 'end_to_end') return 'E2E';
+  if (lower === 'api') return 'API';
+  if (lower === 'unit') return 'Unit';
+  return 'Not set';
+};
+
+const normalizeBehavior = (val?: string): 'Not set' | 'Positive' | 'Negative' | 'Destructive' => {
+  if (!val) return 'Not set';
+  const lower = val.toLowerCase().replace('_', ' ');
+  if (lower === 'positive') return 'Positive';
+  if (lower === 'negative') return 'Negative';
+  if (lower === 'destructive') return 'Destructive';
+  return 'Not set';
+};
 
 export default function TestSuitesPage() {
   const router = useRouter();
@@ -140,34 +188,52 @@ export default function TestSuitesPage() {
 
   const handleExport = (suite: any) => {
     const suiteCases = testCases.filter((tc) => tc.suite_id === suite.id);
-    const cleanCases = suiteCases.map(tc => ({
-      title: tc.title,
-      objective: tc.objective,
-      precondition: tc.precondition,
-      post_condition: tc.post_condition,
-      test_data: tc.test_data,
-      steps: tc.steps,
-      expected_result: tc.expected_result,
-      tags: tc.tags,
-      is_automated: tc.is_automated,
-      automation_link: tc.automation_link,
-      status: tc.status,
-      description: tc.description,
-      severity: tc.severity,
-      priority: tc.priority,
-      type: tc.type,
-      layer: tc.layer,
-      is_flaky: tc.is_flaky,
-      behavior: tc.behavior,
-      is_muted: tc.is_muted
-    }));
+    const cleanCases = suiteCases.map(tc => {
+      const parsedSteps = parseSteps(
+        Array.isArray(tc.steps) ? JSON.stringify(tc.steps) : tc.steps,
+        tc.expected_result
+      ).map((s, idx) => ({
+        action: s.action || '',
+        expected_result: s.expected_result || '',
+        data: s.data || '',
+        position: idx + 1
+      }));
+
+      return {
+        title: tc.title,
+        description: tc.description || '',
+        preconditions: tc.precondition || '',
+        postconditions: tc.post_condition || '',
+        test_data: tc.test_data || '',
+        steps: parsedSteps,
+        expected_result: tc.expected_result || '',
+        tags: tc.tags || [],
+        is_automated: !!tc.is_automated,
+        automation_link: tc.automation_link || '',
+        status: String(tc.status || 'Actual').toLowerCase(),
+        severity: String(tc.severity || 'Normal').toLowerCase(),
+        priority: String(tc.priority || 'Not set').toLowerCase() === 'not set' ? 'undefined' : String(tc.priority).toLowerCase(),
+        type: String(tc.type || 'Other').toLowerCase(),
+        layer: String(tc.layer || 'Not set').toLowerCase() === 'not set' ? 'undefined' : String(tc.layer).toLowerCase(),
+        is_flaky: !!tc.is_flaky,
+        behavior: String(tc.behavior || 'Not set').toLowerCase() === 'not set' ? 'undefined' : String(tc.behavior).toLowerCase(),
+        is_muted: !!tc.is_muted,
+        suite_id: 1 // Link to the suite id defined in suites
+      };
+    });
+
     const exportData = {
-      suite: {
-        name: suite.name,
-        description: suite.description
-      },
-      testCases: cleanCases
+      suites: [
+        {
+          id: 1,
+          title: suite.name,
+          description: suite.description || '',
+          parent_id: null
+        }
+      ],
+      cases: cleanCases
     };
+
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -176,7 +242,7 @@ export default function TestSuitesPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    addToast(`Suite "${suite.name}" exported successfully!`, 'success');
+    addToast(`Suite "${suite.name}" exported to Qase.io JSON format!`, 'success');
   };
 
   const handleExportExcel = (suite: any) => {
@@ -261,38 +327,63 @@ export default function TestSuitesPage() {
       return;
     }
 
-    const exportData = activeSuites.map((suite) => {
-      const suiteCases = testCases.filter((tc) => tc.suite_id === suite.id);
-      const cleanCases = suiteCases.map((tc) => ({
-        title: tc.title,
-        objective: tc.objective,
-        precondition: tc.precondition,
-        post_condition: tc.post_condition,
-        test_data: tc.test_data,
-        steps: tc.steps,
-        expected_result: tc.expected_result,
-        tags: tc.tags,
-        is_automated: tc.is_automated,
-        automation_link: tc.automation_link,
-        status: tc.status,
-        description: tc.description,
-        severity: tc.severity,
-        priority: tc.priority,
-        type: tc.type,
-        layer: tc.layer,
-        is_flaky: tc.is_flaky,
-        behavior: tc.behavior,
-        is_muted: tc.is_muted
-      }));
-
+    // Assign numeric IDs to suites for linking
+    const suiteIdMap: Record<string, number> = {};
+    const suitesExport = activeSuites.map((suite, idx) => {
+      const numericId = idx + 1;
+      suiteIdMap[suite.id] = numericId;
       return {
-        suite: {
-          name: suite.name,
-          description: suite.description
-        },
-        testCases: cleanCases
+        id: numericId,
+        title: suite.name,
+        description: suite.description || '',
+        parent_id: null
       };
     });
+
+    const casesExport: any[] = [];
+    activeSuites.forEach((suite) => {
+      const numericSuiteId = suiteIdMap[suite.id];
+      const suiteCases = testCases.filter((tc) => tc.suite_id === suite.id);
+      
+      suiteCases.forEach((tc) => {
+        const parsedSteps = parseSteps(
+          Array.isArray(tc.steps) ? JSON.stringify(tc.steps) : tc.steps,
+          tc.expected_result
+        ).map((s, idx) => ({
+          action: s.action || '',
+          expected_result: s.expected_result || '',
+          data: s.data || '',
+          position: idx + 1
+        }));
+
+        casesExport.push({
+          title: tc.title,
+          description: tc.description || '',
+          preconditions: tc.precondition || '',
+          postconditions: tc.post_condition || '',
+          test_data: tc.test_data || '',
+          steps: parsedSteps,
+          expected_result: tc.expected_result || '',
+          tags: tc.tags || [],
+          is_automated: !!tc.is_automated,
+          automation_link: tc.automation_link || '',
+          status: String(tc.status || 'Actual').toLowerCase(),
+          severity: String(tc.severity || 'Normal').toLowerCase(),
+          priority: String(tc.priority || 'Not set').toLowerCase() === 'not set' ? 'undefined' : String(tc.priority).toLowerCase(),
+          type: String(tc.type || 'Other').toLowerCase(),
+          layer: String(tc.layer || 'Not set').toLowerCase() === 'not set' ? 'undefined' : String(tc.layer).toLowerCase(),
+          is_flaky: !!tc.is_flaky,
+          behavior: String(tc.behavior || 'Not set').toLowerCase() === 'not set' ? 'undefined' : String(tc.behavior).toLowerCase(),
+          is_muted: !!tc.is_muted,
+          suite_id: numericSuiteId
+        });
+      });
+    });
+
+    const exportData = {
+      suites: suitesExport,
+      cases: casesExport
+    };
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -311,7 +402,7 @@ export default function TestSuitesPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    addToast(`Exported ${activeSuites.length} test suites successfully!`, 'success');
+    addToast(`Exported ${activeSuites.length} test suites in Qase.io JSON format!`, 'success');
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -323,35 +414,44 @@ export default function TestSuitesPage() {
     reader.onload = (event) => {
       try {
         const parsed = JSON.parse(event.target?.result as string);
-        if (Array.isArray(parsed)) {
-          if (parsed.length === 0 || !parsed[0].suite || !parsed[0].suite.name) {
-            addToast('Invalid file format. JSON array must contain suite objects.', 'error');
-            setImportPreview(null);
-            setImportFile(null);
-            return;
-          }
-          const totalCases = parsed.reduce((sum, s) => sum + (Array.isArray(s.testCases) ? s.testCases.length : 0), 0);
+        
+        // Qase.io standard format check
+        if (parsed.suites && Array.isArray(parsed.suites)) {
+          const totalCases = Array.isArray(parsed.cases) ? parsed.cases.length : 0;
           setImportPreview({
-            name: `${parsed.length} Test Suites`,
-            description: `Importing ${parsed.length} suites with a total of ${totalCases} test cases.`,
+            name: parsed.suites.length === 1 ? parsed.suites[0].title : `${parsed.suites.length} Test Suites`,
+            description: parsed.suites.length === 1 
+              ? (parsed.suites[0].description || 'Qase.io exported suite') 
+              : `Importing ${parsed.suites.length} suites with a total of ${totalCases} test cases from Qase.io format.`,
             casesCount: totalCases,
             raw: parsed,
-            isMultiple: true
+            isQaseFormat: true
           });
-        } else {
-          if (!parsed.suite || !parsed.suite.name) {
-            addToast('Invalid file format. JSON must contain suite metadata.', 'error');
-            setImportPreview(null);
-            setImportFile(null);
-            return;
-          }
+        } 
+        // Fallback to legacy single suite format
+        else if (parsed.suite && parsed.suite.name) {
           setImportPreview({
             name: parsed.suite.name,
             description: parsed.suite.description || '',
             casesCount: Array.isArray(parsed.testCases) ? parsed.testCases.length : 0,
             raw: parsed,
-            isMultiple: false
+            isQaseFormat: false
           });
+        } 
+        // Fallback to legacy array format
+        else if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].suite) {
+          const totalCases = parsed.reduce((sum, s) => sum + (Array.isArray(s.testCases) ? s.testCases.length : 0), 0);
+          setImportPreview({
+            name: `${parsed.length} Test Suites`,
+            description: `Importing ${parsed.length} suites with a total of ${totalCases} test cases (Legacy format).`,
+            casesCount: totalCases,
+            raw: parsed,
+            isLegacyArray: true
+          });
+        } else {
+          addToast('Invalid file format. Must be a valid Qase.io JSON export.', 'error');
+          setImportPreview(null);
+          setImportFile(null);
         }
       } catch (err) {
         addToast('Failed to parse JSON file.', 'error');
@@ -375,15 +475,114 @@ export default function TestSuitesPage() {
     setIsImporting(true);
     try {
       const data = importPreview.raw;
-      
-      const importSingleSuite = async (suiteData: any) => {
-        const newSuite = await addTestSuite(importProjectId, suiteData.suite.name, suiteData.suite.description);
-        if (!newSuite) {
-          throw new Error('Failed to create suite in the database.');
+
+      if (importPreview.isQaseFormat) {
+        // Qase.io format: array of suites and cases
+        const suiteIdMapping: Record<string, string> = {};
+
+        // 1. Create all suites
+        for (const suiteData of data.suites) {
+          const newSuite = await addTestSuite(importProjectId, suiteData.title || suiteData.name, suiteData.description || '');
+          if (newSuite) {
+            suiteIdMapping[String(suiteData.id)] = newSuite.id;
+          }
         }
 
-        if (Array.isArray(suiteData.testCases) && suiteData.testCases.length > 0) {
-          for (const tc of suiteData.testCases) {
+        // 2. Import cases
+        if (Array.isArray(data.cases) && data.cases.length > 0) {
+          for (const tc of data.cases) {
+            const mappedSuiteId = suiteIdMapping[String(tc.suite_id)];
+            if (!mappedSuiteId) continue;
+
+            const parsedSteps = JSON.stringify(
+              parseSteps(
+                Array.isArray(tc.steps) ? JSON.stringify(tc.steps) : tc.steps,
+                tc.expected_result
+              )
+            );
+
+            const payload = {
+              project_id: importProjectId,
+              suite_id: mappedSuiteId,
+              title: tc.title,
+              objective: tc.objective || '',
+              precondition: tc.preconditions || tc.precondition || '',
+              post_condition: tc.postconditions || tc.post_condition || '',
+              test_data: tc.test_data || '',
+              steps: parsedSteps,
+              expected_result: tc.expected_result || '',
+              tags: Array.isArray(tc.tags) ? tc.tags : ['Functional'],
+              is_automated: !!tc.is_automated,
+              automation_link: tc.automation_link || '',
+              status: normalizeStatus(tc.status),
+              description: tc.description || '',
+              severity: normalizeSeverity(tc.severity),
+              priority: normalizePriority(tc.priority),
+              type: tc.type || 'Other',
+              layer: normalizeLayer(tc.layer),
+              is_flaky: !!tc.is_flaky,
+              behavior: normalizeBehavior(tc.behavior),
+              is_muted: !!tc.is_muted,
+              created_by: currentUser?.id || 'user-qa-1'
+            };
+            await addTestCase(payload);
+          }
+        }
+        addToast(`Successfully imported Qase.io project data (${data.suites.length} suites, ${data.cases.length} cases)!`, 'success');
+      } else if (importPreview.isLegacyArray && Array.isArray(data)) {
+        // Legacy array of suites
+        for (const suiteEntry of data) {
+          const newSuite = await addTestSuite(importProjectId, suiteEntry.suite.name, suiteEntry.suite.description);
+          if (newSuite && Array.isArray(suiteEntry.testCases)) {
+            for (const tc of suiteEntry.testCases) {
+              const parsedSteps = JSON.stringify(
+                parseSteps(
+                  Array.isArray(tc.steps) ? JSON.stringify(tc.steps) : tc.steps,
+                  tc.expected_result
+                )
+              );
+
+              const payload = {
+                project_id: importProjectId,
+                suite_id: newSuite.id,
+                title: tc.title,
+                objective: tc.objective || '',
+                precondition: tc.precondition || '',
+                post_condition: tc.post_condition || '',
+                test_data: tc.test_data || '',
+                steps: parsedSteps,
+                expected_result: tc.expected_result || '',
+                tags: Array.isArray(tc.tags) ? tc.tags : ['Functional'],
+                is_automated: !!tc.is_automated,
+                automation_link: tc.automation_link || '',
+                status: normalizeStatus(tc.status),
+                description: tc.description || '',
+                severity: normalizeSeverity(tc.severity),
+                priority: normalizePriority(tc.priority),
+                type: tc.type || 'Other',
+                layer: normalizeLayer(tc.layer),
+                is_flaky: !!tc.is_flaky,
+                behavior: normalizeBehavior(tc.behavior),
+                is_muted: !!tc.is_muted,
+                created_by: currentUser?.id || 'user-qa-1'
+              };
+              await addTestCase(payload);
+            }
+          }
+        }
+        addToast(`Successfully imported ${data.length} test suites (Legacy format)!`, 'success');
+      } else {
+        // Legacy single suite
+        const newSuite = await addTestSuite(importProjectId, data.suite.name, data.suite.description);
+        if (newSuite && Array.isArray(data.testCases)) {
+          for (const tc of data.testCases) {
+            const parsedSteps = JSON.stringify(
+              parseSteps(
+                Array.isArray(tc.steps) ? JSON.stringify(tc.steps) : tc.steps,
+                tc.expected_result
+              )
+            );
+
             const payload = {
               project_id: importProjectId,
               suite_id: newSuite.id,
@@ -392,35 +591,26 @@ export default function TestSuitesPage() {
               precondition: tc.precondition || '',
               post_condition: tc.post_condition || '',
               test_data: tc.test_data || '',
-              steps: tc.steps || '[]',
+              steps: parsedSteps,
               expected_result: tc.expected_result || '',
               tags: Array.isArray(tc.tags) ? tc.tags : ['Functional'],
               is_automated: !!tc.is_automated,
               automation_link: tc.automation_link || '',
-              status: tc.status || 'Actual',
+              status: normalizeStatus(tc.status),
               description: tc.description || '',
-              severity: tc.severity || 'Normal',
-              priority: tc.priority || 'Not set',
+              severity: normalizeSeverity(tc.severity),
+              priority: normalizePriority(tc.priority),
               type: tc.type || 'Other',
-              layer: tc.layer || 'Not set',
+              layer: normalizeLayer(tc.layer),
               is_flaky: !!tc.is_flaky,
-              behavior: tc.behavior || 'Not set',
+              behavior: normalizeBehavior(tc.behavior),
               is_muted: !!tc.is_muted,
               created_by: currentUser?.id || 'user-qa-1'
             };
             await addTestCase(payload);
           }
         }
-      };
-
-      if (importPreview.isMultiple && Array.isArray(data)) {
-        for (const suiteEntry of data) {
-          await importSingleSuite(suiteEntry);
-        }
-        addToast(`Successfully imported ${data.length} test suites with ${importPreview.casesCount} test cases!`, 'success');
-      } else {
-        await importSingleSuite(data);
-        addToast(`Suite "${importPreview.name}" imported successfully with ${importPreview.casesCount} cases!`, 'success');
+        addToast(`Suite "${importPreview.name}" imported successfully (Legacy format)!`, 'success');
       }
       setIsImportOpen(false);
       setImportFile(null);
