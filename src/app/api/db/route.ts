@@ -64,10 +64,28 @@ export async function POST(req: NextRequest) {
       queryText = `SELECT * FROM "${table}" ${clause} ${orderClause}`;
 
     } else if (action === 'insert') {
-      const keys = Object.keys(data);
-      const placeholders = keys.map((_, idx) => `$${idx + 1}`).join(', ');
-      queryText = `INSERT INTO "${table}" (${keys.map(k => `"${k}"`).join(', ')}) VALUES (${placeholders}) RETURNING *`;
-      queryValues.push(...Object.values(data));
+      if (Array.isArray(data)) {
+        if (data.length === 0) {
+          return NextResponse.json({ data: [] });
+        }
+        const keys = Object.keys(data[0]);
+        const values: any[] = [];
+        const placeholders = data.map((row, i) => {
+          const rowPlaceholders = keys.map((_, j) => {
+            values.push(row[keys[j]]);
+            return `$${i * keys.length + j + 1}`;
+          });
+          return `(${rowPlaceholders.join(', ')})`;
+        }).join(', ');
+        
+        queryText = `INSERT INTO "${table}" (${keys.map(k => `"${k}"`).join(', ')}) VALUES ${placeholders} RETURNING *`;
+        queryValues.push(...values);
+      } else {
+        const keys = Object.keys(data);
+        const placeholders = keys.map((_, idx) => `$${idx + 1}`).join(', ');
+        queryText = `INSERT INTO "${table}" (${keys.map(k => `"${k}"`).join(', ')}) VALUES (${placeholders}) RETURNING *`;
+        queryValues.push(...Object.values(data));
+      }
 
     } else if (action === 'update') {
       const keys = Object.keys(data);
