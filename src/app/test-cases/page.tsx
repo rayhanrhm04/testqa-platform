@@ -129,7 +129,7 @@ export default function TestCasesPage() {
   // Reset/sync form
   React.useEffect(() => {
     if (editingCase) {
-      setTitle(editingCase.title);
+      setTitle(editingCase.isDuplicate ? `Copy of ${editingCase.title}` : editingCase.title);
       setObjective(editingCase.objective || '');
       setPrecondition(editingCase.precondition || '');
       setTestData(editingCase.test_data || '');
@@ -239,7 +239,7 @@ export default function TestCasesPage() {
     };
 
     try {
-      if (editingCase) {
+      if (editingCase && !editingCase.isDuplicate) {
         await updateTestCase(editingCase.id, payload);
         addToast(`Test case ${editingCase.code} updated!`, 'success');
       } else {
@@ -579,6 +579,22 @@ export default function TestCasesPage() {
                               <Button 
                                 variant="ghost" 
                                 size="icon" 
+                                className="h-7 w-7 hover:bg-muted" 
+                                onClick={() => {
+                                  if (!currentUser) {
+                                    router.push('/login');
+                                    return;
+                                  }
+                                  setEditingCase({ ...tc, isDuplicate: true }); 
+                                  setIsFormOpen(true); 
+                                }}
+                                title="Duplicate"
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
                                 className="h-7 w-7 text-red-500 hover:bg-red-500/10" 
                                 onClick={async () => {
                                   if (!currentUser) {
@@ -814,7 +830,7 @@ export default function TestCasesPage() {
       <Dialog
         isOpen={isFormOpen}
         onClose={() => { setIsFormOpen(false); setEditingCase(null); }}
-        title={editingCase ? `Edit Test Case (${editingCase.code})` : 'Create Test Case'}
+        title={editingCase ? (editingCase.isDuplicate ? 'Duplicate Test Case' : `Edit Test Case (${editingCase.code})`) : 'Create Test Case'}
         footer={
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => { setIsFormOpen(false); setEditingCase(null); }}>Cancel</Button>
