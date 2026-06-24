@@ -65,13 +65,8 @@ export default function RegisterPage() {
         <div className="absolute inset-0 bg-black/10 z-0 pointer-events-none" />
 
         {/* Brand Logo */}
-        <div className="relative z-10 flex items-center gap-2.5">
-          <svg className="w-7 h-7" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M4 20L14 4L9 20H4Z" fill="#00D2FF" />
-            <path d="M9 20L14 4L19 20H9Z" fill="#2979FF" />
-            <path d="M14 4L24 20H19L14 4Z" fill="#00E575" />
-          </svg>
-          <span className="text-xl font-extrabold tracking-wider text-white">MAPID</span>
+        <div className="relative z-10">
+          <img src="/logo.png" alt="MAPID" className="h-8 w-auto object-contain" />
         </div>
 
         {/* Main Product Info */}
@@ -88,22 +83,8 @@ export default function RegisterPage() {
         </div>
 
         {/* Footer Version Info */}
-        <div className="relative z-10 flex items-center gap-2 text-xs text-gray-400 font-medium">
-          <span>Version 2.53.18</span>
-          <span className="text-gray-600">•</span>
-          <a 
-            href="https://www.mapid.io" 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="hover:text-white hover:underline transition-colors flex items-center gap-0.5"
-          >
-            About Us
-            <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-              <polyline points="15 3 21 3 21 9" />
-              <line x1="10" y1="14" x2="21" y2="3" />
-            </svg>
-          </a>
+        <div className="relative z-10 text-xs text-gray-400 font-medium">
+          <span>Version 1.0.0</span>
         </div>
       </div>
 
@@ -112,14 +93,10 @@ export default function RegisterPage() {
         
         {/* Header: Mobile Logo and Connected Future */}
         <div className="flex items-center justify-between w-full mb-8 sm:mb-0">
-          {/* Mobile Logo & Brand (Only visible on mobile screens) */}
-          <div className="flex md:hidden items-center gap-2.5">
-            <svg className="w-6 h-6" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M4 20L14 4L9 20H4Z" fill="#00D2FF" />
-              <path d="M9 20L14 4L19 20H9Z" fill="#2979FF" />
-              <path d="M14 4L24 20H19L14 4Z" fill="#00E575" />
-            </svg>
-            <span className="text-lg font-black tracking-wider text-[#0f141d]">MAPID QA</span>
+          {/* Mobile Logo & Brand (Only visible on mobile screens) - wrapped in dark badge to make white text logo visible */}
+          <div className="flex md:hidden items-center bg-[#0e0f11] px-3 py-1.5 rounded-lg shadow-sm">
+            <img src="/logo.png" alt="MAPID" className="h-5 w-auto object-contain" />
+            <span className="text-[10px] font-bold text-white uppercase tracking-wider ml-2 bg-primary px-1.5 py-0.5 rounded-sm">QA</span>
           </div>
 
           {/* Connected Future text */}
