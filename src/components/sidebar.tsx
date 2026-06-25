@@ -99,7 +99,16 @@ export const Sidebar: React.FC = () => {
               }`}
             >
               {item.icon}
-              {sidebarOpen && <span>{item.name}</span>}
+              {sidebarOpen && (
+                <div className="flex items-center justify-between flex-1 min-w-0">
+                  <span className="truncate">{item.name}</span>
+                  {item.name === 'User Feedback' && (
+                    <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 whitespace-nowrap ml-2">
+                      Coming Soon
+                    </span>
+                  )}
+                </div>
+              )}
             </Link>
           );
         })}

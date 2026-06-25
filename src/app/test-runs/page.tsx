@@ -7,7 +7,7 @@ import { useUIStore } from '@/store/useUIStore';
 import { 
   PlayCircle, ShieldAlert, Plus, Calendar, Activity, CheckCircle, 
   Flame, Trash2, BarChart4, RefreshCw, FileText, CheckCircle2, 
-  XCircle, AlertTriangle, HelpCircle, User 
+  XCircle, AlertTriangle, HelpCircle, User, Printer 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -107,6 +107,410 @@ export default function TestRunsPage() {
       }
     }
   };
+
+  const handleExportPDF = React.useCallback((data: any) => {
+    if (!data) return;
+    const { run, runResults, runCases, total, passed, failed, blocked, notRun, rate } = data;
+    const releaseVersion = releases.find(r => r.id === run.release_id)?.version || 'Backlog';
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      addToast('Popups blocked! Please allow popups to export the PDF.', 'error');
+      return;
+    }
+
+    const escapeHtml = (str: string) => {
+      if (!str) return '';
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    };
+
+    const passedPercent = total > 0 ? (passed / total) * 100 : 0;
+    const failedPercent = total > 0 ? (failed / total) * 100 : 0;
+    const blockedPercent = total > 0 ? (blocked / total) * 100 : 0;
+    const notRunPercent = total > 0 ? (notRun / total) * 100 : 0;
+
+    const rowsHtml = runCases.map((tc: any) => {
+      const res = runResults.find((r: any) => r.test_case_id === tc.id);
+      const resultLabel = res?.result || 'Not Run';
+      const execUser = res?.executed_by ? users.find(u => u.id === res.executed_by) : null;
+      const executedByName = res?.result && res.result !== 'Not Run' ? (execUser ? execUser.name : 'Unknown QA') : '—';
+      const notes = res?.actual_result || res?.notes || 'No output log';
+      const isCustomNotes = !!(res?.actual_result || res?.notes);
+      const notesClass = isCustomNotes ? 'notes' : 'notes-empty';
+      
+      let badgeClass = 'badge-notrun';
+      if (res?.result === 'Pass') badgeClass = 'badge-pass';
+      else if (res?.result === 'Fail') badgeClass = 'badge-fail';
+      else if (res?.result === 'Blocked') badgeClass = 'badge-blocked';
+
+      return `
+        <tr>
+          <td class="case-code">${escapeHtml(tc.code)}</td>
+          <td class="case-title">${escapeHtml(tc.title)}</td>
+          <td><span class="badge ${badgeClass}">${resultLabel}</span></td>
+          <td><div class="executor">${escapeHtml(executedByName)}</div></td>
+          <td class="${notesClass}">${escapeHtml(notes)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    let statusBadgeClass = 'status-draft';
+    if (run.status === 'Completed') statusBadgeClass = 'status-completed';
+    else if (run.status === 'In Progress') statusBadgeClass = 'status-inprogress';
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Test Run Report - ${escapeHtml(run.title)}</title>
+          <style>
+            * {
+              box-sizing: border-box;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            body {
+              font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+              color: #09090b;
+              background-color: #ffffff;
+              margin: 0;
+              padding: 40px;
+              font-size: 11px;
+              line-height: 1.5;
+            }
+            .header {
+              border-bottom: 1px solid #e4e4e7;
+              padding-bottom: 16px;
+              margin-bottom: 24px;
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+            }
+            .title-section {
+              flex: 1;
+            }
+            .report-type {
+              font-size: 9px;
+              font-weight: 800;
+              color: #71717a;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+              margin-bottom: 4px;
+            }
+            .title {
+              font-size: 20px;
+              font-weight: 800;
+              margin: 0 0 6px 0;
+              color: #09090b;
+            }
+            .version {
+              font-size: 11px;
+              color: #71717a;
+              margin: 0;
+            }
+            .version strong {
+              color: #27272a;
+            }
+            .status-badge {
+              font-size: 9px;
+              font-weight: 700;
+              padding: 3px 10px;
+              border-radius: 9999px;
+              border: 1px solid #e4e4e7;
+              display: inline-block;
+              text-transform: uppercase;
+              letter-spacing: 0.02em;
+            }
+            .status-completed {
+              background-color: #ecfdf5 !important;
+              color: #059669 !important;
+              border-color: #a7f3d0 !important;
+            }
+            .status-inprogress {
+              background-color: #fffbeb !important;
+              color: #d97706 !important;
+              border-color: #fde68a !important;
+            }
+            .status-draft {
+              background-color: #f4f4f5 !important;
+              color: #71717a !important;
+              border-color: #e4e4e7 !important;
+            }
+            
+            .description-box {
+              background-color: #f8fafc;
+              border: 1px solid #e2e8f0;
+              border-radius: 8px;
+              padding: 12px;
+              margin-bottom: 24px;
+            }
+            .description-title {
+              font-size: 8px;
+              font-weight: 800;
+              color: #64748b;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+              margin-bottom: 4px;
+            }
+            .description-text {
+              margin: 0;
+              font-size: 11px;
+              color: #334155;
+              line-height: 1.6;
+            }
+
+            .metrics {
+              display: grid;
+              grid-template-columns: repeat(5, minmax(0, 1fr));
+              gap: 12px;
+              margin-bottom: 24px;
+            }
+            .metric-card {
+              border: 1px solid #e4e4e7;
+              border-radius: 8px;
+              padding: 12px;
+              text-align: center;
+              background-color: #ffffff;
+            }
+            .metric-card.passed {
+              background-color: #f0fdf4 !important;
+              border-color: #bbf7d0 !important;
+            }
+            .metric-card.failed {
+              background-color: #fef2f2 !important;
+              border-color: #fecaca !important;
+            }
+            .metric-card.blocked {
+              background-color: #fffbeb !important;
+              border-color: #fef3c7 !important;
+            }
+            .metric-card.notrun {
+              background-color: #f4f4f5 !important;
+              border-color: #e4e4e7 !important;
+            }
+            .metric-label {
+              font-size: 8px;
+              font-weight: 700;
+              color: #71717a;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+            }
+            .metric-value {
+              font-size: 22px;
+              font-weight: 900;
+              margin: 4px 0 0 0;
+              color: #09090b;
+            }
+            .metric-card.passed .metric-label, .metric-card.passed .metric-value { color: #15803d !important; }
+            .metric-card.failed .metric-label, .metric-card.failed .metric-value { color: #b91c1c !important; }
+            .metric-card.blocked .metric-label, .metric-card.blocked .metric-value { color: #b45309 !important; }
+            .metric-card.notrun .metric-label, .metric-card.notrun .metric-value { color: #52525b !important; }
+            
+            .progress-section {
+              margin-bottom: 28px;
+            }
+            .progress-header {
+              display: flex;
+              justify-content: space-between;
+              font-size: 9px;
+              font-weight: 800;
+              color: #71717a;
+              margin-bottom: 6px;
+              letter-spacing: 0.05em;
+            }
+            .progress-bar-container {
+              height: 10px;
+              background-color: #f4f4f5;
+              border-radius: 9999px;
+              overflow: hidden;
+              display: flex;
+              border: 1px solid #e4e4e7;
+            }
+            .progress-segment {
+              height: 100%;
+            }
+            .segment-passed { background-color: #22c55e !important; }
+            .segment-failed { background-color: #ef4444 !important; }
+            .segment-blocked { background-color: #f59e0b !important; }
+            .segment-notrun { background-color: #d4d4d8 !important; }
+            
+            .table-section {
+              margin-top: 24px;
+            }
+            .section-title {
+              font-size: 9px;
+              font-weight: 800;
+              color: #09090b;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+              margin-bottom: 10px;
+              border-bottom: 1px solid #09090b;
+              padding-bottom: 4px;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              text-align: left;
+            }
+            th {
+              background-color: #f4f4f5 !important;
+              color: #52525b;
+              font-size: 8px;
+              font-weight: 700;
+              text-transform: uppercase;
+              padding: 8px 10px;
+              border-bottom: 1px solid #d4d4d8;
+            }
+            td {
+              padding: 8px 10px;
+              border-bottom: 1px solid #e4e4e7;
+              vertical-align: middle;
+            }
+            .case-code {
+              font-family: monospace;
+              font-weight: 700;
+              color: #09090b;
+              width: 100px;
+            }
+            .case-title {
+              font-weight: 600;
+              color: #18181b;
+            }
+            .badge {
+              font-size: 8px;
+              font-weight: 700;
+              padding: 2px 6px;
+              border-radius: 9999px;
+              border: 1px solid transparent;
+              display: inline-block;
+              text-align: center;
+              white-space: nowrap;
+            }
+            .badge-pass {
+              background-color: #d1fae5 !important;
+              color: #065f46 !important;
+              border-color: #a7f3d0 !important;
+            }
+            .badge-fail {
+              background-color: #fee2e2 !important;
+              color: #991b1b !important;
+              border-color: #fecaca !important;
+            }
+            .badge-blocked {
+              background-color: #fef3c7 !important;
+              color: #92400e !important;
+              border-color: #fde68a !important;
+            }
+            .badge-notrun {
+              background-color: #f4f4f5 !important;
+              color: #3f3f46 !important;
+              border-color: #e4e4e7 !important;
+            }
+            .executor {
+              color: #52525b;
+            }
+            .notes {
+              color: #52525b;
+            }
+            .notes-empty {
+              color: #a1a1aa;
+              font-style: italic;
+            }
+            @media print {
+              body {
+                padding: 20px;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="title-section">
+              <div class="report-type">Test Run Execution Report</div>
+              <h1 class="title">${escapeHtml(run.title)}</h1>
+              <p class="version">Release Version: <strong>${escapeHtml(releaseVersion)}</strong></p>
+            </div>
+            <div>
+              <span class="status-badge ${statusBadgeClass}">${escapeHtml(run.status)}</span>
+            </div>
+          </div>
+
+          ${run.description ? `
+            <div class="description-box">
+              <div class="description-title">Campaign Description</div>
+              <p class="description-text">${escapeHtml(run.description)}</p>
+            </div>
+          ` : ''}
+
+          <div class="metrics">
+            <div class="metric-card">
+              <div class="metric-label">Total Cases</div>
+              <div class="metric-value">${total}</div>
+            </div>
+            <div class="metric-card passed">
+              <div class="metric-label">Passed</div>
+              <div class="metric-value">${passed}</div>
+            </div>
+            <div class="metric-card failed">
+              <div class="metric-label">Failed</div>
+              <div class="metric-value">${failed}</div>
+            </div>
+            <div class="metric-card blocked">
+              <div class="metric-label">Blocked</div>
+              <div class="metric-value">${blocked}</div>
+            </div>
+            <div class="metric-card notrun">
+              <div class="metric-label">Not Run</div>
+              <div class="metric-value">${notRun}</div>
+            </div>
+          </div>
+
+          <div class="progress-section">
+            <div class="progress-header">
+              <span>EXECUTION RATE</span>
+              <span>${rate}%</span>
+            </div>
+            <div class="progress-bar-container">
+              ${passedPercent > 0 ? `<div class="progress-segment segment-passed" style="width: ${passedPercent}%"></div>` : ''}
+              ${failedPercent > 0 ? `<div class="progress-segment segment-failed" style="width: ${failedPercent}%"></div>` : ''}
+              ${blockedPercent > 0 ? `<div class="progress-segment segment-blocked" style="width: ${blockedPercent}%"></div>` : ''}
+              ${notRunPercent > 0 ? `<div class="progress-segment segment-notrun" style="width: ${notRunPercent}%"></div>` : ''}
+            </div>
+          </div>
+
+          <div class="table-section">
+            <div class="section-title">Test Cases Execution Logs</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Case Code</th>
+                  <th>Case Title</th>
+                  <th>Result</th>
+                  <th>Executed By</th>
+                  <th>Execution Notes / Output</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHtml}
+              </tbody>
+            </table>
+          </div>
+
+          <script>
+            setTimeout(function() {
+              window.print();
+            }, 500);
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  }, [releases, users, addToast]);
 
   // Filter projects by sharing rules
   const accessibleProjects = React.useMemo(() => {
@@ -311,6 +715,16 @@ export default function TestRunsPage() {
                 }`}>
                   {selectedRunData.run.status}
                 </span>
+
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-7 text-[10px] font-semibold text-foreground border-border hover:bg-muted cursor-pointer flex items-center gap-1"
+                  onClick={() => handleExportPDF(selectedRunData)}
+                >
+                  <Printer className="h-3 w-3" />
+                  Export PDF
+                </Button>
                 
                 {canResetRun(selectedRunData.run) && (
                   <Button 
