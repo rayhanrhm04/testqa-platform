@@ -103,9 +103,9 @@ const seedProjects: Project[] = [
 ];
 
 const seedReleases: Release[] = [
-  { id: 'r-1', version: '2.56.00', release_date: new Date('2026-04-10').toISOString(), notes: 'Initial map rendering acceleration and layout rework.', status: 'Released' },
-  { id: 'r-2', version: '2.56.01', release_date: new Date('2026-05-15').toISOString(), notes: 'Improvements to community channels and export metrics.', status: 'Released' },
-  { id: 'r-3', version: '2.56.02', release_date: new Date('2026-06-25').toISOString(), notes: 'Pending release with bugfixes for GIS map exporters.', status: 'Draft' },
+  { id: 'r-1', project_id: 'p-1', version: '2.56.00', release_date: new Date('2026-04-10').toISOString(), notes: 'Initial map rendering acceleration and layout rework.', status: 'Released' },
+  { id: 'r-2', project_id: 'p-1', version: '2.56.01', release_date: new Date('2026-05-15').toISOString(), notes: 'Improvements to community channels and export metrics.', status: 'Released' },
+  { id: 'r-3', project_id: 'p-1', version: '2.56.02', release_date: new Date('2026-06-25').toISOString(), notes: 'Pending release with bugfixes for GIS map exporters.', status: 'Draft' },
 ];
 
 const seedFeedbacks: Feedback[] = [

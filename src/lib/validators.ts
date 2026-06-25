@@ -51,6 +51,7 @@ export interface Project {
 
 export interface Release {
   id: string;
+  project_id?: string | null;
   version: string;
   release_date: string;
   notes?: string;

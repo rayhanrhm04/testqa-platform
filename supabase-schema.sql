@@ -53,10 +53,12 @@ CREATE POLICY "Allow admins and QA engineers to write projects" ON public.projec
 -- 3. Releases Table
 CREATE TABLE public.releases (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  version TEXT NOT NULL UNIQUE,
+  project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
+  version TEXT NOT NULL,
   release_date TIMESTAMPTZ NOT NULL,
   notes TEXT,
-  status release_status NOT NULL DEFAULT 'Draft'
+  status release_status NOT NULL DEFAULT 'Draft',
+  CONSTRAINT releases_project_id_version_key UNIQUE (project_id, version)
 );
 
 ALTER TABLE public.releases ENABLE ROW LEVEL SECURITY;

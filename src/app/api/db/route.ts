@@ -14,6 +14,24 @@ try {
   pool.query('ALTER TABLE public.users ADD COLUMN IF NOT EXISTS avatar_url TEXT;')
     .then(() => console.log('Database migration: public.users.avatar_url check passed'))
     .catch((err) => console.warn('Database migration warning for users.avatar_url:', err));
+
+  // Migration for releases: add project_id, drop version unique constraint, add project_id + version unique constraint
+  pool.query(`
+    ALTER TABLE public.releases ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE;
+    ALTER TABLE public.releases DROP CONSTRAINT IF EXISTS releases_version_key;
+  `)
+    .then(() => {
+      pool.query('ALTER TABLE public.releases ADD CONSTRAINT releases_project_id_version_key UNIQUE (project_id, version);')
+        .then(() => console.log('Database migration: public.releases.project_id_version_key check passed'))
+        .catch((err: any) => {
+          if (err.code !== '42710' && err.code !== '42P07') {
+            console.warn('Database migration warning for releases constraint:', err);
+          } else {
+            console.log('Database migration: public.releases.project_id_version_key already exists');
+          }
+        });
+    })
+    .catch((err) => console.warn('Database migration warning for releases structure:', err));
 } catch (err) {
   console.error('Error creating PostgreSQL pool', err);
 }

@@ -16,18 +16,29 @@ import { useRouter } from 'next/navigation';
 
 export default function ReleasesPage() {
   const router = useRouter();
-  const { releases, issues, addRelease, updateRelease, deleteRelease, logActivity } = useDataStore();
+  const { releases, issues, addRelease, updateRelease, deleteRelease, logActivity, projects } = useDataStore();
   const { activeRole, currentUser } = useAuthStore();
   const { addToast } = useUIStore();
 
   const [isOpen, setIsOpen] = React.useState(false);
   const [editingRelease, setEditingRelease] = React.useState<any | null>(null);
 
+  // Filter and association project states
+  const [selectedProjectId, setSelectedProjectId] = React.useState('');
+  const [projectId, setProjectId] = React.useState('');
+
   // Form states
   const [version, setVersion] = React.useState('');
   const [releaseDate, setReleaseDate] = React.useState('');
   const [notes, setNotes] = React.useState('');
   const [status, setStatus] = React.useState<'Draft' | 'Released'>('Draft');
+
+  // Set default selected project
+  React.useEffect(() => {
+    if (projects.length > 0 && !selectedProjectId) {
+      setSelectedProjectId(projects[0].id);
+    }
+  }, [projects, selectedProjectId]);
 
   React.useEffect(() => {
     if (editingRelease) {
@@ -37,13 +48,19 @@ export default function ReleasesPage() {
       setReleaseDate(date.toISOString().split('T')[0]);
       setNotes(editingRelease.notes || '');
       setStatus(editingRelease.status);
+      setProjectId(editingRelease.project_id || '');
     } else {
       setVersion('');
       setReleaseDate(new Date().toISOString().split('T')[0]);
       setNotes('');
       setStatus('Draft');
+      setProjectId(selectedProjectId);
     }
-  }, [editingRelease]);
+  }, [editingRelease, selectedProjectId]);
+
+  const filteredReleases = React.useMemo(() => {
+    return releases.filter(r => r.project_id === selectedProjectId);
+  }, [releases, selectedProjectId]);
 
   const canModify = !currentUser || activeRole === 'Admin' || activeRole === 'QA Engineer';
 
@@ -59,6 +76,7 @@ export default function ReleasesPage() {
       release_date: new Date(releaseDate).toISOString(),
       notes: notes || undefined,
       status,
+      project_id: projectId || null,
     };
 
     try {
@@ -87,8 +105,8 @@ export default function ReleasesPage() {
   const handleAutoGenerateNotes = async (releaseId: string, version: string) => {
     if (!canModify) return;
 
-    // Find issues mapped to this release
-    const releaseIssues = issues.filter(i => i.release_id === releaseId);
+    // Find issues mapped to this release and selected project
+    const releaseIssues = issues.filter(i => i.release_id === releaseId && i.project_id === selectedProjectId);
     
     const bugs = releaseIssues.filter(i => i.type === 'Bug');
     const improvements = releaseIssues.filter(i => i.type === 'Improvement');
@@ -156,120 +174,142 @@ export default function ReleasesPage() {
         </div>
       </div>
 
+      {/* Project Filter */}
+      <div className="flex items-center gap-3 bg-muted/20 border border-border/50 rounded-xl p-3.5">
+        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Project:</span>
+        <select 
+          value={selectedProjectId} 
+          onChange={(e) => setSelectedProjectId(e.target.value)}
+          className="text-xs font-bold bg-card border border-border rounded-lg px-3 py-1.5 focus:outline-none focus:border-primary cursor-pointer text-foreground"
+        >
+          {projects.map((proj) => (
+            <option key={proj.id} value={proj.id}>{proj.name}</option>
+          ))}
+        </select>
+      </div>
+
       {/* Grid of Releases */}
       <div className="space-y-6">
-        {releases.map((rel) => {
-          // Count issues
-          const relIssues = issues.filter(i => i.release_id === rel.id);
-          const bugsCount = relIssues.filter(i => i.type === 'Bug').length;
-          const impsCount = relIssues.filter(i => i.type === 'Improvement').length;
+        {filteredReleases.length > 0 ? (
+          filteredReleases.map((rel) => {
+            // Count issues
+            const relIssues = issues.filter(i => i.release_id === rel.id && i.project_id === selectedProjectId);
+            const bugsCount = relIssues.filter(i => i.type === 'Bug').length;
+            const impsCount = relIssues.filter(i => i.type === 'Improvement').length;
 
-          return (
-            <div 
-              key={rel.id}
-              className="bg-card rounded-xl border border-border p-6 shadow-sm hover:border-primary/25 transition-all grid gap-6 md:grid-cols-3 items-start"
-            >
-              {/* Release Version Details */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Rocket className="h-5 w-5 text-primary" />
-                  <h3 className="text-lg font-bold text-foreground">v{rel.version}</h3>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                    rel.status === 'Released'
-                      ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                      : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
-                  }`}>
-                    {rel.status}
-                  </span>
-                </div>
-
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <p className="flex items-center gap-1.5 font-medium">
-                    <Calendar className="h-4 w-4" /> 
-                    Release: {new Date(rel.release_date).toLocaleDateString(undefined, { dateStyle: 'medium' })}
-                  </p>
-                  <p className="font-semibold text-foreground/80 pt-1">
-                    Issues resolved: {relIssues.length} ({bugsCount} Bugs / {impsCount} Improvements)
-                  </p>
-                </div>
-
-                {/* CRUD button actions */}
-                {canModify && (
-                  <div className="flex items-center gap-2 pt-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => {
-                        if (!currentUser) {
-                          router.push('/login');
-                          return;
-                        }
-                        setEditingRelease(rel); 
-                        setIsOpen(true);
-                      }}
-                      className="text-xs font-bold cursor-pointer"
-                    >
-                      <Edit className="h-3.5 w-3.5 mr-1" /> Edit
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => {
-                        if (!currentUser) {
-                          router.push('/login');
-                          return;
-                        }
-                        handleDelete(rel.id, rel.version);
-                      }}
-                      className="text-xs font-bold text-red-500 border-red-500/10 hover:bg-red-500/10 cursor-pointer"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
-                    </Button>
+            return (
+              <div 
+                key={rel.id}
+                className="bg-card rounded-xl border border-border p-6 shadow-sm hover:border-primary/25 transition-all grid gap-6 md:grid-cols-3 items-start"
+              >
+                {/* Release Version Details */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Rocket className="h-5 w-5 text-primary" />
+                    <h3 className="text-lg font-bold text-foreground">v{rel.version}</h3>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                      rel.status === 'Released'
+                        ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                        : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+                    }`}>
+                      {rel.status}
+                    </span>
                   </div>
-                )}
-              </div>
 
-              {/* Release Notes Preview */}
-              <div className="md:col-span-2 bg-muted/20 border border-border/50 rounded-xl p-5 space-y-3 h-full">
-                <div className="flex justify-between items-center border-b border-border/60 pb-2">
-                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                    <FileText className="h-4 w-4 text-primary" /> Release Notes Preview
-                  </span>
-                  
-                  {canModify && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => {
-                        if (!currentUser) {
-                          router.push('/login');
-                          return;
-                        }
-                        handleAutoGenerateNotes(rel.id, rel.version);
-                      }}
-                      className="h-7 text-[10px] font-bold text-primary hover:bg-primary/10 cursor-pointer"
-                    >
-                      <Sparkles className="h-3.5 w-3.5 mr-1 text-yellow-500 animate-spin" />
-                      Auto-generate changelog
-                    </Button>
-                  )}
-                </div>
-
-                <div className="text-xs leading-relaxed text-muted-foreground max-h-[160px] overflow-y-auto whitespace-pre-wrap font-sans">
-                  {rel.notes ? (
-                    <div className="prose dark:prose-invert max-w-none text-foreground/80">
-                      {rel.notes}
-                    </div>
-                  ) : (
-                    <p className="text-center py-6 text-muted-foreground/60 italic">
-                      No release notes generated yet. Click "Auto-generate changelog" to compile logs.
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p className="flex items-center gap-1.5 font-medium">
+                      <Calendar className="h-4 w-4" /> 
+                      Release: {new Date(rel.release_date).toLocaleDateString(undefined, { dateStyle: 'medium' })}
                     </p>
+                    <p className="font-semibold text-foreground/80 pt-1">
+                      Issues resolved: {relIssues.length} ({bugsCount} Bugs / {impsCount} Improvements)
+                    </p>
+                  </div>
+
+                  {/* CRUD button actions */}
+                  {canModify && (
+                    <div className="flex items-center gap-2 pt-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => {
+                          if (!currentUser) {
+                            router.push('/login');
+                            return;
+                          }
+                          setEditingRelease(rel); 
+                          setIsOpen(true);
+                        }}
+                        className="text-xs font-bold cursor-pointer"
+                      >
+                        <Edit className="h-3.5 w-3.5 mr-1" /> Edit
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => {
+                          if (!currentUser) {
+                            router.push('/login');
+                            return;
+                          }
+                          handleDelete(rel.id, rel.version);
+                        }}
+                        className="text-xs font-bold text-red-500 border-red-500/10 hover:bg-red-500/10 cursor-pointer"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+                      </Button>
+                    </div>
                   )}
                 </div>
+
+                {/* Release Notes Preview */}
+                <div className="md:col-span-2 bg-muted/20 border border-border/50 rounded-xl p-5 space-y-3 h-full">
+                  <div className="flex justify-between items-center border-b border-border/60 pb-2">
+                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <FileText className="h-4 w-4 text-primary" /> Release Notes Preview
+                    </span>
+                    
+                    {canModify && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => {
+                          if (!currentUser) {
+                            router.push('/login');
+                            return;
+                          }
+                          handleAutoGenerateNotes(rel.id, rel.version);
+                        }}
+                        className="h-7 text-[10px] font-bold text-primary hover:bg-primary/10 cursor-pointer"
+                      >
+                        <Sparkles className="h-3.5 w-3.5 mr-1 text-yellow-500 animate-spin" />
+                        Auto-generate changelog
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="text-xs leading-relaxed text-muted-foreground max-h-[160px] overflow-y-auto whitespace-pre-wrap font-sans">
+                    {rel.notes ? (
+                      <div className="prose dark:prose-invert max-w-none text-foreground/80">
+                        {rel.notes}
+                      </div>
+                    ) : (
+                      <p className="text-center py-6 text-muted-foreground/60 italic">
+                        No release notes generated yet. Click "Auto-generate changelog" to compile logs.
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        ) : (
+          <div className="py-12 text-center text-muted-foreground border border-dashed border-border rounded-xl bg-card">
+            <Rocket className="h-10 w-10 mx-auto text-muted-foreground/30 mb-2" />
+            <p className="font-semibold text-foreground/80">No releases for this project</p>
+            <p className="text-xs mt-1">Create a release version to begin compiling changelogs.</p>
+          </div>
+        )}
       </div>
 
       {/* Release setup dialog */}
@@ -289,6 +329,15 @@ export default function ReleasesPage() {
         }
       >
         <div className="space-y-4">
+          <FormGroup label="Target Project">
+            <Select value={projectId} onChange={(e: any) => setProjectId(e.target.value)}>
+              <option value="">No Project (Global)</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </Select>
+          </FormGroup>
+
           <FormGroup label="Release Version (SemVer)">
             <Input 
               value={version} 

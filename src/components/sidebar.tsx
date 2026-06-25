@@ -24,6 +24,7 @@ export const Sidebar: React.FC = () => {
     { name: 'User Feedback', path: '/user-feedback', icon: <MessageCircle className="h-4.5 w-4.5" /> },
     { name: 'Issues', path: '/issues', icon: <Bug className="h-4.5 w-4.5" /> },
     { name: 'Releases', path: '/releases', icon: <Rocket className="h-4.5 w-4.5" /> },
+    { name: 'Release Notes', path: '/release-notes', icon: <FileText className="h-4.5 w-4.5" /> },
     { name: 'Test Suites', path: '/test-suites', icon: <FolderHeart className="h-4.5 w-4.5" /> },
     { name: 'Test Cases', path: '/test-cases', icon: <FileSpreadsheet className="h-4.5 w-4.5" /> },
     { name: 'Test Runs', path: '/test-runs', icon: <PlayCircle className="h-4.5 w-4.5" /> },
@@ -32,7 +33,7 @@ export const Sidebar: React.FC = () => {
     { name: 'Settings', path: '/settings', icon: <Settings className="h-4.5 w-4.5" /> },
   ].filter((item) => {
     if (currentUser && activeRole === 'Reporter') {
-      return item.name === 'Reports' || item.name === 'Analytics' || item.name === 'Feedback' || item.name === 'User Feedback';
+      return item.name === 'Reports' || item.name === 'Analytics' || item.name === 'Feedback' || item.name === 'User Feedback' || item.name === 'Release Notes';
     }
     return true;
   });
