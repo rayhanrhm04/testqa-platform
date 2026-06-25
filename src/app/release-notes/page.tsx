@@ -23,15 +23,30 @@ function ReleaseNotesContent() {
 
   const [selectedProjectId, setSelectedProjectId] = React.useState('');
   const [selectedVersion, setSelectedVersion] = React.useState('');
+  const [isSharedView, setIsSharedView] = React.useState(false);
+
+  // 0. Initialize shared view state once on mount
+  React.useEffect(() => {
+    if (searchParams.get('project')) {
+      setIsSharedView(true);
+    }
+  }, []);
 
   // 1. Initialize project selection
   React.useEffect(() => {
     if (releaseProjects.length > 0) {
-      if (queryProject && releaseProjects.some(p => p.id === queryProject)) {
-        setSelectedProjectId(queryProject);
-      } else {
-        setSelectedProjectId(releaseProjects[0].id);
+      if (queryProject) {
+        // Resolve project by ID or by name (case-insensitive)
+        const decodedQuery = decodeURIComponent(queryProject).toLowerCase();
+        const found = releaseProjects.find(
+          p => p.id === queryProject || p.name.toLowerCase() === decodedQuery
+        );
+        if (found) {
+          setSelectedProjectId(found.id);
+          return;
+        }
       }
+      setSelectedProjectId(releaseProjects[0].id);
     }
   }, [releaseProjects, queryProject]);
 
@@ -55,10 +70,15 @@ function ReleaseNotesContent() {
     }
   }, [projectReleases, queryVersion]);
 
-  // 4. Update url query parameters
+  // 4. Update url query parameters using project name instead of UUID
   const updateUrlParams = (projectId: string, versionStr: string) => {
     const params = new URLSearchParams();
-    if (projectId) params.set('project', projectId);
+    const proj = releaseProjects.find(p => p.id === projectId);
+    if (proj) {
+      params.set('project', proj.name);
+    } else if (projectId) {
+      params.set('project', projectId);
+    }
     if (versionStr) params.set('version', versionStr);
     router.push(`/release-notes?${params.toString()}`);
   };
@@ -91,7 +111,8 @@ function ReleaseNotesContent() {
   // Copy shareable link to clipboard
   const handleCopyLink = () => {
     if (typeof window === 'undefined') return;
-    const shareUrl = `${window.location.origin}/release-notes?project=${selectedProjectId}&version=${selectedVersion}`;
+    const projectParam = activeProject ? encodeURIComponent(activeProject.name) : selectedProjectId;
+    const shareUrl = `${window.location.origin}/release-notes?project=${projectParam}&version=${selectedVersion}`;
     navigator.clipboard.writeText(shareUrl);
     addToast('Shareable link copied to clipboard!', 'success');
   };
@@ -183,18 +204,39 @@ function ReleaseNotesContent() {
       <div className="grid gap-6 md:grid-cols-4 items-start">
         {/* Left selector sidebar */}
         <div className="md:col-span-1 space-y-4">
-          <div className="space-y-1.5">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Select Project</span>
-            <select
-              value={selectedProjectId}
-              onChange={(e) => handleProjectChange(e.target.value)}
-              className="w-full text-xs font-bold bg-card border border-border rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-primary cursor-pointer text-foreground shadow-xs"
-            >
-              {releaseProjects.map((proj) => (
-                <option key={proj.id} value={proj.id}>{proj.name}</option>
-              ))}
-            </select>
-          </div>
+          {isSharedView ? (
+            <div className="space-y-2">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Project</span>
+              <div className="w-full text-xs font-extrabold bg-muted border border-border rounded-xl px-3.5 py-2.5 text-foreground shadow-xs">
+                {activeProject?.name || queryProject}
+              </div>
+              {currentUser && (
+                <Button
+                  variant="link"
+                  onClick={() => {
+                    setIsSharedView(false);
+                    router.push('/release-notes');
+                  }}
+                  className="p-0 h-auto text-xs text-primary font-semibold flex items-center gap-1 cursor-pointer hover:underline"
+                >
+                  ← Browse All Projects
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Select Project</span>
+              <select
+                value={selectedProjectId}
+                onChange={(e) => handleProjectChange(e.target.value)}
+                className="w-full text-xs font-bold bg-card border border-border rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-primary cursor-pointer text-foreground shadow-xs"
+              >
+                {releaseProjects.map((proj) => (
+                  <option key={proj.id} value={proj.id}>{proj.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="border border-border bg-card rounded-xl overflow-hidden shadow-xs">
             <div className="bg-muted/40 px-4 py-3 border-b border-border">
