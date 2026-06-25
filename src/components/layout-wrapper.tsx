@@ -44,6 +44,16 @@ export const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ childre
     setMounted(true);
   }, [fetchData, setTheme, initializeAuth, setSidebarOpen]);
 
+  // Collapse sidebar by default when opening a shared release notes link
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (pathname === '/release-notes' && params.has('project')) {
+        setSidebarOpen(false);
+      }
+    }
+  }, [pathname, setSidebarOpen]);
+
   // Handle redirects - guests are allowed to browse all pages as Viewers.
   React.useEffect(() => {
     if (mounted && isInitialized) {
