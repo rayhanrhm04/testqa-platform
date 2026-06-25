@@ -11,6 +11,23 @@ import {
 import { Button } from '@/components/ui/button';
 import { useRouter, useSearchParams } from 'next/navigation';
 
+const compareVersions = (aStr: string, bStr: string) => {
+  const getParts = (str: string) => {
+    const matches = str.match(/\d+/g);
+    return matches ? matches.map(Number) : [];
+  };
+  const partsA = getParts(aStr);
+  const partsB = getParts(bStr);
+  for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+    const valA = partsA[i] || 0;
+    const valB = partsB[i] || 0;
+    if (valA !== valB) {
+      return valA - valB;
+    }
+  }
+  return aStr.localeCompare(bStr);
+};
+
 function ReleaseNotesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -54,11 +71,7 @@ function ReleaseNotesContent() {
   const projectReleases = React.useMemo(() => {
     return releases
       .filter(r => r.project_id === selectedProjectId)
-      .sort((a, b) => {
-        const timeA = a.release_date ? new Date(a.release_date).getTime() : 0;
-        const timeB = b.release_date ? new Date(b.release_date).getTime() : 0;
-        return timeB - timeA;
-      });
+      .sort((a, b) => compareVersions(a.version, b.version));
   }, [releases, selectedProjectId]);
 
   // 3. Initialize version selection
@@ -67,7 +80,7 @@ function ReleaseNotesContent() {
       if (queryVersion && projectReleases.some(r => r.version === queryVersion)) {
         setSelectedVersion(queryVersion);
       } else {
-        setSelectedVersion(projectReleases[0].version);
+        setSelectedVersion(projectReleases[projectReleases.length - 1].version);
       }
     } else {
       setSelectedVersion('');
@@ -91,13 +104,9 @@ function ReleaseNotesContent() {
     setSelectedProjectId(projectId);
     const releasesForProj = releases
       .filter(r => r.project_id === projectId)
-      .sort((a, b) => {
-        const timeA = a.release_date ? new Date(a.release_date).getTime() : 0;
-        const timeB = b.release_date ? new Date(b.release_date).getTime() : 0;
-        return timeB - timeA;
-      });
+      .sort((a, b) => compareVersions(a.version, b.version));
     
-    const defaultVer = releasesForProj.length > 0 ? releasesForProj[0].version : '';
+    const defaultVer = releasesForProj.length > 0 ? releasesForProj[releasesForProj.length - 1].version : '';
     setSelectedVersion(defaultVer);
     updateUrlParams(projectId, defaultVer);
   };
@@ -295,11 +304,15 @@ function ReleaseNotesContent() {
                     </div>
                     <span>{releaseAuthor}</span>
                   </div>
-                  <span className="text-border/80">•</span>
-                  <div className="flex items-center gap-1">
-                    <Calendar className="h-3.5 w-3.5" />
-                    <span>{activeRelease.release_date ? `Released on ${new Date(activeRelease.release_date).toLocaleDateString(undefined, { dateStyle: 'long' })}` : 'Release date not set'}</span>
-                  </div>
+                  {activeRelease.release_date && (
+                    <>
+                      <span className="text-border/80">•</span>
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-3.5 w-3.5" />
+                        <span>Released on {new Date(activeRelease.release_date).toLocaleDateString(undefined, { dateStyle: 'long' })}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 

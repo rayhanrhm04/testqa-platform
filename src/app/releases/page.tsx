@@ -293,10 +293,12 @@ export default function ReleasesPage() {
                   </div>
 
                   <div className="text-xs text-muted-foreground space-y-1">
-                    <p className="flex items-center gap-1.5 font-medium">
-                      <Calendar className="h-4 w-4" /> 
-                      Release: {rel.release_date ? new Date(rel.release_date).toLocaleDateString(undefined, { dateStyle: 'medium' }) : 'Not set'}
-                    </p>
+                    {rel.release_date && (
+                      <p className="flex items-center gap-1.5 font-medium">
+                        <Calendar className="h-4 w-4" /> 
+                        Release: {new Date(rel.release_date).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                      </p>
+                    )}
                     <p className="font-semibold text-foreground/80 pt-1">
                       Issues resolved: {relIssues.length} ({bugsCount} Bugs / {impsCount} Improvements)
                     </p>
