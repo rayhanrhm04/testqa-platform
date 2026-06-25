@@ -38,7 +38,7 @@ export const Sidebar: React.FC = () => {
 
   return (
     <aside 
-      className={`fixed top-0 left-0 bottom-0 z-30 flex flex-col border-r border-border bg-card text-foreground transition-all duration-300 ${
+      className={`fixed top-0 left-0 bottom-0 z-30 flex flex-col border-r border-border bg-white dark:bg-zinc-950 text-foreground transition-all duration-300 ${
         sidebarOpen ? 'w-64 translate-x-0' : 'w-16 -translate-x-full md:translate-x-0'
       }`}
     >
@@ -68,19 +68,19 @@ export const Sidebar: React.FC = () => {
 
       {/* Guest Promo / Upgrade Card (Premium Blue Gradient Card) */}
       {sidebarOpen && !currentUser && (
-        <div className="p-4 m-3 rounded-xl bg-gradient-to-br from-[#1a73e8] to-[#00d2ff] text-white text-center relative overflow-hidden shadow-md shadow-[#1a73e8]/20 select-none">
-          <div className="absolute -right-6 -bottom-6 w-16 h-16 bg-white/10 rounded-full blur-xl pointer-events-none" />
+        <div className="p-4 m-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-border text-foreground text-center relative overflow-hidden select-none">
+          <div className="absolute -right-6 -bottom-6 w-16 h-16 bg-foreground/5 rounded-full blur-xl pointer-events-none" />
           <div className="flex justify-center mb-2">
-            <div className="h-8 w-8 rounded-lg bg-white/20 flex items-center justify-center">
-              <UserCheck className="h-4.5 w-4.5 text-white" />
+            <div className="h-8 w-8 rounded-lg bg-foreground/10 flex items-center justify-center">
+              <UserCheck className="h-4.5 w-4.5 text-foreground" />
             </div>
           </div>
           <p className="text-[11px] font-bold tracking-wide">MAPID QA Portal</p>
-          <p className="text-[9px] text-white/85 mt-1 mb-3.5 font-medium leading-relaxed">
+          <p className="text-[9px] text-muted-foreground mt-1 mb-3.5 font-medium leading-relaxed">
             Get full access to run tests, write suites, and log developer bug reports.
           </p>
           <Link href="/login" className="block">
-            <button className="w-full py-1.5 px-3 bg-white hover:bg-slate-50 text-[#1a73e8] transition-colors text-[10px] font-black rounded-lg shadow-sm cursor-pointer uppercase tracking-wider">
+            <button className="w-full py-1.5 px-3 bg-primary hover:bg-primary-hover text-primary-foreground transition-colors text-[10px] font-black rounded-lg shadow-xs cursor-pointer uppercase tracking-wider">
               Sign In Now
             </button>
           </Link>
@@ -97,8 +97,8 @@ export const Sidebar: React.FC = () => {
               href={item.path}
               className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all ${
                 isActive 
-                  ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20 font-semibold' 
-                  : 'hover:bg-secondary text-muted-foreground hover:text-foreground hover:font-medium'
+                  ? 'bg-[#f0f2f5] dark:bg-zinc-800 text-foreground font-semibold' 
+                  : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/50 text-muted-foreground hover:text-foreground'
               }`}
             >
               {item.icon}
@@ -109,10 +109,10 @@ export const Sidebar: React.FC = () => {
       </nav>
 
       {/* User Info Footer */}
-      <div className="border-t border-border p-3 bg-slate-50/50 dark:bg-zinc-950/20">
+      <div className="border-t border-border p-3 bg-white dark:bg-zinc-950">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-white font-bold text-sm shadow-sm">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-sm shadow-xs">
               {currentUser ? currentUser.name.charAt(0).toUpperCase() : 'G'}
             </div>
             {sidebarOpen && (

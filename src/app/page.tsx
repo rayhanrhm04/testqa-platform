@@ -128,7 +128,7 @@ export default function DashboardPage() {
       {/* Welcome Banner */}
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between pb-3">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-extrabold tracking-tight text-[#0f172a] dark:text-white">Dashboard</h1>
+          <h1 className="text-2xl lg:text-3xl font-extrabold tracking-tight text-foreground">Dashboard</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Real-time indicators, testing health, and issue resolutions.</p>
         </div>
         <div className="flex items-center gap-2">
@@ -162,51 +162,51 @@ export default function DashboardPage() {
           
           {/* Sub-grid of stats */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Card 1: Total Feedback (Red theme) */}
-            <div className="bg-[#ffe2e5] dark:bg-[#ef4444]/10 rounded-2xl p-4 flex flex-col justify-between min-h-[140px] hover:scale-[1.01] transition-transform select-none">
-              <div className="h-10 w-10 rounded-full bg-[#fa5a7d] flex items-center justify-center text-white shadow-sm">
+            {/* Card 1: Total Feedback */}
+            <div className="bg-white dark:bg-zinc-900 border border-border/80 rounded-2xl p-4 flex flex-col justify-between min-h-[140px] hover:scale-[1.01] transition-transform select-none">
+              <div className="h-10 w-10 rounded-full bg-zinc-100 dark:bg-zinc-850 flex items-center justify-center text-foreground shadow-xs">
                 <MessageSquare className="h-4.5 w-4.5" />
               </div>
               <div className="mt-4">
-                <div className="text-2xl font-black text-[#1e293b] dark:text-white leading-none">{totalFeedback}</div>
-                <div className="text-xs font-bold text-slate-800/85 dark:text-slate-200 mt-1.5">Total Feedbacks</div>
-                <div className="text-[9px] font-bold text-[#fa5a7d] mt-1.5">+12% from yesterday</div>
+                <div className="text-2xl font-black text-foreground leading-none">{totalFeedback}</div>
+                <div className="text-xs font-bold text-muted-foreground mt-1.5">Total Feedbacks</div>
+                <div className="text-[9px] font-bold text-muted-foreground mt-1.5">+12% from yesterday</div>
               </div>
             </div>
 
-            {/* Card 2: Active Bugs (Orange theme) */}
-            <div className="bg-[#fff4de] dark:bg-[#f97316]/10 rounded-2xl p-4 flex flex-col justify-between min-h-[140px] hover:scale-[1.01] transition-transform select-none">
-              <div className="h-10 w-10 rounded-full bg-[#ff947a] flex items-center justify-center text-white shadow-sm">
+            {/* Card 2: Active Bugs */}
+            <div className="bg-white dark:bg-zinc-900 border border-border/80 rounded-2xl p-4 flex flex-col justify-between min-h-[140px] hover:scale-[1.01] transition-transform select-none">
+              <div className="h-10 w-10 rounded-full bg-zinc-100 dark:bg-zinc-850 flex items-center justify-center text-foreground shadow-xs">
                 <Bug className="h-4.5 w-4.5" />
               </div>
               <div className="mt-4">
-                <div className="text-2xl font-black text-[#1e293b] dark:text-white leading-none">{openBugs}</div>
-                <div className="text-xs font-bold text-slate-800/85 dark:text-slate-200 mt-1.5">Active Bugs</div>
-                <div className="text-[9px] font-bold text-[#ff947a] mt-1.5">Sprint-critical issues</div>
+                <div className="text-2xl font-black text-foreground leading-none">{openBugs}</div>
+                <div className="text-xs font-bold text-muted-foreground mt-1.5">Active Bugs</div>
+                <div className="text-[9px] font-bold text-muted-foreground mt-1.5">Sprint-critical issues</div>
               </div>
             </div>
 
-            {/* Card 3: Ready for QA (Green theme) */}
-            <div className="bg-[#dcfce7] dark:bg-[#10b981]/10 rounded-2xl p-4 flex flex-col justify-between min-h-[140px] hover:scale-[1.01] transition-transform select-none">
-              <div className="h-10 w-10 rounded-full bg-[#3cd856] flex items-center justify-center text-white shadow-sm">
+            {/* Card 3: Ready for QA */}
+            <div className="bg-white dark:bg-zinc-900 border border-border/80 rounded-2xl p-4 flex flex-col justify-between min-h-[140px] hover:scale-[1.01] transition-transform select-none">
+              <div className="h-10 w-10 rounded-full bg-zinc-100 dark:bg-zinc-850 flex items-center justify-center text-foreground shadow-xs">
                 <CheckCircle className="h-4.5 w-4.5" />
               </div>
               <div className="mt-4">
-                <div className="text-2xl font-black text-[#1e293b] dark:text-white leading-none">{readyQa}</div>
-                <div className="text-xs font-bold text-slate-800/85 dark:text-slate-200 mt-1.5">Ready for QA</div>
-                <div className="text-[9px] font-bold text-[#3cd856] mt-1.5">Awaiting QA validation</div>
+                <div className="text-2xl font-black text-foreground leading-none">{readyQa}</div>
+                <div className="text-xs font-bold text-muted-foreground mt-1.5">Ready for QA</div>
+                <div className="text-[9px] font-bold text-muted-foreground mt-1.5">Awaiting QA validation</div>
               </div>
             </div>
 
-            {/* Card 4: Target Version / Current Release (Purple theme) */}
-            <div className="bg-[#f3e8ff] dark:bg-[#a855f7]/10 rounded-2xl p-4 flex flex-col justify-between min-h-[140px] hover:scale-[1.01] transition-transform select-none">
-              <div className="h-10 w-10 rounded-full bg-[#bf5af2] flex items-center justify-center text-white shadow-sm">
+            {/* Card 4: Target Version / Current Release */}
+            <div className="bg-white dark:bg-zinc-900 border border-border/80 rounded-2xl p-4 flex flex-col justify-between min-h-[140px] hover:scale-[1.01] transition-transform select-none">
+              <div className="h-10 w-10 rounded-full bg-zinc-100 dark:bg-zinc-850 flex items-center justify-center text-foreground shadow-xs">
                 <Rocket className="h-4.5 w-4.5" />
               </div>
               <div className="mt-4">
-                <div className="text-2xl font-black text-[#1e293b] dark:text-white leading-none truncate">{currentRelease}</div>
-                <div className="text-xs font-bold text-slate-800/85 dark:text-slate-200 mt-1.5">Target Version</div>
-                <div className="text-[9px] font-bold text-[#bf5af2] mt-1.5">Scheduled candidate</div>
+                <div className="text-2xl font-black text-foreground leading-none truncate">{currentRelease}</div>
+                <div className="text-xs font-bold text-muted-foreground mt-1.5">Target Version</div>
+                <div className="text-[9px] font-bold text-muted-foreground mt-1.5">Scheduled candidate</div>
               </div>
             </div>
           </div>
@@ -255,33 +255,33 @@ export default function DashboardPage() {
 
       {/* Row 2: Secondary statistics pills */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="bg-card rounded-2xl border border-border/50 p-4 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-zinc-900/30 transition-colors shadow-xs">
+        <div className="bg-card rounded-2xl border border-border/50 p-4 flex items-center justify-between hover:bg-zinc-50 dark:hover:bg-zinc-900/30 transition-colors shadow-xs">
           <div>
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Test Cases</p>
             <p className="text-xl font-bold mt-1 text-foreground">{totalTestCases}</p>
           </div>
-          <div className="text-[10px] font-bold px-2 py-0.5 bg-primary/10 text-primary rounded-md">Total</div>
+          <div className="text-[10px] font-bold px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-foreground border border-border/40 rounded-md">Total</div>
         </div>
-        <div className="bg-card rounded-2xl border border-border/50 p-4 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-zinc-900/30 transition-colors shadow-xs">
+        <div className="bg-card rounded-2xl border border-border/50 p-4 flex items-center justify-between hover:bg-zinc-50 dark:hover:bg-zinc-900/30 transition-colors shadow-xs">
           <div>
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Smoke Tags</p>
             <p className="text-xl font-bold mt-1 text-foreground">{smokeCount}</p>
           </div>
-          <div className="text-[10px] font-bold px-2 py-0.5 bg-blue-500/10 text-blue-500 rounded-md">Smoke</div>
+          <div className="text-[10px] font-bold px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-foreground border border-border/40 rounded-md">Smoke</div>
         </div>
-        <div className="bg-card rounded-2xl border border-border/50 p-4 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-zinc-900/30 transition-colors shadow-xs">
+        <div className="bg-card rounded-2xl border border-border/50 p-4 flex items-center justify-between hover:bg-zinc-50 dark:hover:bg-zinc-900/30 transition-colors shadow-xs">
           <div>
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Regression</p>
             <p className="text-xl font-bold mt-1 text-foreground">{regressionCount}</p>
           </div>
-          <div className="text-[10px] font-bold px-2 py-0.5 bg-purple-500/10 text-purple-500 rounded-md">Reg</div>
+          <div className="text-[10px] font-bold px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-foreground border border-border/40 rounded-md">Reg</div>
         </div>
-        <div className="bg-card rounded-2xl border border-border/50 p-4 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-zinc-900/30 transition-colors shadow-xs">
+        <div className="bg-card rounded-2xl border border-border/50 p-4 flex items-center justify-between hover:bg-zinc-50 dark:hover:bg-zinc-900/30 transition-colors shadow-xs">
           <div>
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Functional</p>
             <p className="text-xl font-bold mt-1 text-foreground">{functionalCount}</p>
           </div>
-          <div className="text-[10px] font-bold px-2 py-0.5 bg-amber-500/10 text-amber-500 rounded-md">Func</div>
+          <div className="text-[10px] font-bold px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-foreground border border-border/40 rounded-md">Func</div>
         </div>
       </div>
 
@@ -308,9 +308,9 @@ export default function DashboardPage() {
                   itemStyle={{ fontSize: '11px' }}
                 />
                 <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
-                {/* Vibrant blue (#1a73e8) and green (#00e575) pills */}
-                <Bar dataKey="Bugs" name="Bugs" fill="#1a73e8" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Improvements" name="Improvements" fill="#00e575" radius={[4, 4, 0, 0]} />
+                {/* Monochrome fill variables */}
+                <Bar dataKey="Bugs" name="Bugs" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Improvements" name="Improvements" fill="var(--color-muted-foreground)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -330,8 +330,8 @@ export default function DashboardPage() {
               <AreaChart data={feedbackTrendData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#1a73e8" stopOpacity={0.25}/>
-                    <stop offset="95%" stopColor="#1a73e8" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.25}/>
+                    <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
@@ -341,8 +341,8 @@ export default function DashboardPage() {
                   contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--foreground)' }}
                   itemStyle={{ fontSize: '11px' }}
                 />
-                {/* Smooth curves with gradient fill */}
-                <Area type="monotone" dataKey="Count" stroke="#1a73e8" fillOpacity={1} fill="url(#colorCount)" strokeWidth={2.5} />
+                {/* Smooth curves with monochrome stroke & fill gradient */}
+                <Area type="monotone" dataKey="Count" stroke="var(--color-primary)" fillOpacity={1} fill="url(#colorCount)" strokeWidth={2.5} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
