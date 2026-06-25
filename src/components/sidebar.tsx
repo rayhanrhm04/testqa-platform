@@ -46,11 +46,7 @@ export const Sidebar: React.FC = () => {
       {/* Brand Header */}
       <div className="flex h-14 items-center justify-between px-4 border-b border-border bg-white dark:bg-zinc-950">
         <Link href="/" className="flex items-center gap-2 font-bold tracking-tight">
-          <svg className="w-6 h-6 shrink-0" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M4 20L14 4L9 20H4Z" fill="#00D2FF" />
-            <path d="M9 20L14 4L19 20H9Z" fill="#2979FF" />
-            <path d="M14 4L24 20H19L14 4Z" fill="#00E575" />
-          </svg>
+          <img src="/logo.png" alt="MAPID QA" className="w-6 h-6 shrink-0 object-contain" />
           {sidebarOpen && (
             <span className="text-sm font-black uppercase tracking-wider text-foreground">
               MAPID QA
