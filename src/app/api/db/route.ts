@@ -10,6 +10,10 @@ try {
     connectionString,
     ssl: false // SumoPod db does not support SSL connections
   });
+  // Migration: Add avatar_url column to users table if it doesn't exist
+  pool.query('ALTER TABLE public.users ADD COLUMN IF NOT EXISTS avatar_url TEXT;')
+    .then(() => console.log('Database migration: public.users.avatar_url check passed'))
+    .catch((err) => console.warn('Database migration warning for users.avatar_url:', err));
 } catch (err) {
   console.error('Error creating PostgreSQL pool', err);
 }

@@ -39,6 +39,7 @@ export interface User {
   email: string;
   role: UserRole;
   created_at: string;
+  avatar_url?: string | null;
 }
 
 export interface Project {

@@ -164,7 +164,7 @@ export default function DashboardPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {/* Card 1: Total Feedback */}
             <div className="bg-white dark:bg-zinc-900 border border-border/80 rounded-2xl p-4 flex flex-col justify-between min-h-[140px] hover:scale-[1.01] transition-transform select-none">
-              <div className="h-10 w-10 rounded-full bg-zinc-100 dark:bg-zinc-850 flex items-center justify-center text-foreground shadow-xs">
+              <div className="h-10 w-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-foreground shadow-xs">
                 <MessageSquare className="h-4.5 w-4.5" />
               </div>
               <div className="mt-4">
@@ -176,7 +176,7 @@ export default function DashboardPage() {
 
             {/* Card 2: Active Bugs */}
             <div className="bg-white dark:bg-zinc-900 border border-border/80 rounded-2xl p-4 flex flex-col justify-between min-h-[140px] hover:scale-[1.01] transition-transform select-none">
-              <div className="h-10 w-10 rounded-full bg-zinc-100 dark:bg-zinc-850 flex items-center justify-center text-foreground shadow-xs">
+              <div className="h-10 w-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-foreground shadow-xs">
                 <Bug className="h-4.5 w-4.5" />
               </div>
               <div className="mt-4">
@@ -188,7 +188,7 @@ export default function DashboardPage() {
 
             {/* Card 3: Ready for QA */}
             <div className="bg-white dark:bg-zinc-900 border border-border/80 rounded-2xl p-4 flex flex-col justify-between min-h-[140px] hover:scale-[1.01] transition-transform select-none">
-              <div className="h-10 w-10 rounded-full bg-zinc-100 dark:bg-zinc-850 flex items-center justify-center text-foreground shadow-xs">
+              <div className="h-10 w-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-foreground shadow-xs">
                 <CheckCircle className="h-4.5 w-4.5" />
               </div>
               <div className="mt-4">
@@ -200,7 +200,7 @@ export default function DashboardPage() {
 
             {/* Card 4: Target Version / Current Release */}
             <div className="bg-white dark:bg-zinc-900 border border-border/80 rounded-2xl p-4 flex flex-col justify-between min-h-[140px] hover:scale-[1.01] transition-transform select-none">
-              <div className="h-10 w-10 rounded-full bg-zinc-100 dark:bg-zinc-850 flex items-center justify-center text-foreground shadow-xs">
+              <div className="h-10 w-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-foreground shadow-xs">
                 <Rocket className="h-4.5 w-4.5" />
               </div>
               <div className="mt-4">

@@ -5,8 +5,11 @@ import { usePathname } from 'next/navigation';
 import { useUIStore } from '@/store/useUIStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { isSupabaseConfigured } from '@/lib/supabase';
-import { Sun, Moon, CloudOff, Cloud, Menu, Search, Bell, ChevronDown, ChevronLeft } from 'lucide-react';
+import { Sun, Moon, CloudOff, Cloud, Menu, Bell, ChevronDown, ChevronLeft } from 'lucide-react';
 import { Button } from './ui/button';
+import Link from 'next/link';
+import { Avatar } from '@/components/ui/avatar';
+
 
 export const Header: React.FC = () => {
   const pathname = usePathname();
@@ -64,16 +67,6 @@ export const Header: React.FC = () => {
             </React.Fragment>
           ))}
         </div>
-
-        {/* Center Search input (Mock, styled exactly like image) */}
-        <div className="hidden md:flex items-center gap-2 bg-[#f0f2f5] dark:bg-zinc-900 px-4 py-2 rounded-full w-80 lg:w-96 transition-all border border-transparent focus-within:border-border">
-          <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-          <input 
-            type="text" 
-            placeholder="Cari Project, Grup atau Data Anda" 
-            className="bg-transparent text-xs text-foreground placeholder-muted-foreground outline-none w-full font-medium"
-          />
-        </div>
       </div>
 
       {/* Right: Actions (DB Status, Limit Count, Notifications, Profile, Theme) */}
@@ -122,21 +115,11 @@ export const Header: React.FC = () => {
           {theme === 'light' ? <Moon className="h-4.5 w-4.5 text-muted-foreground" /> : <Sun className="h-4.5 w-4.5 text-amber-400" />}
         </Button>
 
-        {/* User Profile Avatar & Text Info (exactly like image) */}
-        <div className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 select-none shrink-0" title={currentUser ? currentUser.name : 'Guest User'}>
-          <div className="h-8.5 w-8.5 rounded-full bg-[#00E575] text-white flex items-center justify-center font-black text-sm shadow-xs">
-            {currentUser ? currentUser.name.charAt(0).toUpperCase() : 'A'}
-          </div>
-          <div className="hidden md:flex flex-col text-left">
-            <span className="text-xs font-black text-foreground leading-tight">
-              {currentUser ? currentUser.name : 'Adam'}
-            </span>
-            <span className="text-[9px] font-bold text-muted-foreground leading-none">
-              Personal Plan
-            </span>
-          </div>
+        {/* User Profile Avatar (simplified: name text removed, wrapped in link to /profile) */}
+        <Link href="/profile" className="flex items-center gap-1 cursor-pointer hover:opacity-90 select-none shrink-0" title={currentUser ? currentUser.name : 'Guest User'}>
+          <Avatar user={currentUser} className="h-8.5 w-8.5 text-white font-black text-sm bg-[#00E575]" />
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-        </div>
+        </Link>
       </div>
     </header>
   );

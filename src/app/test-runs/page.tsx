@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Avatar } from '@/components/ui/avatar';
 
 export default function TestRunsPage() {
   const router = useRouter();
@@ -409,9 +410,7 @@ export default function TestRunsPage() {
                           <td className="p-3">
                             {res?.result && res.result !== 'Not Run' ? (
                               <div className="flex items-center gap-1.5">
-                                <div className="h-5 w-5 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[8px] uppercase">
-                                  {execUser ? execUser.name.charAt(0) : 'U'}
-                                </div>
+                                <Avatar user={execUser} className="h-5 w-5 bg-primary/10 text-primary font-bold text-[8px]" fallbackChar="U" />
                                 <span className="text-muted-foreground">{execUser ? execUser.name : 'Unknown QA'}</span>
                               </div>
                             ) : (

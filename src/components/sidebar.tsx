@@ -11,6 +11,7 @@ import {
   ChevronLeft, ChevronRight, UserCheck, LogOut, MessageCircle
 } from 'lucide-react';
 import { Button } from './ui/button';
+import { Avatar } from '@/components/ui/avatar';
 
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
@@ -111,10 +112,8 @@ export const Sidebar: React.FC = () => {
       {/* User Info Footer */}
       <div className="border-t border-border p-3 bg-white dark:bg-zinc-950">
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-sm shadow-xs">
-              {currentUser ? currentUser.name.charAt(0).toUpperCase() : 'G'}
-            </div>
+          <Link href="/profile" className="flex items-center gap-3 min-w-0 hover:opacity-80 transition-opacity">
+            <Avatar user={currentUser} className="h-8 w-8 text-primary-foreground bg-primary shrink-0" fallbackChar={currentUser ? currentUser.name.charAt(0) : 'G'} />
             {sidebarOpen && (
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-bold text-foreground">
@@ -125,7 +124,7 @@ export const Sidebar: React.FC = () => {
                 </p>
               </div>
             )}
-          </div>
+          </Link>
           {sidebarOpen && (
             currentUser ? (
               <Button 

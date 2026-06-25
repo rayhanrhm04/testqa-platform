@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FormGroup, Input, Textarea } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { Avatar } from '@/components/ui/avatar';
 import Link from 'next/link';
 
 export default function FeedbackDetailPage() {
@@ -297,9 +298,7 @@ export default function FeedbackDetailPage() {
                   const user = users.find((u) => u.id === comm.user_id);
                   return (
                     <div key={comm.id} className="flex gap-3 text-sm border-b border-border/40 pb-4 last:border-0 last:pb-0">
-                      <div className="h-8 w-8 shrink-0 flex items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-xs">
-                        {user?.name.charAt(0) || 'U'}
-                      </div>
+                      <Avatar user={user} className="h-8 w-8 text-primary bg-primary/10 shrink-0" fallbackChar="U" />
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-foreground">{user?.name}</span>
