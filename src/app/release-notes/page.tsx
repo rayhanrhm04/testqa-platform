@@ -14,7 +14,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 function ReleaseNotesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { releases, projects, users } = useDataStore();
+  const { releases, releaseProjects, users } = useDataStore();
   const { currentUser, activeRole } = useAuthStore();
   const { addToast } = useUIStore();
 
@@ -26,14 +26,14 @@ function ReleaseNotesContent() {
 
   // 1. Initialize project selection
   React.useEffect(() => {
-    if (projects.length > 0) {
-      if (queryProject && projects.some(p => p.id === queryProject)) {
+    if (releaseProjects.length > 0) {
+      if (queryProject && releaseProjects.some(p => p.id === queryProject)) {
         setSelectedProjectId(queryProject);
       } else {
-        setSelectedProjectId(projects[0].id);
+        setSelectedProjectId(releaseProjects[0].id);
       }
     }
-  }, [projects, queryProject]);
+  }, [releaseProjects, queryProject]);
 
   // 2. Filter releases for the selected project
   const projectReleases = React.useMemo(() => {
@@ -85,8 +85,8 @@ function ReleaseNotesContent() {
   }, [projectReleases, selectedVersion]);
 
   const activeProject = React.useMemo(() => {
-    return projects.find(p => p.id === selectedProjectId);
-  }, [projects, selectedProjectId]);
+    return releaseProjects.find(p => p.id === selectedProjectId);
+  }, [releaseProjects, selectedProjectId]);
 
   // Copy shareable link to clipboard
   const handleCopyLink = () => {
@@ -190,7 +190,7 @@ function ReleaseNotesContent() {
               onChange={(e) => handleProjectChange(e.target.value)}
               className="w-full text-xs font-bold bg-card border border-border rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-primary cursor-pointer text-foreground shadow-xs"
             >
-              {projects.map((proj) => (
+              {releaseProjects.map((proj) => (
                 <option key={proj.id} value={proj.id}>{proj.name}</option>
               ))}
             </select>

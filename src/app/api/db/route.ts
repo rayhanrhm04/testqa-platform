@@ -15,23 +15,56 @@ try {
     .then(() => console.log('Database migration: public.users.avatar_url check passed'))
     .catch((err) => console.warn('Database migration warning for users.avatar_url:', err));
 
-  // Migration for releases: add project_id, drop version unique constraint, add project_id + version unique constraint
+  // Migration: Create release_projects table and alter releases table
   pool.query(`
-    ALTER TABLE public.releases ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE;
-    ALTER TABLE public.releases DROP CONSTRAINT IF EXISTS releases_version_key;
+    CREATE TABLE IF NOT EXISTS public.release_projects (
+      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `)
     .then(() => {
-      pool.query('ALTER TABLE public.releases ADD CONSTRAINT releases_project_id_version_key UNIQUE (project_id, version);')
-        .then(() => console.log('Database migration: public.releases.project_id_version_key check passed'))
-        .catch((err: any) => {
-          if (err.code !== '42710' && err.code !== '42P07') {
-            console.warn('Database migration warning for releases constraint:', err);
-          } else {
-            console.log('Database migration: public.releases.project_id_version_key already exists');
-          }
-        });
+      // Seed initial release projects
+      pool.query(`
+        INSERT INTO public.release_projects (id, name) VALUES 
+          ('11111111-1111-1111-1111-111111111111', 'DSDA Jakarta'),
+          ('22222222-2222-2222-2222-222222222222', 'FORM MAPID'),
+          ('33333333-3333-3333-3333-333333333333', 'GEO MAPID')
+        ON CONFLICT (id) DO NOTHING;
+      `).catch(err => console.warn('Database migration warning seeding release projects:', err));
+
+      // Alter releases structure to point to release_projects instead of projects
+      pool.query(`
+        ALTER TABLE public.releases ADD COLUMN IF NOT EXISTS project_id UUID;
+        ALTER TABLE public.releases DROP CONSTRAINT IF EXISTS releases_project_id_fkey;
+        ALTER TABLE public.releases DROP CONSTRAINT IF EXISTS releases_release_project_id_fkey;
+        ALTER TABLE public.releases DROP CONSTRAINT IF EXISTS releases_version_key;
+      `)
+        .then(() => {
+          // Re-create the foreign key referencing release_projects
+          pool.query(`
+            ALTER TABLE public.releases ADD CONSTRAINT releases_release_project_id_fkey 
+              FOREIGN KEY (project_id) REFERENCES public.release_projects(id) ON DELETE CASCADE;
+          `)
+            .then(() => console.log('Database migration: releases_release_project_id_fkey check passed'))
+            .catch((err: any) => {
+              if (err.code !== '42710' && err.code !== '42P07') {
+                console.warn('Database migration warning creating foreign key constraint:', err);
+              }
+            });
+
+          // Re-create the unique composite constraint
+          pool.query('ALTER TABLE public.releases ADD CONSTRAINT releases_project_id_version_key UNIQUE (project_id, version);')
+            .then(() => console.log('Database migration: public.releases.project_id_version_key check passed'))
+            .catch((err: any) => {
+              if (err.code !== '42710' && err.code !== '42P07') {
+                console.warn('Database migration warning creating unique constraint:', err);
+              }
+            });
+        })
+        .catch(err => console.warn('Database migration warning altering releases structure:', err));
     })
-    .catch((err) => console.warn('Database migration warning for releases structure:', err));
+    .catch(err => console.warn('Database migration warning creating release_projects:', err));
 } catch (err) {
   console.error('Error creating PostgreSQL pool', err);
 }

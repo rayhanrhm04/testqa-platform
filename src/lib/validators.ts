@@ -49,6 +49,12 @@ export interface Project {
   created_at: string;
 }
 
+export interface ReleaseProject {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
 export interface Release {
   id: string;
   project_id?: string | null;

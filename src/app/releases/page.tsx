@@ -16,12 +16,19 @@ import { useRouter } from 'next/navigation';
 
 export default function ReleasesPage() {
   const router = useRouter();
-  const { releases, issues, addRelease, updateRelease, deleteRelease, logActivity, projects } = useDataStore();
+  const { 
+    releases, issues, addRelease, updateRelease, deleteRelease, logActivity, 
+    releaseProjects, addReleaseProject, deleteReleaseProject 
+  } = useDataStore();
   const { activeRole, currentUser } = useAuthStore();
   const { addToast } = useUIStore();
 
   const [isOpen, setIsOpen] = React.useState(false);
   const [editingRelease, setEditingRelease] = React.useState<any | null>(null);
+
+  // New release project modal state
+  const [isProjOpen, setIsProjOpen] = React.useState(false);
+  const [newProjName, setNewProjName] = React.useState('');
 
   // Filter and association project states
   const [selectedProjectId, setSelectedProjectId] = React.useState('');
@@ -35,10 +42,10 @@ export default function ReleasesPage() {
 
   // Set default selected project
   React.useEffect(() => {
-    if (projects.length > 0 && !selectedProjectId) {
-      setSelectedProjectId(projects[0].id);
+    if (releaseProjects.length > 0 && !selectedProjectId) {
+      setSelectedProjectId(releaseProjects[0].id);
     }
-  }, [projects, selectedProjectId]);
+  }, [releaseProjects, selectedProjectId]);
 
   React.useEffect(() => {
     if (editingRelease) {
@@ -61,6 +68,41 @@ export default function ReleasesPage() {
   const filteredReleases = React.useMemo(() => {
     return releases.filter(r => r.project_id === selectedProjectId);
   }, [releases, selectedProjectId]);
+
+  const handleAddProject = async () => {
+    if (!newProjName.trim()) {
+      addToast('Project name cannot be empty.', 'warning');
+      return;
+    }
+
+    try {
+      const created = await addReleaseProject(newProjName.trim());
+      if (created) {
+        setSelectedProjectId(created.id);
+        addToast(`Release project "${newProjName}" added successfully!`, 'success');
+      }
+      setNewProjName('');
+      setIsProjOpen(false);
+    } catch (e: any) {
+      addToast(e.message || 'Failed to add release project.', 'error');
+    }
+  };
+
+  const handleDeleteProject = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete the release project "${name}"? This will delete all releases and release notes associated with it.`)) {
+      return;
+    }
+
+    try {
+      await deleteReleaseProject(id);
+      addToast(`Release project "${name}" deleted.`, 'info');
+      // Re-initialize selection
+      const remaining = releaseProjects.filter(rp => rp.id !== id);
+      setSelectedProjectId(remaining.length > 0 ? remaining[0].id : '');
+    } catch (e: any) {
+      addToast(e.message || 'Failed to delete project.', 'error');
+    }
+  };
 
   const canModify = !currentUser || activeRole === 'Admin' || activeRole === 'QA Engineer';
 
@@ -175,17 +217,47 @@ export default function ReleasesPage() {
       </div>
 
       {/* Project Filter */}
-      <div className="flex items-center gap-3 bg-muted/20 border border-border/50 rounded-xl p-3.5">
-        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Project:</span>
-        <select 
-          value={selectedProjectId} 
-          onChange={(e) => setSelectedProjectId(e.target.value)}
-          className="text-xs font-bold bg-card border border-border rounded-lg px-3 py-1.5 focus:outline-none focus:border-primary cursor-pointer text-foreground"
-        >
-          {projects.map((proj) => (
-            <option key={proj.id} value={proj.id}>{proj.name}</option>
-          ))}
-        </select>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center justify-between bg-muted/20 border border-border/50 rounded-xl p-3.5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Project:</span>
+          <select 
+            value={selectedProjectId} 
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            className="text-xs font-bold bg-card border border-border rounded-lg px-3 py-1.5 focus:outline-none focus:border-primary cursor-pointer text-foreground"
+          >
+            {releaseProjects.length > 0 ? (
+              releaseProjects.map((proj) => (
+                <option key={proj.id} value={proj.id}>{proj.name}</option>
+              ))
+            ) : (
+              <option value="">No projects</option>
+            )}
+          </select>
+          {canModify && selectedProjectId && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                const active = releaseProjects.find(rp => rp.id === selectedProjectId);
+                if (active) handleDeleteProject(active.id, active.name);
+              }}
+              className="h-7 text-[10px] font-bold text-red-500 hover:text-red-600 border-red-500/20 hover:bg-red-500/5 cursor-pointer"
+              title="Delete active project"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+        {canModify && (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setIsProjOpen(true)}
+            className="h-8 text-xs font-bold cursor-pointer border-border hover:bg-muted"
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" /> Add Project
+          </Button>
+        )}
       </div>
 
       {/* Grid of Releases */}
@@ -332,7 +404,7 @@ export default function ReleasesPage() {
           <FormGroup label="Target Project">
             <Select value={projectId} onChange={(e: any) => setProjectId(e.target.value)}>
               <option value="">No Project (Global)</option>
-              {projects.map(p => (
+              {releaseProjects.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </Select>
@@ -368,6 +440,33 @@ export default function ReleasesPage() {
               <option value="Draft">Draft</option>
               <option value="Released">Released</option>
             </Select>
+          </FormGroup>
+        </div>
+      </Dialog>
+
+      {/* Release project setup dialog */}
+      <Dialog
+        isOpen={isProjOpen}
+        onClose={() => { setIsProjOpen(false); setNewProjName(''); }}
+        title="Add Custom Release Project"
+        footer={
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => { setIsProjOpen(false); setNewProjName(''); }}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddProject}>
+              Add Project
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <FormGroup label="Project Name">
+            <Input 
+              value={newProjName} 
+              onChange={(e) => setNewProjName(e.target.value)} 
+              placeholder="e.g. DSDA Jakarta" 
+            />
           </FormGroup>
         </div>
       </Dialog>

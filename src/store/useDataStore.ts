@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { 
   Project, Feedback, Issue, Release, TestSuite, TestCase, TestRun, TestRunResult, Comment, ActivityLog,
   FeedbackPriority, FeedbackStatus, IssueType, IssueSeverity, IssueStatus, ReleaseStatus, TestRunStatus, TestResultValue,
-  ProjectShare, User, UserRole, UserFeedback, UserFeedbackTopic
+  ProjectShare, User, UserRole, UserFeedback, UserFeedbackTopic, ReleaseProject
 } from '@/lib/validators';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
@@ -17,6 +17,7 @@ interface DataState {
   feedbacks: Feedback[];
   issues: Issue[];
   releases: Release[];
+  releaseProjects: ReleaseProject[];
   testSuites: TestSuite[];
   testCases: TestCase[];
   testRuns: TestRun[];
@@ -61,6 +62,10 @@ interface DataState {
   updateRelease: (id: string, updates: Partial<Release>) => Promise<void>;
   deleteRelease: (id: string) => Promise<void>;
 
+  // Release Projects
+  addReleaseProject: (name: string) => Promise<ReleaseProject | null>;
+  deleteReleaseProject: (id: string) => Promise<void>;
+
   // Test Suites
   addTestSuite: (project_id: string, name: string, description?: string) => Promise<TestSuite | null>;
   updateTestSuite: (id: string, name: string, description?: string) => Promise<void>;
@@ -102,10 +107,16 @@ const seedProjects: Project[] = [
   { id: 'p-4', name: 'MAPID ACADEMY', description: 'Online documentation, tutorial tracks, and certifications.', created_at: new Date('2026-02-01').toISOString() },
 ];
 
+const seedReleaseProjects: ReleaseProject[] = [
+  { id: '11111111-1111-1111-1111-111111111111', name: 'DSDA Jakarta', created_at: new Date('2026-01-01').toISOString() },
+  { id: '22222222-2222-2222-2222-222222222222', name: 'FORM MAPID', created_at: new Date('2026-01-05').toISOString() },
+  { id: '33333333-3333-3333-3333-333333333333', name: 'GEO MAPID', created_at: new Date('2026-01-10').toISOString() },
+];
+
 const seedReleases: Release[] = [
-  { id: 'r-1', project_id: 'p-1', version: '2.56.00', release_date: new Date('2026-04-10').toISOString(), notes: 'Initial map rendering acceleration and layout rework.', status: 'Released' },
-  { id: 'r-2', project_id: 'p-1', version: '2.56.01', release_date: new Date('2026-05-15').toISOString(), notes: 'Improvements to community channels and export metrics.', status: 'Released' },
-  { id: 'r-3', project_id: 'p-1', version: '2.56.02', release_date: new Date('2026-06-25').toISOString(), notes: 'Pending release with bugfixes for GIS map exporters.', status: 'Draft' },
+  { id: 'r-1', project_id: '11111111-1111-1111-1111-111111111111', version: '2.56.00', release_date: new Date('2026-04-10').toISOString(), notes: 'Initial map rendering acceleration and layout rework.', status: 'Released' },
+  { id: 'r-2', project_id: '11111111-1111-1111-1111-111111111111', version: '2.56.01', release_date: new Date('2026-05-15').toISOString(), notes: 'Improvements to community channels and export metrics.', status: 'Released' },
+  { id: 'r-3', project_id: '11111111-1111-1111-1111-111111111111', version: '2.56.02', release_date: new Date('2026-06-25').toISOString(), notes: 'Pending release with bugfixes for GIS map exporters.', status: 'Draft' },
 ];
 
 const seedFeedbacks: Feedback[] = [
@@ -195,6 +206,7 @@ export const useDataStore = create<DataState>((set, get) => {
     feedbacks: [],
     issues: [],
     releases: [],
+    releaseProjects: [],
     testSuites: [],
     testCases: [],
     testRuns: [],
@@ -253,12 +265,23 @@ export const useDataStore = create<DataState>((set, get) => {
             const local = localStorage.getItem('qa_userFeedbacks');
             userFbs = local ? JSON.parse(local) : seedUserFeedbacks;
           }
+
+          let releaseProjectsData: any[] = [];
+          try {
+            const { data } = await supabase!.from('release_projects').select('*').order('created_at', { ascending: true });
+            releaseProjectsData = data || [];
+          } catch (e) {
+            console.warn("Table release_projects does not exist or fetch failed, loading fallback:", e);
+            const local = localStorage.getItem('qa_releaseProjects');
+            releaseProjectsData = local ? JSON.parse(local) : seedReleaseProjects;
+          }
  
            set({
              projects: p || [],
              feedbacks: fb || [],
              issues: iss || [],
              releases: rel || [],
+             releaseProjects: releaseProjectsData,
              testSuites: ts || [],
              testCases: tc || [],
              testRuns: tr || [],
@@ -303,6 +326,7 @@ export const useDataStore = create<DataState>((set, get) => {
             feedbacks: getLocal('feedbacks', seedFeedbacks),
             issues: getLocal('issues', seedIssues),
             releases: getLocal('releases', seedReleases),
+            releaseProjects: getLocal('releaseProjects', seedReleaseProjects),
             testSuites: getLocal('testSuites', seedTestSuites),
             testCases: getLocal('testCases', seedTestCases),
             testRuns: getLocal('testRuns', seedTestRuns),
@@ -685,6 +709,58 @@ export const useDataStore = create<DataState>((set, get) => {
           const next = state.releases.filter((r) => r.id !== id);
           persist({ releases: next });
           return { releases: next };
+        });
+      }
+    },
+
+    addReleaseProject: async (name) => {
+      const newProj: ReleaseProject = {
+        id: isSupabaseConfigured() ? undefined : `rp-${Date.now()}` as any,
+        name,
+        created_at: new Date().toISOString(),
+      };
+
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase!.from('release_projects').insert(newProj).select();
+        if (error) {
+          console.error("Error adding release project in Supabase:", error);
+          throw new Error(error.message);
+        }
+        if (data && data[0]) {
+          set((state) => ({ releaseProjects: [...state.releaseProjects, data[0]] }));
+          return data[0];
+        }
+        return null;
+      } else {
+        newProj.id = `rp-${Date.now()}`;
+        let created: ReleaseProject | null = null;
+        set((state) => {
+          const next = [...state.releaseProjects, newProj];
+          persist({ releaseProjects: next });
+          created = newProj;
+          return { releaseProjects: next };
+        });
+        return created;
+      }
+    },
+
+    deleteReleaseProject: async (id) => {
+      if (isSupabaseConfigured()) {
+        const { error } = await supabase!.from('release_projects').delete().eq('id', id);
+        if (error) {
+          console.error("Error deleting release project in Supabase:", error);
+          throw new Error(error.message);
+        }
+        set((state) => ({ 
+          releaseProjects: state.releaseProjects.filter((rp) => rp.id !== id),
+          releases: state.releases.filter((r) => r.project_id !== id)
+        }));
+      } else {
+        set((state) => {
+          const nextProjects = state.releaseProjects.filter((rp) => rp.id !== id);
+          const nextReleases = state.releases.filter((r) => r.project_id !== id);
+          persist({ releaseProjects: nextProjects, releases: nextReleases });
+          return { releaseProjects: nextProjects, releases: nextReleases };
         });
       }
     },

@@ -50,10 +50,26 @@ CREATE POLICY "Allow admins and QA engineers to write projects" ON public.projec
   )
 );
 
--- 3. Releases Table
+-- 3. Release Projects Table
+CREATE TABLE public.release_projects (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.release_projects ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read access to release projects" ON public.release_projects FOR SELECT USING (true);
+CREATE POLICY "Allow admins and QA engineers to write release projects" ON public.release_projects FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM public.users 
+    WHERE users.id = auth.uid() AND users.role IN ('Admin', 'QA Engineer')
+  )
+);
+
+-- 3b. Releases Table
 CREATE TABLE public.releases (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
+  project_id UUID REFERENCES public.release_projects(id) ON DELETE CASCADE,
   version TEXT NOT NULL,
   release_date TIMESTAMPTZ NOT NULL,
   notes TEXT,
