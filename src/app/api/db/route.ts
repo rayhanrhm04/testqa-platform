@@ -39,6 +39,7 @@ try {
         ALTER TABLE public.releases DROP CONSTRAINT IF EXISTS releases_project_id_fkey;
         ALTER TABLE public.releases DROP CONSTRAINT IF EXISTS releases_release_project_id_fkey;
         ALTER TABLE public.releases DROP CONSTRAINT IF EXISTS releases_version_key;
+        ALTER TABLE public.releases ALTER COLUMN release_date DROP NOT NULL;
       `)
         .then(() => {
           // Re-create the foreign key referencing release_projects

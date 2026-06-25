@@ -54,7 +54,11 @@ function ReleaseNotesContent() {
   const projectReleases = React.useMemo(() => {
     return releases
       .filter(r => r.project_id === selectedProjectId)
-      .sort((a, b) => new Date(b.release_date).getTime() - new Date(a.release_date).getTime());
+      .sort((a, b) => {
+        const timeA = a.release_date ? new Date(a.release_date).getTime() : 0;
+        const timeB = b.release_date ? new Date(b.release_date).getTime() : 0;
+        return timeB - timeA;
+      });
   }, [releases, selectedProjectId]);
 
   // 3. Initialize version selection
@@ -87,7 +91,11 @@ function ReleaseNotesContent() {
     setSelectedProjectId(projectId);
     const releasesForProj = releases
       .filter(r => r.project_id === projectId)
-      .sort((a, b) => new Date(b.release_date).getTime() - new Date(a.release_date).getTime());
+      .sort((a, b) => {
+        const timeA = a.release_date ? new Date(a.release_date).getTime() : 0;
+        const timeB = b.release_date ? new Date(b.release_date).getTime() : 0;
+        return timeB - timeA;
+      });
     
     const defaultVer = releasesForProj.length > 0 ? releasesForProj[0].version : '';
     setSelectedVersion(defaultVer);
@@ -290,7 +298,7 @@ function ReleaseNotesContent() {
                   <span className="text-border/80">•</span>
                   <div className="flex items-center gap-1">
                     <Calendar className="h-3.5 w-3.5" />
-                    <span>Released on {new Date(activeRelease.release_date).toLocaleDateString(undefined, { dateStyle: 'long' })}</span>
+                    <span>{activeRelease.release_date ? `Released on ${new Date(activeRelease.release_date).toLocaleDateString(undefined, { dateStyle: 'long' })}` : 'Release date not set'}</span>
                   </div>
                 </div>
               </div>

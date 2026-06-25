@@ -59,7 +59,7 @@ export interface Release {
   id: string;
   project_id?: string | null;
   version: string;
-  release_date: string;
+  release_date?: string | null;
   notes?: string;
   status: ReleaseStatus;
 }
@@ -218,7 +218,7 @@ export const issueSchema = z.object({
 
 export const releaseSchema = z.object({
   version: z.string().min(1, 'Version is required').regex(/^\d+\.\d+\.\d+$/, 'Version must follow semver (e.g. 2.56.02)'),
-  release_date: z.string().min(1, 'Release date is required'),
+  release_date: z.string().optional().nullable(),
   notes: z.string().optional(),
   status: z.enum(RELEASE_STATUSES),
 });

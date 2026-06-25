@@ -51,14 +51,18 @@ export default function ReleasesPage() {
     if (editingRelease) {
       setVersion(editingRelease.version);
       // Format date for html input
-      const date = new Date(editingRelease.release_date);
-      setReleaseDate(date.toISOString().split('T')[0]);
+      if (editingRelease.release_date) {
+        const date = new Date(editingRelease.release_date);
+        setReleaseDate(isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0]);
+      } else {
+        setReleaseDate('');
+      }
       setNotes(editingRelease.notes || '');
       setStatus(editingRelease.status);
       setProjectId(editingRelease.project_id || '');
     } else {
       setVersion('');
-      setReleaseDate(new Date().toISOString().split('T')[0]);
+      setReleaseDate('');
       setNotes('');
       setStatus('Draft');
       setProjectId(selectedProjectId);
@@ -115,7 +119,7 @@ export default function ReleasesPage() {
 
     const payload = {
       version,
-      release_date: new Date(releaseDate).toISOString(),
+      release_date: releaseDate ? new Date(releaseDate).toISOString() : null,
       notes: notes || undefined,
       status,
       project_id: projectId || null,
@@ -291,7 +295,7 @@ export default function ReleasesPage() {
                   <div className="text-xs text-muted-foreground space-y-1">
                     <p className="flex items-center gap-1.5 font-medium">
                       <Calendar className="h-4 w-4" /> 
-                      Release: {new Date(rel.release_date).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                      Release: {rel.release_date ? new Date(rel.release_date).toLocaleDateString(undefined, { dateStyle: 'medium' }) : 'Not set'}
                     </p>
                     <p className="font-semibold text-foreground/80 pt-1">
                       Issues resolved: {relIssues.length} ({bugsCount} Bugs / {impsCount} Improvements)
