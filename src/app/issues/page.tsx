@@ -119,32 +119,34 @@ export default function IssuesPage() {
 
   // Sync edit form fields
   React.useEffect(() => {
-    if (editingIssue) {
-      setTitle(editingIssue.title);
-      setDescription(editingIssue.description);
-      setType(editingIssue.type);
-      setProject(editingIssue.project_id);
-      setSeverity(editingIssue.severity);
-      setStatus(editingIssue.status);
-      setAssignee(editingIssue.assigned_to || '');
-      setRelease(editingIssue.release_id || '');
-      setExpected(editingIssue.expected_result || '');
-      setActual(editingIssue.actual_result || '');
-      setSteps(editingIssue.steps_to_reproduce || '');
-    } else {
-      setTitle('');
-      setDescription('');
-      setType('Bug');
-      setProject(projects[0]?.id || '');
-      setSeverity('Medium');
-      setStatus('Open');
-      setAssignee('');
-      setRelease('');
-      setExpected('');
-      setActual('');
-      setSteps('');
+    if (isFormOpen) {
+      if (editingIssue) {
+        setTitle(editingIssue.title);
+        setDescription(editingIssue.description);
+        setType(editingIssue.type);
+        setProject(editingIssue.project_id);
+        setSeverity(editingIssue.severity);
+        setStatus(editingIssue.status);
+        setAssignee(editingIssue.assigned_to || '');
+        setRelease(editingIssue.release_id || '');
+        setExpected(editingIssue.expected_result || '');
+        setActual(editingIssue.actual_result || '');
+        setSteps(editingIssue.steps_to_reproduce || '');
+      } else {
+        setTitle('');
+        setDescription('');
+        setType('Bug');
+        setProject(projectFilter !== 'all' ? projectFilter : (projects[0]?.id || ''));
+        setSeverity('Medium');
+        setStatus('Open');
+        setAssignee('');
+        setRelease('');
+        setExpected('');
+        setActual('');
+        setSteps('');
+      }
     }
-  }, [editingIssue, projects]);
+  }, [editingIssue, projects, isFormOpen, projectFilter]);
 
   // Filters calculation
   const filteredIssues = React.useMemo(() => {

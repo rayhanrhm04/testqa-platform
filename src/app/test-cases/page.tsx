@@ -156,55 +156,57 @@ export default function TestCasesPage() {
 
   // Reset/sync form
   React.useEffect(() => {
-    if (editingCase) {
-      setTitle(editingCase.isDuplicate ? `Copy of ${editingCase.title}` : editingCase.title);
-      setObjective(editingCase.objective || '');
-      setPrecondition(editingCase.precondition || '');
-      setTestData(editingCase.test_data || '');
-      setSuiteId(editingCase.suite_id);
-      setTags(editingCase.tags || []);
-      setIsAutomated(editingCase.is_automated || false);
-      setAutomationLink(editingCase.automation_link || '');
-      
-      const parsed = parseSteps(editingCase.steps, editingCase.expected_result);
-      setFormSteps(parsed);
-      
-      // Qase fields
-      setStatus(editingCase.status || 'Actual');
-      setDescription(editingCase.description || '');
-      setSeverity(editingCase.severity || 'Normal');
-      setPriority(editingCase.priority || 'Not set');
-      setType(editingCase.type || 'Other');
-      setLayer(editingCase.layer || 'Not set');
-      setIsFlaky(editingCase.is_flaky || false);
-      setBehavior(editingCase.behavior || 'Not set');
-      setIsMuted(editingCase.is_muted || false);
-      setPostCondition(editingCase.post_condition || '');
-    } else {
-      setTitle('');
-      setObjective('');
-      setPrecondition('');
-      setTestData('');
-      const firstSuite = testSuites.find(s => s.project_id === activeProject);
-      setSuiteId(firstSuite?.id || '');
-      setTags(['Functional']);
-      setIsAutomated(false);
-      setAutomationLink('');
-      setFormSteps([{ action: '', data: '', expected_result: '' }]);
-      
-      // Qase defaults
-      setStatus('Actual');
-      setDescription('');
-      setSeverity('Normal');
-      setPriority('Not set');
-      setType('Other');
-      setLayer('Not set');
-      setIsFlaky(false);
-      setBehavior('Not set');
-      setIsMuted(false);
-      setPostCondition('');
+    if (isFormOpen) {
+      if (editingCase) {
+        setTitle(editingCase.isDuplicate ? `Copy of ${editingCase.title}` : editingCase.title);
+        setObjective(editingCase.objective || '');
+        setPrecondition(editingCase.precondition || '');
+        setTestData(editingCase.test_data || '');
+        setSuiteId(editingCase.suite_id);
+        setTags(editingCase.tags || []);
+        setIsAutomated(editingCase.is_automated || false);
+        setAutomationLink(editingCase.automation_link || '');
+        
+        const parsed = parseSteps(editingCase.steps, editingCase.expected_result);
+        setFormSteps(parsed);
+        
+        // Qase fields
+        setStatus(editingCase.status || 'Actual');
+        setDescription(editingCase.description || '');
+        setSeverity(editingCase.severity || 'Normal');
+        setPriority(editingCase.priority || 'Not set');
+        setType(editingCase.type || 'Other');
+        setLayer(editingCase.layer || 'Not set');
+        setIsFlaky(editingCase.is_flaky || false);
+        setBehavior(editingCase.behavior || 'Not set');
+        setIsMuted(editingCase.is_muted || false);
+        setPostCondition(editingCase.post_condition || '');
+      } else {
+        setTitle('');
+        setObjective('');
+        setPrecondition('');
+        setTestData('');
+        const firstSuite = testSuites.find(s => s.project_id === activeProject);
+        setSuiteId(firstSuite?.id || '');
+        setTags(['Functional']);
+        setIsAutomated(false);
+        setAutomationLink('');
+        setFormSteps([{ action: '', data: '', expected_result: '' }]);
+        
+        // Qase defaults
+        setStatus('Actual');
+        setDescription('');
+        setSeverity('Normal');
+        setPriority('Not set');
+        setType('Other');
+        setLayer('Not set');
+        setIsFlaky(false);
+        setBehavior('Not set');
+        setIsMuted(false);
+        setPostCondition('');
+      }
     }
-  }, [editingCase, activeProject, testSuites]);
+  }, [editingCase, activeProject, testSuites, isFormOpen]);
 
   const canModify = React.useMemo(() => {
     if (activeRole === 'Admin' || activeRole === 'QA Engineer') return true;

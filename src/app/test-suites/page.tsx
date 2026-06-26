@@ -136,16 +136,18 @@ export default function TestSuitesPage() {
   }, [accessibleProjects]);
 
   React.useEffect(() => {
-    if (editingSuite) {
-      setName(editingSuite.name);
-      setDescription(editingSuite.description || '');
-      setProjectId(editingSuite.project_id);
-    } else {
-      setName('');
-      setDescription('');
-      setProjectId(projects[0]?.id || '');
+    if (isOpen) {
+      if (editingSuite) {
+        setName(editingSuite.name);
+        setDescription(editingSuite.description || '');
+        setProjectId(editingSuite.project_id);
+      } else {
+        setName('');
+        setDescription('');
+        setProjectId(projectFilter !== 'all' ? projectFilter : (projects[0]?.id || ''));
+      }
     }
-  }, [editingSuite, projects]);
+  }, [editingSuite, projects, isOpen, projectFilter]);
 
   const canModifyProject = React.useCallback((projId: string) => {
     if (activeRole === 'Admin' || activeRole === 'QA Engineer') return true;

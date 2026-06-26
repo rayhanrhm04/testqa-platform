@@ -48,26 +48,28 @@ export default function ReleasesPage() {
   }, [releaseProjects, selectedProjectId]);
 
   React.useEffect(() => {
-    if (editingRelease) {
-      setVersion(editingRelease.version);
-      // Format date for html input
-      if (editingRelease.release_date) {
-        const date = new Date(editingRelease.release_date);
-        setReleaseDate(isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0]);
+    if (isOpen) {
+      if (editingRelease) {
+        setVersion(editingRelease.version);
+        // Format date for html input
+        if (editingRelease.release_date) {
+          const date = new Date(editingRelease.release_date);
+          setReleaseDate(isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0]);
+        } else {
+          setReleaseDate('');
+        }
+        setNotes(editingRelease.notes || '');
+        setStatus(editingRelease.status);
+        setProjectId(editingRelease.project_id || '');
       } else {
+        setVersion('');
         setReleaseDate('');
+        setNotes('');
+        setStatus('Draft');
+        setProjectId(selectedProjectId);
       }
-      setNotes(editingRelease.notes || '');
-      setStatus(editingRelease.status);
-      setProjectId(editingRelease.project_id || '');
-    } else {
-      setVersion('');
-      setReleaseDate('');
-      setNotes('');
-      setStatus('Draft');
-      setProjectId(selectedProjectId);
     }
-  }, [editingRelease, selectedProjectId]);
+  }, [editingRelease, selectedProjectId, isOpen]);
 
   const filteredReleases = React.useMemo(() => {
     return releases.filter(r => r.project_id === selectedProjectId);

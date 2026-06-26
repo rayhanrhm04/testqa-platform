@@ -51,24 +51,26 @@ export default function FeedbackPage() {
 
   // Pre-fill form if editing
   React.useEffect(() => {
-    if (editingFeedback) {
-      setValue('title', editingFeedback.title);
-      setValue('description', editingFeedback.description);
-      setValue('project_id', editingFeedback.project_id);
-      setValue('reporter_id', editingFeedback.reporter_id || '');
-      setValue('priority', editingFeedback.priority);
-      setValue('status', editingFeedback.status);
-    } else {
-      reset({
-        title: '',
-        description: '',
-        project_id: projects[0]?.id || '',
-        reporter_id: currentUser?.id || '',
-        priority: 'Medium',
-        status: 'Open',
-      });
+    if (isCreateOpen) {
+      if (editingFeedback) {
+        setValue('title', editingFeedback.title);
+        setValue('description', editingFeedback.description);
+        setValue('project_id', editingFeedback.project_id);
+        setValue('reporter_id', editingFeedback.reporter_id || '');
+        setValue('priority', editingFeedback.priority);
+        setValue('status', editingFeedback.status);
+      } else {
+        reset({
+          title: '',
+          description: '',
+          project_id: projectFilter !== 'all' ? projectFilter : (projects[0]?.id || ''),
+          reporter_id: currentUser?.id || '',
+          priority: 'Medium',
+          status: 'Open',
+        });
+      }
     }
-  }, [editingFeedback, projects, currentUser, setValue, reset]);
+  }, [editingFeedback, projects, currentUser, setValue, reset, isCreateOpen, projectFilter]);
 
   const accessibleProjects = React.useMemo(() => {
     if (!currentUser || activeRole === 'Admin' || activeRole === 'QA Engineer') {
