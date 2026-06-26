@@ -19,7 +19,8 @@ export default function ExploratoryPage() {
   const { 
     projects, projectShares,
     exploratorySessions, exploratoryNotes, exploratoryBugs, exploratoryEvidence,
-    addExploratorySession, updateExploratorySession, addExploratoryNote, addExploratoryBug, addExploratoryEvidence
+    addExploratorySession, updateExploratorySession, addExploratoryNote, addExploratoryBug, addExploratoryEvidence,
+    deleteExploratorySession, addFeedback
   } = useDataStore();
   const { activeRole, currentUser } = useAuthStore();
   const { addToast } = useUIStore();
@@ -63,6 +64,18 @@ export default function ExploratoryPage() {
   // Simulated File Uploader States
   const [isUploading, setIsUploading] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // Promoted Bug IDs tracking
+  const [promotedBugIds, setPromotedBugIds] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('qa_promoted_bugs');
+      if (saved) {
+        setPromotedBugIds(JSON.parse(saved));
+      }
+    }
+  }, []);
 
   // Filter accessible projects
   const accessibleProjects = React.useMemo(() => {
@@ -322,6 +335,59 @@ export default function ExploratoryPage() {
     setActiveSession(null);
   };
 
+  // Delete exploratory session handler
+  const handleDeleteSession = async (id: string) => {
+    if (window.confirm("Are you sure you want to delete this exploratory session? All notes, bugs, and evidence will be permanently deleted.")) {
+      await deleteExploratorySession(id);
+      addToast('Exploratory session deleted successfully!', 'success');
+    }
+  };
+
+  // Promote bug finding to feedback board
+  const handlePromoteBugToFeedback = async (bug: any, session: any) => {
+    if (!bug || !session) return;
+    
+    const description = `
+**Bug Details from Exploratory Testing session: "${session.name}"**
+
+*   **Category**: ${bug.category || 'Functional'}
+*   **Severity**: ${bug.severity}
+*   **Priority**: ${bug.priority}
+*   **Relative Discovery Timestamp**: Found at ${formatTime(bug.relative_timestamp_seconds)} during the session.
+
+---
+
+### Description
+${bug.description || 'No description provided.'}
+
+### Steps to Reproduce
+${bug.steps_to_reproduce || 'No steps provided.'}
+
+### Expected Result
+${bug.expected_result || 'No expected result provided.'}
+
+### Actual Result
+${bug.actual_result || 'No actual result provided.'}
+`.trim();
+
+    await addFeedback({
+      title: `[Exploratory Bug] ${bug.title}`,
+      description,
+      project_id: session.project_id,
+      reporter_id: currentUser?.id || null,
+      priority: bug.priority,
+      status: 'Open',
+    });
+    
+    setPromotedBugIds((prev) => {
+      const next = [...prev, bug.id];
+      localStorage.setItem('qa_promoted_bugs', JSON.stringify(next));
+      return next;
+    });
+    
+    addToast('Bug successfully logged to the Feedback page!', 'success');
+  };
+
   // Format size for mock representation
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -439,22 +505,48 @@ export default function ExploratoryPage() {
                       </div>
 
                       {session.status === 'Completed' ? (
-                        <Button 
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleOpenSummary(session)}
-                          className="cursor-pointer text-[10px] font-bold py-1 h-7 flex items-center gap-1"
-                        >
-                          View Summary <ExternalLink className="h-3 w-3" />
-                        </Button>
+                        <div className="flex items-center gap-1.5">
+                          <Button 
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleOpenSummary(session)}
+                            className="cursor-pointer text-[10px] font-bold py-1 h-7 flex items-center gap-1"
+                          >
+                            View Summary <ExternalLink className="h-3 w-3" />
+                          </Button>
+                          {canEdit && (
+                            <Button 
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteSession(session.id)}
+                              className="cursor-pointer text-[10px] font-bold py-1 h-7 text-red-500 hover:text-red-600 hover:bg-red-500/10 border-border/80"
+                              title="Delete Session"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
                       ) : (
-                        <Button 
-                          size="sm"
-                          onClick={() => handleOpenWorkspace(session)}
-                          className="cursor-pointer text-[10px] font-bold py-1 h-7 flex items-center gap-1 bg-primary text-primary-foreground hover:bg-primary/95"
-                        >
-                          {session.status === 'Draft' ? 'Start' : 'Resume'} <Play className="h-3 w-3 fill-current" />
-                        </Button>
+                        <div className="flex items-center gap-1.5">
+                          <Button 
+                            size="sm"
+                            onClick={() => handleOpenWorkspace(session)}
+                            className="cursor-pointer text-[10px] font-bold py-1 h-7 flex items-center gap-1 bg-primary text-primary-foreground hover:bg-primary/95"
+                          >
+                            {session.status === 'Draft' ? 'Start' : 'Resume'} <Play className="h-3 w-3 fill-current" />
+                          </Button>
+                          {canEdit && (
+                            <Button 
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteSession(session.id)}
+                              className="cursor-pointer text-[10px] font-bold py-1 h-7 text-red-500 hover:text-red-600 hover:bg-red-500/10 border-border/80"
+                              title="Delete Session"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -703,6 +795,24 @@ export default function ExploratoryPage() {
                         <p className="text-xs text-muted-foreground leading-relaxed pt-1">
                           {bug.description || 'No description provided.'}
                         </p>
+                        {canEdit && (
+                          <div className="pt-2 flex justify-end border-t border-border/40 mt-1">
+                            {promotedBugIds.includes(bug.id) ? (
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                                <CheckCircle2 className="h-3 w-3" /> Added to Feedback
+                              </span>
+                            ) : (
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => handlePromoteBugToFeedback(bug, activeSession)}
+                                className="cursor-pointer text-[10px] font-bold py-0.5 h-6 flex items-center gap-1 border-border/80 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                              >
+                                <Plus className="h-3 w-3 text-red-500" /> Add to Feedback
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))
                   )}
@@ -928,6 +1038,24 @@ export default function ExploratoryPage() {
                             </div>
                           )}
                         </div>
+                        {canEdit && (
+                          <div className="pt-2 flex justify-end border-t border-border/40 mt-1">
+                            {promotedBugIds.includes(bug.id) ? (
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20">
+                                <CheckCircle2 className="h-3 w-3" /> Added to Feedback
+                              </span>
+                            ) : (
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => handlePromoteBugToFeedback(bug, selectedSummarySession)}
+                                className="cursor-pointer text-[10px] font-bold py-1 h-7 flex items-center gap-1 border-border/80 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                              >
+                                <Plus className="h-3 w-3 text-red-500" /> Add to Feedback
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))
                   )}

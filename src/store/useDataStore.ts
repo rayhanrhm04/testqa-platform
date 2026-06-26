@@ -107,6 +107,7 @@ interface DataState {
   addExploratoryNote: (sessionId: string, noteText: string) => Promise<void>;
   addExploratoryBug: (bug: Omit<ExploratoryBug, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
   addExploratoryEvidence: (evidence: Omit<ExploratoryEvidence, 'id' | 'created_at'>) => Promise<void>;
+  deleteExploratorySession: (id: string) => Promise<void>;
 }
 
 // ----------------------------------------------------
@@ -1472,6 +1473,60 @@ export const useDataStore = create<DataState>((set, get) => {
           const next = [evidenceWithId, ...state.exploratoryEvidence];
           persist({ exploratoryEvidence: next });
           return { exploratoryEvidence: next };
+        });
+      }
+    },
+
+    deleteExploratorySession: async (id) => {
+      if (isSupabaseConfigured()) {
+        try {
+          const { error } = await supabase!.from('exploratory_sessions').delete().eq('id', id);
+          if (error) throw error;
+          set((state) => ({
+            exploratorySessions: state.exploratorySessions.filter((s) => s.id !== id),
+            exploratoryNotes: state.exploratoryNotes.filter((n) => n.session_id !== id),
+            exploratoryBugs: state.exploratoryBugs.filter((b) => b.session_id !== id),
+            exploratoryEvidence: state.exploratoryEvidence.filter((e) => e.session_id !== id),
+          }));
+        } catch (e) {
+          console.warn("Table exploratory_sessions delete failed, deleting from localStorage:", e);
+          set((state) => {
+            const sessions = state.exploratorySessions.filter((s) => s.id !== id);
+            const notes = state.exploratoryNotes.filter((n) => n.session_id !== id);
+            const bugs = state.exploratoryBugs.filter((b) => b.session_id !== id);
+            const evidence = state.exploratoryEvidence.filter((e) => e.session_id !== id);
+            persist({ 
+              exploratorySessions: sessions, 
+              exploratoryNotes: notes, 
+              exploratoryBugs: bugs, 
+              exploratoryEvidence: evidence 
+            });
+            return { 
+              exploratorySessions: sessions, 
+              exploratoryNotes: notes, 
+              exploratoryBugs: bugs, 
+              exploratoryEvidence: evidence 
+            };
+          });
+        }
+      } else {
+        set((state) => {
+          const sessions = state.exploratorySessions.filter((s) => s.id !== id);
+          const notes = state.exploratoryNotes.filter((n) => n.session_id !== id);
+          const bugs = state.exploratoryBugs.filter((b) => b.session_id !== id);
+          const evidence = state.exploratoryEvidence.filter((e) => e.session_id !== id);
+          persist({ 
+            exploratorySessions: sessions, 
+            exploratoryNotes: notes, 
+            exploratoryBugs: bugs, 
+            exploratoryEvidence: evidence 
+          });
+          return { 
+            exploratorySessions: sessions, 
+            exploratoryNotes: notes, 
+            exploratoryBugs: bugs, 
+            exploratoryEvidence: evidence 
+          };
         });
       }
     },
