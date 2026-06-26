@@ -830,9 +830,9 @@ export const useDataStore = create<DataState>((set, get) => {
     // TEST CASES CRUD
     // ----------------------------------------------------
     addTestCase: async (testCase) => {
-      const proj = get().projects.find((p) => p.id === testCase.project_id);
-      const projCode = proj ? proj.name.split(' ')[0] : 'TC';
-      const code = getNextCode(`TC-${projCode}`, get().testCases);
+      const suite = get().testSuites.find((s) => s.id === testCase.suite_id);
+      const suiteCode = suite ? suite.name.split(' ')[0].toUpperCase() : 'TC';
+      const code = getNextCode(`TC-${suiteCode}`, get().testCases);
       
       const newCase: TestCase = {
         ...testCase,
@@ -910,9 +910,10 @@ export const useDataStore = create<DataState>((set, get) => {
       const sourceCases = get().testCases.filter((tc) => ids.includes(tc.id));
       const newCases: TestCase[] = sourceCases.map((sc, idx) => {
         const currentList = [...get().testCases, ...newCases];
-        const proj = get().projects.find((p) => p.id === sc.project_id);
-        const projCode = proj ? proj.name.split(' ')[0] : 'TC';
-        const code = getNextCode(`TC-${projCode}`, currentList);
+        const targetSuite = targetSuiteId || sc.suite_id;
+        const suite = get().testSuites.find((s) => s.id === targetSuite);
+        const suiteCode = suite ? suite.name.split(' ')[0].toUpperCase() : 'TC';
+        const code = getNextCode(`TC-${suiteCode}`, currentList);
         return {
           ...sc,
           id: `tc-${Date.now()}-${idx}` as any,
