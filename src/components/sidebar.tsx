@@ -9,7 +9,7 @@ import {
   LayoutDashboard, MessageSquare, Bug, Rocket, FolderHeart, 
   FileSpreadsheet, PlayCircle, FileText, BarChart3, Settings, 
   ChevronLeft, ChevronRight, UserCheck, LogOut, MessageCircle,
-  Compass
+  Compass, ClipboardList
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Avatar } from '@/components/ui/avatar';
@@ -32,10 +32,16 @@ export const Sidebar: React.FC = () => {
     { name: 'Exploratory Testing', path: '/exploratory', icon: <Compass className="h-4.5 w-4.5" /> },
     { name: 'Reports', path: '/reports', icon: <FileText className="h-4.5 w-4.5" /> },
     { name: 'Analytics', path: '/analytics', icon: <BarChart3 className="h-4.5 w-4.5" /> },
+    { name: 'Implementation Reports', path: '/implementation-reports', icon: <ClipboardList className="h-4.5 w-4.5" /> },
     { name: 'Settings', path: '/settings', icon: <Settings className="h-4.5 w-4.5" /> },
   ].filter((item) => {
     if (currentUser && activeRole === 'Reporter') {
-      return item.name === 'Reports' || item.name === 'Analytics' || item.name === 'Feedback' || item.name === 'User Feedback' || item.name === 'Release Notes';
+      return item.name === 'Reports' || 
+             item.name === 'Analytics' || 
+             item.name === 'Feedback' || 
+             item.name === 'User Feedback' || 
+             item.name === 'Release Notes' ||
+             item.name === 'Implementation Reports';
     }
     return true;
   });

@@ -112,7 +112,35 @@ try {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `)
-    .then(() => console.log('Database migration: exploratory tables check passed'))
+    .then(() => {
+      console.log('Database migration: exploratory tables check passed');
+      
+      // Create implementation report tables
+      pool.query(`
+        CREATE TABLE IF NOT EXISTS public.implementation_reports (
+          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+          title TEXT NOT NULL,
+          reporter_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+          version_id UUID REFERENCES public.releases(id) ON DELETE CASCADE,
+          platform TEXT NOT NULL DEFAULT 'Web',
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS public.implementation_report_items (
+          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+          report_id UUID REFERENCES public.implementation_reports(id) ON DELETE CASCADE,
+          feedback_id UUID REFERENCES public.feedbacks(id) ON DELETE SET NULL,
+          title TEXT NOT NULL,
+          feature TEXT,
+          status TEXT NOT NULL,
+          implementation_version TEXT,
+          qa_note TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `)
+        .then(() => console.log('Database migration: implementation report tables check passed'))
+        .catch((err) => console.warn('Database migration warning for implementation report tables:', err));
+    })
     .catch((err) => console.warn('Database migration warning for exploratory tables:', err));
 
 } catch (err) {

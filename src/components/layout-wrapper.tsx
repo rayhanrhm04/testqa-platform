@@ -86,7 +86,7 @@ export const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ childre
   }
 
   // 2. Reporter Restriction check
-  // Reporter can only access /reports, /analytics, /feedback, and /release-notes (only applies to logged-in users)
+  // Reporter can only access /reports, /analytics, /feedback, /user-feedback, /release-notes, and /implementation-reports (only applies to logged-in users)
   const isReporterRestricted = currentUser && 
                                activeRole === 'Reporter' && 
                                pathname !== '/reports' && 
@@ -94,6 +94,8 @@ export const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ childre
                                pathname !== '/feedback' &&
                                pathname !== '/user-feedback' &&
                                pathname !== '/release-notes' &&
+                               pathname !== '/implementation-reports' &&
+                               !pathname.startsWith('/implementation-reports/') &&
                                !pathname.startsWith('/feedback/');
 
   return (

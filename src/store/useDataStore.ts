@@ -3,7 +3,8 @@ import {
   Project, Feedback, Issue, Release, TestSuite, TestCase, TestRun, TestRunResult, Comment, ActivityLog,
   FeedbackPriority, FeedbackStatus, IssueType, IssueSeverity, IssueStatus, ReleaseStatus, TestRunStatus, TestResultValue,
   ProjectShare, User, UserRole, UserFeedback, UserFeedbackTopic, ReleaseProject,
-  ExploratorySession, ExploratoryNote, ExploratoryBug, ExploratoryEvidence
+  ExploratorySession, ExploratoryNote, ExploratoryBug, ExploratoryEvidence,
+  ImplementationReport, ImplementationReportItem
 } from '@/lib/validators';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
@@ -32,6 +33,8 @@ interface DataState {
   exploratoryNotes: ExploratoryNote[];
   exploratoryBugs: ExploratoryBug[];
   exploratoryEvidence: ExploratoryEvidence[];
+  implementationReports: ImplementationReport[];
+  implementationReportItems: ImplementationReportItem[];
   isLoading: boolean;
 
   // Actions
@@ -108,6 +111,13 @@ interface DataState {
   addExploratoryBug: (bug: Omit<ExploratoryBug, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
   addExploratoryEvidence: (evidence: Omit<ExploratoryEvidence, 'id' | 'created_at'>) => Promise<void>;
   deleteExploratorySession: (id: string) => Promise<void>;
+
+  // Implementation Reports
+  addImplementationReport: (report: Omit<ImplementationReport, 'id' | 'created_at' | 'updated_at'>) => Promise<ImplementationReport | null>;
+  deleteImplementationReport: (id: string) => Promise<void>;
+  addImplementationReportItem: (item: Omit<ImplementationReportItem, 'id' | 'created_at'>) => Promise<void>;
+  deleteImplementationReportItem: (id: string) => Promise<void>;
+  updateImplementationReportItem: (id: string, updates: Partial<ImplementationReportItem>) => Promise<void>;
 }
 
 // ----------------------------------------------------
@@ -233,6 +243,8 @@ export const useDataStore = create<DataState>((set, get) => {
     exploratoryNotes: [],
     exploratoryBugs: [],
     exploratoryEvidence: [],
+    implementationReports: [],
+    implementationReportItems: [],
     isLoading: true,
 
     fetchData: async () => {
@@ -320,6 +332,24 @@ export const useDataStore = create<DataState>((set, get) => {
             expBugs = JSON.parse(localStorage.getItem('qa_exploratoryBugs') || '[]');
             expEvidence = JSON.parse(localStorage.getItem('qa_exploratoryEvidence') || '[]');
           }
+
+          let reports: any[] = [];
+          let reportItems: any[] = [];
+          try {
+            const [
+              { data: reps },
+              { data: items }
+            ] = await Promise.all([
+              supabase!.from('implementation_reports').select('*').order('created_at', { ascending: false }),
+              supabase!.from('implementation_report_items').select('*').order('created_at', { ascending: true }),
+            ]);
+            reports = reps || [];
+            reportItems = items || [];
+          } catch (e) {
+            console.warn("Implementation report tables fetch failed, loading fallback:", e);
+            reports = JSON.parse(localStorage.getItem('qa_implementationReports') || '[]');
+            reportItems = JSON.parse(localStorage.getItem('qa_implementationReportItems') || '[]');
+          }
  
            set({
              projects: p || [],
@@ -340,6 +370,8 @@ export const useDataStore = create<DataState>((set, get) => {
              exploratoryNotes: expNotes,
              exploratoryBugs: expBugs,
              exploratoryEvidence: expEvidence,
+             implementationReports: reports,
+             implementationReportItems: reportItems,
              isLoading: false,
            });
         } catch (e) {
@@ -389,6 +421,8 @@ export const useDataStore = create<DataState>((set, get) => {
             exploratoryNotes: getLocal('exploratoryNotes', []),
             exploratoryBugs: getLocal('exploratoryBugs', []),
             exploratoryEvidence: getLocal('exploratoryEvidence', []),
+            implementationReports: getLocal('implementationReports', []),
+            implementationReportItems: getLocal('implementationReportItems', []),
             isLoading: false,
           });
         }, 300);
@@ -1527,6 +1561,128 @@ export const useDataStore = create<DataState>((set, get) => {
             exploratoryBugs: bugs, 
             exploratoryEvidence: evidence 
           };
+        });
+      }
+    },
+
+    // ----------------------------------------------------
+    // IMPLEMENTATION REPORT ACTIONS
+    // ----------------------------------------------------
+    addImplementationReport: async (report) => {
+      const newReport: ImplementationReport = {
+        ...report,
+        id: isSupabaseConfigured() ? undefined : `rep-\${Date.now()}` as any,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase!.from('implementation_reports').insert(newReport).select();
+        if (!error && data && data[0]) {
+          set((state) => ({ implementationReports: [data[0], ...state.implementationReports] }));
+          return data[0];
+        }
+        console.error("Error inserting implementation report:", error);
+        return null;
+      } else {
+        const reportWithId = { ...newReport, id: `rep-${Date.now()}` };
+        set((state) => {
+          const next = [reportWithId, ...state.implementationReports];
+          persist({ implementationReports: next });
+          return { implementationReports: next };
+        });
+        return reportWithId;
+      }
+    },
+
+    deleteImplementationReport: async (id) => {
+      if (isSupabaseConfigured()) {
+        try {
+          const { error } = await supabase!.from('implementation_reports').delete().eq('id', id);
+          if (error) throw error;
+          set((state) => ({
+            implementationReports: state.implementationReports.filter((r) => r.id !== id),
+            implementationReportItems: state.implementationReportItems.filter((i) => i.report_id !== id),
+          }));
+        } catch (e) {
+          console.warn("Table implementation_reports delete failed, local fallback:", e);
+          set((state) => {
+            const reports = state.implementationReports.filter((r) => r.id !== id);
+            const items = state.implementationReportItems.filter((i) => i.report_id !== id);
+            persist({ implementationReports: reports, implementationReportItems: items });
+            return { implementationReports: reports, implementationReportItems: items };
+          });
+        }
+      } else {
+        set((state) => {
+          const reports = state.implementationReports.filter((r) => r.id !== id);
+          const items = state.implementationReportItems.filter((i) => i.report_id !== id);
+          persist({ implementationReports: reports, implementationReportItems: items });
+          return { implementationReports: reports, implementationReportItems: items };
+        });
+      }
+    },
+
+    addImplementationReportItem: async (item) => {
+      const newItem: ImplementationReportItem = {
+        ...item,
+        id: isSupabaseConfigured() ? undefined : `item-\${Date.now()}` as any,
+        created_at: new Date().toISOString(),
+      };
+
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase!.from('implementation_report_items').insert(newItem).select();
+        if (!error && data && data[0]) {
+          set((state) => ({ implementationReportItems: [...state.implementationReportItems, data[0]] }));
+        } else {
+          console.error("Error inserting implementation report item:", error);
+        }
+      } else {
+        const itemWithId = { ...newItem, id: `item-${Date.now()}` };
+        set((state) => {
+          const next = [...state.implementationReportItems, itemWithId];
+          persist({ implementationReportItems: next });
+          return { implementationReportItems: next };
+        });
+      }
+    },
+
+    deleteImplementationReportItem: async (id) => {
+      if (isSupabaseConfigured()) {
+        try {
+          const { error } = await supabase!.from('implementation_report_items').delete().eq('id', id);
+          if (error) throw error;
+          set((state) => ({
+            implementationReportItems: state.implementationReportItems.filter((i) => i.id !== id),
+          }));
+        } catch (e) {
+          console.warn("Table implementation_report_items delete failed, local fallback:", e);
+          set((state) => {
+            const next = state.implementationReportItems.filter((i) => i.id !== id);
+            persist({ implementationReportItems: next });
+            return { implementationReportItems: next };
+          });
+        }
+      } else {
+        set((state) => {
+          const next = state.implementationReportItems.filter((i) => i.id !== id);
+          persist({ implementationReportItems: next });
+          return { implementationReportItems: next };
+        });
+      }
+    },
+
+    updateImplementationReportItem: async (id, updates) => {
+      if (isSupabaseConfigured()) {
+        await supabase!.from('implementation_report_items').update(updates).eq('id', id);
+        set((state) => ({
+          implementationReportItems: state.implementationReportItems.map((i) => i.id === id ? { ...i, ...updates } : i),
+        }));
+      } else {
+        set((state) => {
+          const next = state.implementationReportItems.map((i) => i.id === id ? { ...i, ...updates } : i);
+          persist({ implementationReportItems: next });
+          return { implementationReportItems: next };
         });
       }
     },

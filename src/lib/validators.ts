@@ -370,3 +370,29 @@ export interface ExploratoryEvidence {
   created_at: string;
 }
 
+// ----------------------------------------------------
+// IMPLEMENTATION REPORT MODELS
+// ----------------------------------------------------
+export interface ImplementationReport {
+  id: string;
+  title: string;
+  reporter_id: string;
+  version_id: string;
+  platform: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ImplementationReportItem {
+  id: string;
+  report_id: string;
+  feedback_id?: string | null;
+  title: string;
+  feature?: string | null;
+  status: 'Implemented' | 'In Progress' | 'Pending' | 'Rejected' | 'Duplicate';
+  implementation_version?: string | null;
+  qa_note?: string | null;
+  created_at: string;
+}
+
+
