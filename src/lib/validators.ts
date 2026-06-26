@@ -376,7 +376,8 @@ export interface ExploratoryEvidence {
 export interface ImplementationReport {
   id: string;
   title: string;
-  reporter_id: string;
+  reporter_id?: string | null;
+  reporter_name?: string | null;
   version_id: string;
   platform: string;
   created_at: string;

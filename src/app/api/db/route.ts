@@ -121,11 +121,14 @@ try {
           id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
           title TEXT NOT NULL,
           reporter_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+          reporter_name TEXT,
           version_id UUID REFERENCES public.releases(id) ON DELETE CASCADE,
           platform TEXT NOT NULL DEFAULT 'Web',
           created_at TIMESTAMPTZ DEFAULT NOW(),
           updated_at TIMESTAMPTZ DEFAULT NOW()
         );
+        ALTER TABLE public.implementation_reports ADD COLUMN IF NOT EXISTS reporter_name TEXT;
+        
         CREATE TABLE IF NOT EXISTS public.implementation_report_items (
           id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
           report_id UUID REFERENCES public.implementation_reports(id) ON DELETE CASCADE,

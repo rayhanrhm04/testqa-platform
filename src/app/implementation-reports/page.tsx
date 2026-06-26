@@ -57,9 +57,16 @@ export default function ImplementationReportsPage() {
 
   // Generator Form States
   const [reportTitle, setReportTitle] = React.useState('');
-  const [selectedReporterId, setSelectedReporterId] = React.useState('');
+  const [reporterNameInput, setReporterNameInput] = React.useState('');
   const [selectedVersionId, setSelectedVersionId] = React.useState('');
   const [selectedPlatform, setSelectedPlatform] = React.useState('Web');
+  
+  const matchedUser = React.useMemo(() => {
+    if (!reporterNameInput) return null;
+    return users.find(u => u.name.toLowerCase() === reporterNameInput.trim().toLowerCase()) || null;
+  }, [reporterNameInput, users]);
+
+  const selectedReporterId = matchedUser?.id || '';
   
   // Generator Feedbacks Checklist
   const [feedbacksToInclude, setFeedbacksToInclude] = React.useState<Array<{
@@ -77,18 +84,21 @@ export default function ImplementationReportsPage() {
       return implementationReports;
     }
     // Reporter: only their own reports
-    return implementationReports.filter(r => r.reporter_id === currentUser.id);
+    return implementationReports.filter(r => 
+      r.reporter_id === currentUser.id || 
+      (r.reporter_name && r.reporter_name.toLowerCase() === currentUser.name.toLowerCase())
+    );
   }, [implementationReports, currentUser, activeRole]);
 
   // Filtered reports for the dashboard listing
   const filteredReports = React.useMemo(() => {
     return allowedReports.filter(report => {
-      const reporter = users.find(u => u.id === report.reporter_id);
+      const reporterName = report.reporter_name || users.find(u => u.id === report.reporter_id)?.name || 'Unknown';
       const version = releases.find(v => v.id === report.version_id);
       const matchesSearch = report.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            (reporter?.name || '').toLowerCase().includes(searchQuery.toLowerCase());
+                            reporterName.toLowerCase().includes(searchQuery.toLowerCase());
       
-      const matchesReporter = filterReporter === 'all' || report.reporter_id === filterReporter;
+      const matchesReporter = filterReporter === 'all' || report.reporter_id === filterReporter || report.reporter_name === filterReporter;
       const matchesVersion = filterVersion === 'all' || report.version_id === filterVersion;
       const matchesPlatform = filterPlatform === 'all' || report.platform === filterPlatform;
 
@@ -169,7 +179,7 @@ export default function ImplementationReportsPage() {
   // Generate Report Action
   const handleGenerateReportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedReporterId || !selectedVersionId || !reportTitle.trim()) {
+    if (!reporterNameInput.trim() || !selectedVersionId || !reportTitle.trim()) {
       addToast('Please fill out all required fields', 'error');
       return;
     }
@@ -177,7 +187,8 @@ export default function ImplementationReportsPage() {
     // 1. Create Report
     const createdReport = await addImplementationReport({
       title: reportTitle,
-      reporter_id: selectedReporterId,
+      reporter_id: selectedReporterId || null,
+      reporter_name: selectedReporterId ? null : reporterNameInput.trim(),
       version_id: selectedVersionId,
       platform: selectedPlatform,
     });
@@ -202,7 +213,7 @@ export default function ImplementationReportsPage() {
       );
 
       // Clean form states
-      setSelectedReporterId('');
+      setReporterNameInput('');
       setSelectedVersionId('');
       setReportTitle('');
       setIsGenerateModalOpen(false);
@@ -211,6 +222,31 @@ export default function ImplementationReportsPage() {
       
       // Load report
       router.push(`/implementation-reports?id=${createdReport.id}`);
+    }
+  };
+
+  // Add manual feedback item
+  const handleAddManualItem = async (status: 'Implemented' | 'In Progress' | 'Pending' | 'Rejected' | 'Duplicate') => {
+    if (!activeReport) return;
+    const targetVersion = releases.find(v => v.id === activeReport.version_id)?.version || '';
+    
+    await addImplementationReportItem({
+      report_id: activeReport.id,
+      feedback_id: null,
+      title: 'New Feedback Ticket',
+      feature: 'General',
+      status,
+      implementation_version: status === 'Implemented' ? targetVersion : null,
+      qa_note: '',
+    });
+    addToast(`Added new item to ${status}`, 'success');
+  };
+
+  // Delete manual feedback item
+  const handleDeleteItem = async (itemId: string) => {
+    if (window.confirm('Delete this item from the report?')) {
+      await deleteImplementationReportItem(itemId);
+      addToast('Item removed from report.', 'success');
     }
   };
 
@@ -240,6 +276,7 @@ export default function ImplementationReportsPage() {
   const getLarkShareText = () => {
     if (!activeReport) return '';
     const reporter = users.find(u => u.id === activeReport.reporter_id);
+    const reporterName = activeReport.reporter_name || reporter?.name || 'User';
     const version = releases.find(v => v.id === activeReport.version_id);
     const items = activeReportItems;
 
@@ -248,7 +285,7 @@ export default function ImplementationReportsPage() {
     const pendItems = items.filter(i => i.status === 'Pending');
     const rejItems = items.filter(i => i.status === 'Rejected');
 
-    let text = `*Implementation Report – ${reporter?.name || 'User'}*\n`;
+    let text = `*Implementation Report – ${reporterName}*\n`;
     text += `Version: ${version?.version || 'General'} (${activeReport.platform})\n\n`;
 
     if (implItems.length > 0) {
@@ -371,7 +408,7 @@ export default function ImplementationReportsPage() {
                     <div>
                       <span className="text-muted-foreground block font-medium">Reporter:</span>
                       <span className="text-foreground font-bold">
-                        {users.find(u => u.id === activeReport.reporter_id)?.name || 'Unknown'}
+                        {activeReport.reporter_name || users.find(u => u.id === activeReport.reporter_id)?.name || 'Unknown'}
                       </span>
                     </div>
                     <div>
@@ -405,7 +442,7 @@ export default function ImplementationReportsPage() {
                   <div className="hidden print:block pb-6 border-b border-zinc-200 mb-6">
                     <h1 className="text-xl font-bold text-black">{activeReport.title}</h1>
                     <p className="text-[11px] text-zinc-500 mt-1">
-                      Reporter: {users.find(u => u.id === activeReport.reporter_id)?.name || 'N/A'} | Version: {releases.find(v => v.id === activeReport.version_id)?.version || 'N/A'} | Platform: {activeReport.platform}
+                      Reporter: {activeReport.reporter_name || users.find(u => u.id === activeReport.reporter_id)?.name || 'N/A'} | Version: {releases.find(v => v.id === activeReport.version_id)?.version || 'N/A'} | Platform: {activeReport.platform}
                     </p>
                   </div>
 
@@ -413,7 +450,7 @@ export default function ImplementationReportsPage() {
                     {/* Status Sections Mapping */}
                     {(['Implemented', 'In Progress', 'Pending', 'Rejected', 'Duplicate'] as const).map(status => {
                       const items = activeReportItems.filter(i => i.status === status);
-                      if (items.length === 0) return null;
+                      if (items.length === 0 && !canEdit) return null;
 
                       // Styles for headings
                       const statusProps = {
@@ -426,55 +463,134 @@ export default function ImplementationReportsPage() {
 
                       return (
                         <div key={status} className="space-y-4">
-                          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border w-fit ${statusProps.colorClass} print:border-0 print:bg-transparent print:p-0`}>
-                            {statusProps.icon}
-                            <span className="text-xs font-black uppercase tracking-wider">{statusProps.label}</span>
+                          <div className="flex items-center justify-between">
+                            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border w-fit ${statusProps.colorClass} print:border-0 print:bg-transparent print:p-0`}>
+                              {statusProps.icon}
+                              <span className="text-xs font-black uppercase tracking-wider">{statusProps.label}</span>
+                            </div>
+                            {canEdit && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleAddManualItem(status)}
+                                className="cursor-pointer text-[10px] font-bold h-7 px-2 flex items-center gap-1 bg-white hover:bg-zinc-50 border-border/80"
+                              >
+                                <Plus className="h-3 w-3" /> Add Item
+                              </Button>
+                            )}
                           </div>
 
-                          {/* Table of items */}
-                          <div className="border border-border/80 rounded-xl overflow-hidden bg-zinc-50/50 dark:bg-zinc-900/10 print:border-zinc-200">
-                            <table className="w-full text-left text-xs border-collapse">
-                              <thead>
-                                <tr className="border-b border-border bg-white dark:bg-zinc-950 font-bold text-muted-foreground print:bg-zinc-100 print:text-black">
-                                  <th className="p-3 w-1/2">Feedback Title</th>
-                                  <th className="p-3">Feature</th>
-                                  <th className="p-3">Ver</th>
-                                  <th className="p-3 w-1/3 print:w-1/2">QA Comments / Notes</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {items.map((item) => (
-                                  <tr key={item.id} className="border-b border-border bg-white dark:bg-zinc-950/20 last:border-0 print:border-zinc-100">
-                                    <td className="p-3 font-semibold text-foreground/90">
-                                      {item.title}
-                                    </td>
-                                    <td className="p-3 text-muted-foreground font-medium">
-                                      {item.feature || 'General'}
-                                    </td>
-                                    <td className="p-3">
-                                      <span className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-[10px] text-foreground/80 font-bold">
-                                        {item.implementation_version || '-'}
-                                      </span>
-                                    </td>
-                                    <td className="p-3">
-                                      {canEdit ? (
-                                        <textarea
-                                          value={item.qa_note || ''}
-                                          onChange={(e) => updateImplementationReportItem(item.id, { qa_note: e.target.value })}
-                                          placeholder="Type QA update comments..."
-                                          className="w-full bg-zinc-50 dark:bg-zinc-900 border border-border/60 hover:border-primary/50 focus:border-primary rounded px-2 py-1 text-[11px] leading-relaxed transition-colors min-h-[45px] resize-none focus-visible:outline-none print:bg-transparent print:border-0 print:p-0 print:min-h-0"
-                                        />
-                                      ) : (
-                                        <p className="text-[11px] text-muted-foreground leading-relaxed italic print:not-italic print:text-zinc-700">
-                                          {item.qa_note || 'No comments logged.'}
-                                        </p>
-                                      )}
-                                    </td>
+                          {items.length === 0 ? (
+                            <div className="text-center text-[11px] text-muted-foreground py-4 bg-zinc-50/50 dark:bg-zinc-900/10 rounded-xl border border-dashed border-border/80">
+                              No tickets listed. Click "Add Item" to document manually.
+                            </div>
+                          ) : (
+                            /* Table of items */
+                            <div className="border border-border/80 rounded-xl overflow-hidden bg-zinc-50/50 dark:bg-zinc-900/10 print:border-zinc-200">
+                              <table className="w-full text-left text-xs border-collapse">
+                                <thead>
+                                  <tr className="border-b border-border bg-white dark:bg-zinc-950 font-bold text-muted-foreground print:bg-zinc-100 print:text-black">
+                                    <th className="p-3 w-2/5">Feedback Title</th>
+                                    <th className="p-3">Feature</th>
+                                    <th className="p-3">Ver</th>
+                                    <th className="p-3 w-1/3 print:w-1/2">QA Comments / Notes</th>
+                                    {canEdit && <th className="p-3 w-32 print:hidden">Move / Delete</th>}
                                   </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
+                                </thead>
+                                <tbody>
+                                  {items.map((item) => (
+                                    <tr key={item.id} className="border-b border-border bg-white dark:bg-zinc-950/20 last:border-0 print:border-zinc-100">
+                                      <td className="p-3">
+                                        {canEdit ? (
+                                          <input
+                                            type="text"
+                                            value={item.title}
+                                            onChange={(e) => updateImplementationReportItem(item.id, { title: e.target.value })}
+                                            placeholder="Feedback Title"
+                                            className="w-full bg-transparent border-0 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 focus:bg-zinc-100 dark:focus:bg-zinc-800/50 focus-visible:outline-none p-1 text-xs font-semibold rounded text-foreground/90"
+                                          />
+                                        ) : (
+                                          <span className="font-semibold text-foreground/90 p-1 block">
+                                            {item.title}
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="p-3">
+                                        {canEdit ? (
+                                          <input
+                                            type="text"
+                                            value={item.feature || ''}
+                                            onChange={(e) => updateImplementationReportItem(item.id, { feature: e.target.value })}
+                                            placeholder="General"
+                                            className="w-full bg-transparent border-0 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 focus:bg-zinc-100 dark:focus:bg-zinc-800/50 focus-visible:outline-none p-1 text-xs rounded text-muted-foreground font-medium"
+                                          />
+                                        ) : (
+                                          <span className="text-muted-foreground font-medium p-1 block">
+                                            {item.feature || 'General'}
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="p-3">
+                                        {canEdit ? (
+                                          <input
+                                            type="text"
+                                            value={item.implementation_version || ''}
+                                            onChange={(e) => updateImplementationReportItem(item.id, { implementation_version: e.target.value })}
+                                            placeholder="Version"
+                                            className="w-16 bg-transparent border-0 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 focus:bg-zinc-100 dark:focus:bg-zinc-800/50 focus-visible:outline-none p-1 text-xs font-mono rounded text-foreground/80 font-bold"
+                                          />
+                                        ) : (
+                                          <span className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-[10px] text-foreground/80 font-bold block w-fit">
+                                            {item.implementation_version || '-'}
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="p-3">
+                                        {canEdit ? (
+                                          <textarea
+                                            value={item.qa_note || ''}
+                                            onChange={(e) => updateImplementationReportItem(item.id, { qa_note: e.target.value })}
+                                            placeholder="Type QA update comments..."
+                                            className="w-full bg-zinc-50 dark:bg-zinc-900 border border-border/60 hover:border-primary/50 focus:border-primary rounded px-2 py-1 text-[11px] leading-relaxed transition-colors min-h-[45px] resize-none focus-visible:outline-none print:bg-transparent print:border-0 print:p-0 print:min-h-0"
+                                          />
+                                        ) : (
+                                          <p className="text-[11px] text-muted-foreground leading-relaxed italic print:not-italic print:text-zinc-700">
+                                            {item.qa_note || 'No comments logged.'}
+                                          </p>
+                                        )}
+                                      </td>
+                                      {canEdit && (
+                                        <td className="p-3 print:hidden">
+                                          <div className="flex items-center gap-1.5">
+                                            <select
+                                              value={item.status}
+                                              onChange={(e) => updateImplementationReportItem(item.id, { status: e.target.value as any })}
+                                              className="bg-zinc-50 dark:bg-zinc-900 border border-border/60 hover:border-primary/50 rounded px-1.5 py-0.5 text-[10px] font-bold text-foreground/80 select-xs focus-visible:outline-none"
+                                            >
+                                              <option value="Implemented">Implemented</option>
+                                              <option value="In Progress">In Progress</option>
+                                              <option value="Pending">Pending</option>
+                                              <option value="Rejected">Rejected</option>
+                                              <option value="Duplicate">Duplicate</option>
+                                            </select>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => handleDeleteItem(item.id)}
+                                              className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-500/10 rounded cursor-pointer flex items-center justify-center"
+                                              title="Delete item"
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                          </div>
+                                        </td>
+                                      )}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -582,7 +698,7 @@ export default function ImplementationReportsPage() {
               </div>
             ) : (
               filteredReports.map((report) => {
-                const reporter = users.find(u => u.id === report.reporter_id);
+                const reporterName = report.reporter_name || users.find(u => u.id === report.reporter_id)?.name || 'Unknown';
                 const version = releases.find(v => v.id === report.version_id);
                 const items = implementationReportItems.filter(i => i.report_id === report.id);
 
@@ -611,7 +727,7 @@ export default function ImplementationReportsPage() {
                         {report.title}
                       </h3>
                       <p className="text-[11px] text-muted-foreground mt-1 font-semibold">
-                        Reporter: <span className="text-foreground">{reporter?.name || 'Unknown'}</span>
+                        Reporter: <span className="text-foreground">{reporterName}</span>
                       </p>
                       
                       {/* Brief status metrics */}
@@ -669,7 +785,7 @@ export default function ImplementationReportsPage() {
             </Button>
             <Button 
               onClick={handleGenerateReportSubmit}
-              disabled={!selectedReporterId || !selectedVersionId}
+              disabled={!reporterNameInput.trim() || !selectedVersionId}
               className="cursor-pointer font-bold text-xs bg-primary text-primary-foreground"
             >
               Generate Report
@@ -679,17 +795,20 @@ export default function ImplementationReportsPage() {
       >
         <form onSubmit={handleGenerateReportSubmit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-3">
-            <FormGroup label="Reporter" error="">
-              <Select
-                value={selectedReporterId}
-                onChange={(e) => setSelectedReporterId(e.target.value)}
+            <FormGroup label="Reporter Name" error="">
+              <Input
+                list="reporters-list"
+                placeholder="Type or select reporter..."
+                value={reporterNameInput}
+                onChange={(e) => setReporterNameInput(e.target.value)}
+                className="bg-transparent border border-input text-sm h-9 rounded-lg"
                 required
-              >
-                <option value="" disabled>Select reporter...</option>
+              />
+              <datalist id="reporters-list">
                 {users.map((u) => (
-                  <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                  <option key={u.id} value={u.name} />
                 ))}
-              </Select>
+              </datalist>
             </FormGroup>
 
             <FormGroup label="Release Version" error="">
@@ -737,7 +856,7 @@ export default function ImplementationReportsPage() {
               </span>
             </h4>
             
-            {selectedReporterId && selectedVersionId ? (
+            {reporterNameInput.trim() && selectedVersionId ? (
               feedbacksToInclude.length === 0 ? (
                 <div className="text-center text-xs text-muted-foreground py-6 bg-zinc-50 dark:bg-zinc-900/60 rounded-xl border border-border/40">
                   No feedback tickets found for this reporter.
