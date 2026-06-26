@@ -186,8 +186,12 @@ export default function TestCasesPage() {
         setObjective('');
         setPrecondition('');
         setTestData('');
-        const firstSuite = testSuites.find(s => s.project_id === activeProject);
-        setSuiteId(firstSuite?.id || '');
+        if (activeSuite && activeSuite !== 'all') {
+          setSuiteId(activeSuite);
+        } else {
+          const firstSuite = testSuites.find(s => s.project_id === activeProject);
+          setSuiteId(firstSuite?.id || '');
+        }
         setTags(['Functional']);
         setIsAutomated(false);
         setAutomationLink('');
@@ -206,7 +210,7 @@ export default function TestCasesPage() {
         setPostCondition('');
       }
     }
-  }, [editingCase, activeProject, testSuites, isFormOpen]);
+  }, [editingCase, activeProject, testSuites, isFormOpen, activeSuite]);
 
   const canModify = React.useMemo(() => {
     if (activeRole === 'Admin' || activeRole === 'QA Engineer') return true;
