@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import { 
   Project, Feedback, Issue, Release, TestSuite, TestCase, TestRun, TestRunResult, Comment, ActivityLog,
   FeedbackPriority, FeedbackStatus, IssueType, IssueSeverity, IssueStatus, ReleaseStatus, TestRunStatus, TestResultValue,
-  ProjectShare, User, UserRole, UserFeedback, UserFeedbackTopic, ReleaseProject
+  ProjectShare, User, UserRole, UserFeedback, UserFeedbackTopic, ReleaseProject,
+  ExploratorySession, ExploratoryNote, ExploratoryBug, ExploratoryEvidence
 } from '@/lib/validators';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
@@ -27,6 +28,10 @@ interface DataState {
   users: User[];
   projectShares: ProjectShare[];
   userFeedbacks: UserFeedback[];
+  exploratorySessions: ExploratorySession[];
+  exploratoryNotes: ExploratoryNote[];
+  exploratoryBugs: ExploratoryBug[];
+  exploratoryEvidence: ExploratoryEvidence[];
   isLoading: boolean;
 
   // Actions
@@ -95,6 +100,13 @@ interface DataState {
   // User Feedbacks
   addUserFeedback: (project_id: string, topic: UserFeedbackTopic, message: string, email?: string) => Promise<void>;
   deleteUserFeedback: (id: string) => Promise<void>;
+
+  // Exploratory Testing
+  addExploratorySession: (session: Omit<ExploratorySession, 'id' | 'created_at' | 'updated_at' | 'elapsed_seconds' | 'status'>) => Promise<ExploratorySession | null>;
+  updateExploratorySession: (id: string, updates: Partial<ExploratorySession>) => Promise<void>;
+  addExploratoryNote: (sessionId: string, noteText: string) => Promise<void>;
+  addExploratoryBug: (bug: Omit<ExploratoryBug, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
+  addExploratoryEvidence: (evidence: Omit<ExploratoryEvidence, 'id' | 'created_at'>) => Promise<void>;
 }
 
 // ----------------------------------------------------
@@ -216,6 +228,10 @@ export const useDataStore = create<DataState>((set, get) => {
     users: [],
     projectShares: [],
     userFeedbacks: [],
+    exploratorySessions: [],
+    exploratoryNotes: [],
+    exploratoryBugs: [],
+    exploratoryEvidence: [],
     isLoading: true,
 
     fetchData: async () => {
@@ -275,6 +291,34 @@ export const useDataStore = create<DataState>((set, get) => {
             const local = localStorage.getItem('qa_releaseProjects');
             releaseProjectsData = local ? JSON.parse(local) : seedReleaseProjects;
           }
+
+          let expSessions: any[] = [];
+          let expNotes: any[] = [];
+          let expBugs: any[] = [];
+          let expEvidence: any[] = [];
+          try {
+            const [
+              { data: es },
+              { data: en },
+              { data: eb },
+              { data: ee }
+            ] = await Promise.all([
+              supabase!.from('exploratory_sessions').select('*').order('created_at', { ascending: false }),
+              supabase!.from('exploratory_notes').select('*').order('created_at', { ascending: true }),
+              supabase!.from('exploratory_bugs').select('*').order('created_at', { ascending: false }),
+              supabase!.from('exploratory_evidence').select('*').order('created_at', { ascending: false }),
+            ]);
+            expSessions = es || [];
+            expNotes = en || [];
+            expBugs = eb || [];
+            expEvidence = ee || [];
+          } catch (e) {
+            console.warn("Exploratory testing tables fetch failed, loading fallback:", e);
+            expSessions = JSON.parse(localStorage.getItem('qa_exploratorySessions') || '[]');
+            expNotes = JSON.parse(localStorage.getItem('qa_exploratoryNotes') || '[]');
+            expBugs = JSON.parse(localStorage.getItem('qa_exploratoryBugs') || '[]');
+            expEvidence = JSON.parse(localStorage.getItem('qa_exploratoryEvidence') || '[]');
+          }
  
            set({
              projects: p || [],
@@ -291,6 +335,10 @@ export const useDataStore = create<DataState>((set, get) => {
              users: u || [],
              projectShares: shares,
              userFeedbacks: userFbs,
+             exploratorySessions: expSessions,
+             exploratoryNotes: expNotes,
+             exploratoryBugs: expBugs,
+             exploratoryEvidence: expEvidence,
              isLoading: false,
            });
         } catch (e) {
@@ -336,6 +384,10 @@ export const useDataStore = create<DataState>((set, get) => {
             users: allUsers,
             projectShares: getLocal('projectShares', []),
             userFeedbacks: getLocal('userFeedbacks', seedUserFeedbacks),
+            exploratorySessions: getLocal('exploratorySessions', []),
+            exploratoryNotes: getLocal('exploratoryNotes', []),
+            exploratoryBugs: getLocal('exploratoryBugs', []),
+            exploratoryEvidence: getLocal('exploratoryEvidence', []),
             isLoading: false,
           });
         }, 300);
@@ -1298,6 +1350,128 @@ export const useDataStore = create<DataState>((set, get) => {
           const next = state.userFeedbacks.filter((ufb) => ufb.id !== id);
           persist({ userFeedbacks: next });
           return { userFeedbacks: next };
+        });
+      }
+    },
+
+    // ----------------------------------------------------
+    // EXPLORATORY TESTING CRUD ACTIONS
+    // ----------------------------------------------------
+    addExploratorySession: async (session) => {
+      const newSession: ExploratorySession = {
+        ...session,
+        id: isSupabaseConfigured() ? undefined : `es-${Date.now()}` as any,
+        elapsed_seconds: 0,
+        status: 'Draft',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase!.from('exploratory_sessions').insert(newSession).select();
+        if (!error && data && data[0]) {
+          set((state) => ({ exploratorySessions: [data[0], ...state.exploratorySessions] }));
+          return data[0];
+        }
+        console.error("Error inserting exploratory session:", error);
+        return null;
+      } else {
+        const sessionWithId = { ...newSession, id: `es-${Date.now()}` };
+        set((state) => {
+          const next = [sessionWithId, ...state.exploratorySessions];
+          persist({ exploratorySessions: next });
+          return { exploratorySessions: next };
+        });
+        return sessionWithId;
+      }
+    },
+
+    updateExploratorySession: async (id, updates) => {
+      const payload = { ...updates, updated_at: new Date().toISOString() };
+      if (isSupabaseConfigured()) {
+        await supabase!.from('exploratory_sessions').update(payload).eq('id', id);
+        set((state) => ({
+          exploratorySessions: state.exploratorySessions.map((s) => s.id === id ? { ...s, ...payload } : s),
+        }));
+      } else {
+        set((state) => {
+          const next = state.exploratorySessions.map((s) => s.id === id ? { ...s, ...payload } : s);
+          persist({ exploratorySessions: next });
+          return { exploratorySessions: next };
+        });
+      }
+    },
+
+    addExploratoryNote: async (sessionId, noteText) => {
+      const newNote: ExploratoryNote = {
+        id: isSupabaseConfigured() ? undefined : `en-${Date.now()}` as any,
+        session_id: sessionId,
+        note_text: noteText,
+        created_at: new Date().toISOString(),
+      };
+
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase!.from('exploratory_notes').insert(newNote).select();
+        if (!error && data && data[0]) {
+          set((state) => ({ exploratoryNotes: [...state.exploratoryNotes, data[0]] }));
+        } else {
+          console.error("Error inserting exploratory note:", error);
+        }
+      } else {
+        const noteWithId = { ...newNote, id: `en-${Date.now()}` };
+        set((state) => {
+          const next = [...state.exploratoryNotes, noteWithId];
+          persist({ exploratoryNotes: next });
+          return { exploratoryNotes: next };
+        });
+      }
+    },
+
+    addExploratoryBug: async (bug) => {
+      const newBug: ExploratoryBug = {
+        ...bug,
+        id: isSupabaseConfigured() ? undefined : `eb-${Date.now()}` as any,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase!.from('exploratory_bugs').insert(newBug).select();
+        if (!error && data && data[0]) {
+          set((state) => ({ exploratoryBugs: [data[0], ...state.exploratoryBugs] }));
+        } else {
+          console.error("Error inserting exploratory bug:", error);
+        }
+      } else {
+        const bugWithId = { ...newBug, id: `eb-${Date.now()}` };
+        set((state) => {
+          const next = [bugWithId, ...state.exploratoryBugs];
+          persist({ exploratoryBugs: next });
+          return { exploratoryBugs: next };
+        });
+      }
+    },
+
+    addExploratoryEvidence: async (evidence) => {
+      const newEvidence: ExploratoryEvidence = {
+        ...evidence,
+        id: isSupabaseConfigured() ? undefined : `ee-${Date.now()}` as any,
+        created_at: new Date().toISOString(),
+      };
+
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase!.from('exploratory_evidence').insert(newEvidence).select();
+        if (!error && data && data[0]) {
+          set((state) => ({ exploratoryEvidence: [data[0], ...state.exploratoryEvidence] }));
+        } else {
+          console.error("Error inserting exploratory evidence:", error);
+        }
+      } else {
+        const evidenceWithId = { ...newEvidence, id: `ee-${Date.now()}` };
+        set((state) => {
+          const next = [evidenceWithId, ...state.exploratoryEvidence];
+          persist({ exploratoryEvidence: next });
+          return { exploratoryEvidence: next };
         });
       }
     },

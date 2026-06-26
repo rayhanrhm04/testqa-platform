@@ -66,6 +66,55 @@ try {
         .catch(err => console.warn('Database migration warning altering releases structure:', err));
     })
     .catch(err => console.warn('Database migration warning creating release_projects:', err));
+
+  // Migration: Create exploratory testing tables
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS public.exploratory_sessions (
+      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+      project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      module TEXT,
+      objective TEXT,
+      timebox_mins INTEGER NOT NULL,
+      elapsed_seconds INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'Draft',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS public.exploratory_notes (
+      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+      session_id UUID REFERENCES public.exploratory_sessions(id) ON DELETE CASCADE,
+      note_text TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS public.exploratory_bugs (
+      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+      session_id UUID REFERENCES public.exploratory_sessions(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      category TEXT,
+      severity TEXT NOT NULL DEFAULT 'Medium',
+      priority TEXT NOT NULL DEFAULT 'Medium',
+      description TEXT,
+      steps_to_reproduce TEXT,
+      expected_result TEXT,
+      actual_result TEXT,
+      relative_timestamp_seconds INTEGER NOT NULL,
+      evidence_url TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS public.exploratory_evidence (
+      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+      session_id UUID REFERENCES public.exploratory_sessions(id) ON DELETE CASCADE,
+      file_name TEXT NOT NULL,
+      file_type TEXT NOT NULL,
+      file_url TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `)
+    .then(() => console.log('Database migration: exploratory tables check passed'))
+    .catch((err) => console.warn('Database migration warning for exploratory tables:', err));
+
 } catch (err) {
   console.error('Error creating PostgreSQL pool', err);
 }

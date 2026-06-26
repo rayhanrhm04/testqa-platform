@@ -320,3 +320,53 @@ export function parseSteps(steps: string | undefined | null, expected_result?: s
   }
   return parsedSteps;
 }
+
+// ----------------------------------------------------
+// EXPLORATORY TESTING MODELS
+// ----------------------------------------------------
+export interface ExploratorySession {
+  id: string;
+  project_id: string;
+  name: string;
+  module?: string;
+  objective?: string;
+  timebox_mins: number;
+  elapsed_seconds: number;
+  status: 'Draft' | 'Active' | 'Paused' | 'Completed';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExploratoryNote {
+  id: string;
+  session_id: string;
+  note_text: string;
+  created_at: string;
+}
+
+export interface ExploratoryBug {
+  id: string;
+  session_id: string;
+  title: string;
+  category?: string;
+  severity: string;
+  priority: string;
+  description?: string;
+  steps_to_reproduce?: string;
+  expected_result?: string;
+  actual_result?: string;
+  relative_timestamp_seconds: number;
+  evidence_url?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExploratoryEvidence {
+  id: string;
+  session_id: string;
+  file_name: string;
+  file_type: 'image' | 'video';
+  file_url: string;
+  created_at: string;
+}
+
