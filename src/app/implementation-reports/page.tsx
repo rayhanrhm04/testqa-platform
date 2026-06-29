@@ -67,15 +67,6 @@ export default function ImplementationReportsPage() {
   }, [reporterNameInput, users]);
 
   const selectedReporterId = matchedUser?.id || '';
-  
-  // Generator Feedbacks Checklist
-  const [feedbacksToInclude, setFeedbacksToInclude] = React.useState<Array<{
-    feedbackId: string;
-    title: string;
-    feature: string;
-    suggestedStatus: 'Implemented' | 'In Progress' | 'Pending';
-    checked: boolean;
-  }>>([]);
 
   // Fetch / filter reports based on permissions
   const allowedReports = React.useMemo(() => {
@@ -118,52 +109,7 @@ export default function ImplementationReportsPage() {
     return implementationReportItems.filter(i => i.report_id === selectedReportId);
   }, [selectedReportId, implementationReportItems]);
 
-  // Handle reporter dropdown change in Generator: Auto-scans feedbacks
-  React.useEffect(() => {
-    if (!selectedReporterId || !selectedVersionId) {
-      setFeedbacksToInclude([]);
-      return;
-    }
 
-    const reporterFeedbacks = feedbacks.filter(f => f.reporter_id === selectedReporterId);
-    const mapped = reporterFeedbacks.map(f => {
-      // Find if there is any issue linked to this feedback
-      const linkedIssues = issues.filter(i => i.feedback_id === f.id);
-      const matchesVersion = linkedIssues.some(i => i.release_id === selectedVersionId);
-      
-      let suggestedStatus: 'Implemented' | 'In Progress' | 'Pending' = 'Pending';
-      let checked = false;
-
-      if (matchesVersion) {
-        checked = true;
-        const verifiedIssue = linkedIssues.find(i => i.release_id === selectedVersionId && (i.status === 'Verified' || i.status === 'Closed'));
-        if (verifiedIssue) {
-          suggestedStatus = 'Implemented';
-        } else {
-          suggestedStatus = 'In Progress';
-        }
-      } else if (f.status === 'Implemented') {
-        suggestedStatus = 'Implemented';
-        checked = true;
-      } else if (f.status === 'Reviewed') {
-        suggestedStatus = 'In Progress';
-      }
-
-      // Determine feature name
-      const matchedIssue = linkedIssues[0];
-      const feature = matchedIssue ? 'Functional Module' : 'General';
-
-      return {
-        feedbackId: f.id,
-        title: f.title,
-        feature,
-        suggestedStatus,
-        checked
-      };
-    });
-
-    setFeedbacksToInclude(mapped);
-  }, [selectedReporterId, selectedVersionId, feedbacks, issues]);
 
   // Auto-generate title in Generator
   React.useEffect(() => {
@@ -194,24 +140,6 @@ export default function ImplementationReportsPage() {
     });
 
     if (createdReport) {
-      // 2. Insert items
-      const selectedItems = feedbacksToInclude.filter(f => f.checked);
-      const targetVersion = releases.find(v => v.id === selectedVersionId)?.version || '';
-
-      await Promise.all(
-        selectedItems.map(item => 
-          addImplementationReportItem({
-            report_id: createdReport.id,
-            feedback_id: item.feedbackId,
-            title: item.title,
-            feature: item.feature,
-            status: item.suggestedStatus,
-            implementation_version: item.suggestedStatus === 'Implemented' ? targetVersion : null,
-            qa_note: '',
-          })
-        )
-      );
-
       // Clean form states
       setReporterNameInput('');
       setSelectedVersionId('');
@@ -847,62 +775,6 @@ export default function ImplementationReportsPage() {
             />
           </FormGroup>
 
-          {/* Feedback scanner checklist */}
-          <div className="space-y-2 border-t border-border/40 pt-4">
-            <h4 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center justify-between">
-              <span>Scanned Feedbacks Checklist ({feedbacksToInclude.length})</span>
-              <span className="text-[10px] text-muted-foreground font-medium lowercase">
-                Pulls matching tickets reported by selection.
-              </span>
-            </h4>
-            
-            {reporterNameInput.trim() && selectedVersionId ? (
-              feedbacksToInclude.length === 0 ? (
-                <div className="text-center text-xs text-muted-foreground py-6 bg-zinc-50 dark:bg-zinc-900/60 rounded-xl border border-border/40">
-                  No feedback tickets found for this reporter.
-                </div>
-              ) : (
-                <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                  {feedbacksToInclude.map((item, idx) => (
-                    <div 
-                      key={item.feedbackId}
-                      className="flex items-start gap-3 p-2.5 rounded-lg border border-border/60 bg-white dark:bg-zinc-950/40 hover:border-primary/20 transition-colors"
-                    >
-                      <input 
-                        type="checkbox"
-                        checked={item.checked}
-                        onChange={(e) => {
-                          const next = [...feedbacksToInclude];
-                          next[idx].checked = e.target.checked;
-                          setFeedbacksToInclude(next);
-                        }}
-                        className="mt-1 cursor-pointer"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs font-bold text-foreground truncate">{item.title}</p>
-                          <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border shrink-0 ml-2 ${
-                            item.suggestedStatus === 'Implemented'
-                              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                              : item.suggestedStatus === 'In Progress'
-                              ? 'bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400'
-                              : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700'
-                          }`}>
-                            {item.suggestedStatus}
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">Feature: {item.feature}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
-            ) : (
-              <div className="text-center text-xs text-muted-foreground py-8 bg-zinc-50 dark:bg-zinc-900/60 rounded-xl border border-border/40">
-                Select Reporter and Release Version to pull matching feedbacks checklist.
-              </div>
-            )}
-          </div>
         </form>
       </Dialog>
 
