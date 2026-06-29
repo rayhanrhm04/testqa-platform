@@ -184,9 +184,63 @@ try {
           attachment_name TEXT,
           timestamp TIMESTAMPTZ DEFAULT NOW()
         );
+
+        CREATE TABLE IF NOT EXISTS public.api_collections (
+          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+          project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          description TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        
+        CREATE TABLE IF NOT EXISTS public.api_endpoints (
+          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+          collection_id UUID REFERENCES public.api_collections(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          method TEXT NOT NULL,
+          path TEXT NOT NULL,
+          headers TEXT,
+          params TEXT,
+          body TEXT,
+          test_case_id UUID REFERENCES public.test_cases(id) ON DELETE SET NULL,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        
+        CREATE TABLE IF NOT EXISTS public.api_environments (
+          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+          project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          variables TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        
+        CREATE TABLE IF NOT EXISTS public.api_test_runs (
+          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+          collection_id UUID REFERENCES public.api_collections(id) ON DELETE CASCADE,
+          environment_id UUID REFERENCES public.api_environments(id) ON DELETE SET NULL,
+          executed_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
+          passed_count INT NOT NULL DEFAULT 0,
+          failed_count INT NOT NULL DEFAULT 0,
+          duration_ms INT NOT NULL DEFAULT 0,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        
+        CREATE TABLE IF NOT EXISTS public.api_test_results (
+          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+          run_id UUID REFERENCES public.api_test_runs(id) ON DELETE CASCADE,
+          endpoint_id UUID REFERENCES public.api_endpoints(id) ON DELETE CASCADE,
+          status TEXT NOT NULL,
+          status_code INT,
+          response_time_ms INT,
+          request_payload TEXT,
+          request_headers TEXT,
+          response_payload TEXT,
+          response_headers TEXT,
+          error_message TEXT
+        );
       `)
-        .then(() => console.log('Database migration: implementation report, notifications, and recorder tables check passed'))
-        .catch((err) => console.warn('Database migration warning for implementation report, notifications, and recorder tables:', err));
+        .then(() => console.log('Database migration: implementation report, notifications, recorder, and api hub tables check passed'))
+        .catch((err) => console.warn('Database migration warning for implementation report, notifications, recorder, and api hub tables:', err));
     })
     .catch((err) => console.warn('Database migration warning for exploratory tables:', err));
 

@@ -464,4 +464,103 @@ export const recorderStepSchema = z.object({
   attachment_name: z.string().optional().nullable(),
 });
 
+export interface ApiCollection {
+  id: string;
+  project_id: string;
+  name: string;
+  description?: string | null;
+  created_at: string;
+}
+
+export interface ApiEndpoint {
+  id: string;
+  collection_id: string;
+  name: string;
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS';
+  path: string;
+  headers?: string | null;
+  params?: string | null;
+  body?: string | null;
+  test_case_id?: string | null;
+  created_at: string;
+}
+
+export interface ApiEnvironment {
+  id: string;
+  project_id: string;
+  name: string;
+  variables?: string | null;
+  created_at: string;
+}
+
+export interface ApiTestRun {
+  id: string;
+  collection_id: string;
+  environment_id?: string | null;
+  executed_by?: string | null;
+  passed_count: number;
+  failed_count: number;
+  duration_ms: number;
+  created_at: string;
+}
+
+export interface ApiTestResult {
+  id: string;
+  run_id: string;
+  endpoint_id: string;
+  status: 'Passed' | 'Failed';
+  status_code?: number | null;
+  response_time_ms?: number | null;
+  request_payload?: string | null;
+  request_headers?: string | null;
+  response_payload?: string | null;
+  response_headers?: string | null;
+  error_message?: string | null;
+}
+
+export const apiCollectionSchema = z.object({
+  project_id: z.string().min(1),
+  name: z.string().min(3, 'Collection name must be at least 3 characters'),
+  description: z.string().optional().nullable(),
+});
+
+export const apiEndpointSchema = z.object({
+  collection_id: z.string().min(1),
+  name: z.string().min(3, 'Endpoint name must be at least 3 characters'),
+  method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']),
+  path: z.string().min(1, 'Path is required'),
+  headers: z.string().optional().nullable(),
+  params: z.string().optional().nullable(),
+  body: z.string().optional().nullable(),
+  test_case_id: z.string().optional().nullable(),
+});
+
+export const apiEnvironmentSchema = z.object({
+  project_id: z.string().min(1),
+  name: z.string().min(3, 'Environment name must be at least 3 characters'),
+  variables: z.string().optional().nullable(),
+});
+
+export const apiTestRunSchema = z.object({
+  collection_id: z.string().min(1),
+  environment_id: z.string().optional().nullable(),
+  executed_by: z.string().optional().nullable(),
+  passed_count: z.number().int().min(0),
+  failed_count: z.number().int().min(0),
+  duration_ms: z.number().int().min(0),
+});
+
+export const apiTestResultSchema = z.object({
+  run_id: z.string().min(1),
+  endpoint_id: z.string().min(1),
+  status: z.enum(['Passed', 'Failed']),
+  status_code: z.number().optional().nullable(),
+  response_time_ms: z.number().optional().nullable(),
+  request_payload: z.string().optional().nullable(),
+  request_headers: z.string().optional().nullable(),
+  response_payload: z.string().optional().nullable(),
+  response_headers: z.string().optional().nullable(),
+  error_message: z.string().optional().nullable(),
+});
+
 

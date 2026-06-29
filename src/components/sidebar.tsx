@@ -9,7 +9,7 @@ import {
   LayoutDashboard, MessageSquare, Bug, Rocket, FolderHeart, 
   FileSpreadsheet, PlayCircle, FileText, BarChart3, Settings, 
   ChevronLeft, ChevronRight, UserCheck, LogOut, MessageCircle,
-  Compass, ClipboardList, Video
+  Compass, ClipboardList, Video, Layers
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Avatar } from '@/components/ui/avatar';
@@ -31,6 +31,7 @@ export const Sidebar: React.FC = () => {
     { name: 'Test Runs', path: '/test-runs', icon: <PlayCircle className="h-4.5 w-4.5" /> },
     { name: 'Exploratory Testing', path: '/exploratory', icon: <Compass className="h-4.5 w-4.5" /> },
     { name: 'Smart Recorder', path: '/smart-recorder', icon: <Video className="h-4.5 w-4.5 text-red-500" /> },
+    { name: 'API Testing Hub', path: '/api-hub', icon: <Layers className="h-4.5 w-4.5 text-indigo-500" /> },
     { name: 'Reports', path: '/reports', icon: <FileText className="h-4.5 w-4.5" /> },
     { name: 'Analytics', path: '/analytics', icon: <BarChart3 className="h-4.5 w-4.5" /> },
     { name: 'Implementation Reports', path: '/implementation-reports', icon: <ClipboardList className="h-4.5 w-4.5" /> },
