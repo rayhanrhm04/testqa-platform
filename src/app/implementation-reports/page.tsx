@@ -70,7 +70,7 @@ export default function ImplementationReportsPage() {
 
   // Fetch / filter reports based on permissions
   const allowedReports = React.useMemo(() => {
-    if (!currentUser) return [];
+    if (!currentUser) return implementationReports;
     if (activeRole === 'Admin' || activeRole === 'QA Engineer' || activeRole === 'Developer') {
       return implementationReports;
     }
