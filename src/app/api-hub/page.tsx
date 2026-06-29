@@ -27,6 +27,7 @@ export default function ApiTestingHubPage() {
     apiTestResults,
     projects, 
     testCases, 
+    testSuites,
     users,
     addApiCollection,
     deleteApiCollection,
@@ -40,7 +41,8 @@ export default function ApiTestingHubPage() {
     runApiEndpoint,
     runApiCollection,
     addIssue,
-    addTestCase
+    addTestCase,
+    addTestSuite
   } = useDataStore();
 
   const { currentUser, activeRole } = useAuthStore();
@@ -620,24 +622,45 @@ ${resolvedBody}
   const handleGenerateTestCase = async () => {
     if (!requestUrl) return;
     try {
-      const nextCode = `TC-${Date.now().toString().slice(-4)}`;
+      let targetSuiteId = '';
+      const projectSuites = testSuites.filter(s => s.project_id === selectedProjectId);
+      
+      if (projectSuites.length > 0) {
+        targetSuiteId = projectSuites[0].id;
+      } else {
+        const newSuite = await addTestSuite(
+          selectedProjectId, 
+          'API Testing Suite', 
+          'Auto-generated suite for manual sandbox HTTP requests'
+        );
+        if (newSuite) {
+          targetSuiteId = newSuite.id;
+        } else {
+          throw new Error('Failed to create default Test Suite');
+        }
+      }
+
       await addTestCase({
         project_id: selectedProjectId,
-        suite_id: 'default-suite',
-        code: nextCode,
+        suite_id: targetSuiteId,
         title: `API Verification: ${requestMethod} ${requestUrl.split('/').pop() || 'Endpoint'}`,
         description: `Verify that request to ${requestUrl} behaves correctly.`,
-        steps: `1. Send ${requestMethod} request to ${requestUrl}.\n2. Assert response status is 200 OK.`,
-        expected_result: `Request returns status ${requestResponse?.status || 200} with response payload.`,
+        steps: `1. Send ${requestMethod} request to ${requestUrl}.\n2. Assert response status is ${requestResponse?.status || 200}.\n3. Validate response payloads content.`,
+        expected_result: `Request returns status ${requestResponse?.status || 200} with response body.`,
         tags: ['API-Automation'],
         is_automated: true,
         created_by: currentUser?.id || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        objective: 'Verify endpoint availability and status validation',
+        precondition: 'Staging environment variables mapped correctly',
+        post_condition: 'Connection closed successfully',
+        test_data: requestBodyContent || '',
+        status: 'Actual'
       } as any);
+
       addToast('Generated manual Test Case successfully!', 'success');
-    } catch (e) {
-      addToast('Failed to generate TestCase.', 'error');
+    } catch (e: any) {
+      console.error("Test Case generation error:", e);
+      addToast(`Failed to generate TestCase: ${e.message || e}`, 'error');
     }
   };
 
