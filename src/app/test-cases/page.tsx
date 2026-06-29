@@ -686,9 +686,9 @@ export default function TestCasesPage() {
             {/* Left Column */}
             <div className="md:col-span-2 space-y-5">
               <div>
-                <h2 className="text-base font-bold text-foreground leading-tight">{activeDetailCase.title}</h2>
+                <h2 className="text-base font-bold text-foreground leading-tight break-all" style={{ wordBreak: 'break-all' }}>{activeDetailCase.title}</h2>
                 {activeDetailCase.description && (
-                  <p className="text-xs text-muted-foreground mt-2 bg-muted/10 border border-border/40 p-2.5 rounded-lg leading-relaxed">
+                  <p className="text-xs text-muted-foreground mt-2 bg-muted/10 border border-border/40 p-2.5 rounded-lg leading-relaxed break-all" style={{ wordBreak: 'break-all' }}>
                     {activeDetailCase.description}
                   </p>
                 )}
