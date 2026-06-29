@@ -157,9 +157,36 @@ try {
           is_read BOOLEAN NOT NULL DEFAULT FALSE,
           created_at TIMESTAMPTZ DEFAULT NOW()
         );
+        
+        CREATE TABLE IF NOT EXISTS public.recorder_sessions (
+          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+          title TEXT NOT NULL,
+          project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
+          suite_id UUID REFERENCES public.test_suites(id) ON DELETE SET NULL,
+          case_id UUID REFERENCES public.test_cases(id) ON DELETE SET NULL,
+          browser TEXT NOT NULL DEFAULT 'Chrome',
+          environment TEXT NOT NULL DEFAULT 'Staging',
+          start_url TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'Draft',
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        
+        CREATE TABLE IF NOT EXISTS public.recorder_steps (
+          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+          session_id UUID REFERENCES public.recorder_sessions(id) ON DELETE CASCADE,
+          step_number INT NOT NULL,
+          action_type TEXT NOT NULL,
+          target_element TEXT,
+          value TEXT,
+          notes TEXT,
+          attachment_url TEXT,
+          attachment_name TEXT,
+          timestamp TIMESTAMPTZ DEFAULT NOW()
+        );
       `)
-        .then(() => console.log('Database migration: implementation report and notifications tables check passed'))
-        .catch((err) => console.warn('Database migration warning for implementation report and notifications tables:', err));
+        .then(() => console.log('Database migration: implementation report, notifications, and recorder tables check passed'))
+        .catch((err) => console.warn('Database migration warning for implementation report, notifications, and recorder tables:', err));
     })
     .catch((err) => console.warn('Database migration warning for exploratory tables:', err));
 

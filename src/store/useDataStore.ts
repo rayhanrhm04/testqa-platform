@@ -4,7 +4,8 @@ import {
   FeedbackPriority, FeedbackStatus, IssueType, IssueSeverity, IssueStatus, ReleaseStatus, TestRunStatus, TestResultValue,
   ProjectShare, User, UserRole, UserFeedback, UserFeedbackTopic, ReleaseProject,
   ExploratorySession, ExploratoryNote, ExploratoryBug, ExploratoryEvidence,
-  ImplementationReport, ImplementationReportItem, Notification
+  ImplementationReport, ImplementationReportItem, Notification,
+  RecorderSession, RecorderStep
 } from '@/lib/validators';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
@@ -36,6 +37,8 @@ interface DataState {
   implementationReports: ImplementationReport[];
   implementationReportItems: ImplementationReportItem[];
   notifications: Notification[];
+  recorderSessions: RecorderSession[];
+  recorderSteps: RecorderStep[];
   isLoading: boolean;
 
   // Actions
@@ -125,6 +128,15 @@ interface DataState {
   markNotificationAsRead: (id: string) => Promise<void>;
   markAllNotificationsAsRead: (userId: string | null) => Promise<void>;
   deleteNotification: (id: string) => Promise<void>;
+
+  // Smart Recorder
+  addRecorderSession: (session: Omit<RecorderSession, 'id' | 'created_at' | 'updated_at' | 'status'>) => Promise<RecorderSession | null>;
+  updateRecorderSession: (id: string, updates: Partial<RecorderSession>) => Promise<void>;
+  deleteRecorderSession: (id: string) => Promise<void>;
+  addRecorderStep: (step: Omit<RecorderStep, 'id' | 'timestamp'>) => Promise<void>;
+  updateRecorderStep: (id: string, updates: Partial<RecorderStep>) => Promise<void>;
+  deleteRecorderStep: (id: string) => Promise<void>;
+  convertSessionToTestCase: (sessionId: string, targetSuiteId: string) => Promise<void>;
 }
 
 // ----------------------------------------------------
@@ -253,6 +265,8 @@ export const useDataStore = create<DataState>((set, get) => {
     implementationReports: [],
     implementationReportItems: [],
     notifications: [],
+    recorderSessions: [],
+    recorderSteps: [],
     isLoading: true,
 
     fetchData: async () => {
@@ -270,7 +284,9 @@ export const useDataStore = create<DataState>((set, get) => {
             { data: trr },
             { data: comm },
             { data: act },
-            { data: u }
+            { data: u },
+            { data: recS },
+            { data: recSt }
           ] = await Promise.all([
             supabase!.from('projects').select('*').order('created_at', { ascending: false }),
             supabase!.from('feedbacks').select('*').order('created_at', { ascending: false }),
@@ -283,6 +299,8 @@ export const useDataStore = create<DataState>((set, get) => {
             supabase!.from('comments').select('*').order('created_at', { ascending: true }),
             supabase!.from('activity_logs').select('*').order('created_at', { ascending: false }),
             supabase!.from('users').select('*').order('created_at', { ascending: false }),
+            supabase!.from('recorder_sessions').select('*').order('created_at', { ascending: false }),
+            supabase!.from('recorder_steps').select('*').order('step_number', { ascending: true }),
           ]);
           
           let shares: any[] = [];
@@ -390,6 +408,8 @@ export const useDataStore = create<DataState>((set, get) => {
              implementationReports: reports,
              implementationReportItems: reportItems,
              notifications: notificationsData,
+             recorderSessions: recS || [],
+             recorderSteps: recSt || [],
              isLoading: false,
            });
         } catch (e) {
@@ -442,6 +462,8 @@ export const useDataStore = create<DataState>((set, get) => {
             implementationReports: getLocal('implementationReports', []),
             implementationReportItems: getLocal('implementationReportItems', []),
             notifications: getLocal('notifications', []),
+            recorderSessions: getLocal('recorderSessions', []),
+            recorderSteps: getLocal('recorderSteps', []),
             isLoading: false,
           });
         }, 300);
@@ -1840,6 +1862,178 @@ export const useDataStore = create<DataState>((set, get) => {
           const next = state.notifications.filter((n) => n.id !== id);
           persist({ notifications: next });
           return { notifications: next };
+        });
+      }
+    },
+
+    addRecorderSession: async (session) => {
+      const newSession: RecorderSession = {
+        ...session,
+        id: isSupabaseConfigured() ? undefined : `rs-${Date.now()}` as any,
+        status: 'Draft',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase!.from('recorder_sessions').insert(newSession).select();
+        if (!error && data) {
+          set((state) => ({ recorderSessions: [data[0], ...state.recorderSessions] }));
+          return data[0];
+        }
+        return null;
+      } else {
+        newSession.id = `rs-${Date.now()}` as any;
+        set((state) => {
+          const next = [newSession, ...state.recorderSessions];
+          persist({ recorderSessions: next });
+          return { recorderSessions: next };
+        });
+        return newSession;
+      }
+    },
+
+    updateRecorderSession: async (id, updates) => {
+      const payload = { ...updates, updated_at: new Date().toISOString() };
+      if (isSupabaseConfigured()) {
+        await supabase!.from('recorder_sessions').update(payload).eq('id', id);
+        set((state) => ({
+          recorderSessions: state.recorderSessions.map((s) => s.id === id ? { ...s, ...payload } : s),
+        }));
+      } else {
+        set((state) => {
+          const next = state.recorderSessions.map((s) => s.id === id ? { ...s, ...payload } : s);
+          persist({ recorderSessions: next });
+          return { recorderSessions: next };
+        });
+      }
+    },
+
+    deleteRecorderSession: async (id) => {
+      if (isSupabaseConfigured()) {
+        await supabase!.from('recorder_sessions').delete().eq('id', id);
+        set((state) => ({
+          recorderSessions: state.recorderSessions.filter((s) => s.id !== id),
+          recorderSteps: state.recorderSteps.filter((st) => st.session_id !== id),
+        }));
+      } else {
+        set((state) => {
+          const nextSessions = state.recorderSessions.filter((s) => s.id !== id);
+          const nextSteps = state.recorderSteps.filter((st) => st.session_id !== id);
+          persist({ recorderSessions: nextSessions, recorderSteps: nextSteps });
+          return { recorderSessions: nextSessions, recorderSteps: nextSteps };
+        });
+      }
+    },
+
+    addRecorderStep: async (step) => {
+      const newStep: RecorderStep = {
+        ...step,
+        id: isSupabaseConfigured() ? undefined : `rst-${Date.now()}-${Math.random()}` as any,
+        timestamp: new Date().toISOString(),
+      };
+
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase!.from('recorder_steps').insert(newStep).select();
+        if (!error && data) {
+          set((state) => ({ recorderSteps: [...state.recorderSteps, data[0]] }));
+        }
+      } else {
+        newStep.id = `rst-${Date.now()}-${Math.random()}` as any;
+        set((state) => {
+          const next = [...state.recorderSteps, newStep];
+          persist({ recorderSteps: next });
+          return { recorderSteps: next };
+        });
+      }
+    },
+
+    updateRecorderStep: async (id, updates) => {
+      if (isSupabaseConfigured()) {
+        await supabase!.from('recorder_steps').update(updates).eq('id', id);
+        set((state) => ({
+          recorderSteps: state.recorderSteps.map((st) => st.id === id ? { ...st, ...updates } : st),
+        }));
+      } else {
+        set((state) => {
+          const next = state.recorderSteps.map((st) => st.id === id ? { ...st, ...updates } : st);
+          persist({ recorderSteps: next });
+          return { recorderSteps: next };
+        });
+      }
+    },
+
+    deleteRecorderStep: async (id) => {
+      if (isSupabaseConfigured()) {
+        await supabase!.from('recorder_steps').delete().eq('id', id);
+        set((state) => ({
+          recorderSteps: state.recorderSteps.filter((st) => st.id !== id),
+        }));
+      } else {
+        set((state) => {
+          const next = state.recorderSteps.filter((st) => st.id !== id);
+          persist({ recorderSteps: next });
+          return { recorderSteps: next };
+        });
+      }
+    },
+
+    convertSessionToTestCase: async (sessionId, targetSuiteId) => {
+      const session = get().recorderSessions.find((s) => s.id === sessionId);
+      if (!session) throw new Error('Session not found');
+
+      const steps = get().recorderSteps
+        .filter((st) => st.session_id === sessionId)
+        .sort((a, b) => a.step_number - b.step_number);
+
+      const stepsContent = steps
+        .map((st) => {
+          let line = `${st.step_number}. **${st.action_type}**`;
+          if (st.target_element) line += ` on \`${st.target_element}\``;
+          if (st.value) line += ` with value \`${st.value}\``;
+          if (st.notes) line += ` (${st.notes})`;
+          return line;
+        })
+        .join('\n');
+
+      const expectedResults = steps
+        .filter((st) => st.action_type === 'Assert')
+        .map((st) => `${st.step_number}. Assertion: ${st.value || st.notes || 'Expected state matches assertion'}`)
+        .join('\n') || 'All steps executed successfully without errors.';
+
+      const nextCode = getNextCode('TC', get().testCases);
+
+      const newTestCase: TestCase = {
+        id: isSupabaseConfigured() ? undefined : `tc-${Date.now()}` as any,
+        code: nextCode,
+        project_id: session.project_id,
+        suite_id: targetSuiteId,
+        title: session.title,
+        description: `Recorded on ${session.browser} (${session.environment}) starting at ${session.start_url}`,
+        steps: stepsContent,
+        expected_result: expectedResults,
+        priority: 'Medium',
+        type: 'Functional',
+        is_automated: false,
+        tags: ['Functional'],
+        created_by: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase!.from('test_cases').insert(newTestCase).select();
+        if (!error && data) {
+          set((state) => ({ testCases: [data[0], ...state.testCases] }));
+        } else if (error) {
+          throw error;
+        }
+      } else {
+        newTestCase.id = `tc-${Date.now()}` as any;
+        set((state) => {
+          const next = [newTestCase, ...state.testCases];
+          persist({ testCases: next });
+          return { testCases: next };
         });
       }
     },

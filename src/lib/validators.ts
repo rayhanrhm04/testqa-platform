@@ -415,4 +415,53 @@ export interface Notification {
   created_at: string;
 }
 
+export interface RecorderSession {
+  id: string;
+  title: string;
+  project_id: string;
+  suite_id?: string | null;
+  case_id?: string | null;
+  browser: string;
+  environment: string;
+  start_url: string;
+  status: 'Draft' | 'Recording' | 'Completed';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RecorderStep {
+  id: string;
+  session_id: string;
+  step_number: number;
+  action_type: 'Navigate' | 'Click' | 'Input' | 'Dropdown' | 'Upload' | 'Scroll' | 'Assert' | 'Custom';
+  target_element?: string | null;
+  value?: string | null;
+  notes?: string | null;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
+  timestamp: string;
+}
+
+export const recorderSessionSchema = z.object({
+  title: z.string().min(3, 'Title must be at least 3 characters'),
+  project_id: z.string().min(1, 'Project mapping is required'),
+  suite_id: z.string().optional().nullable(),
+  case_id: z.string().optional().nullable(),
+  browser: z.string().min(1, 'Browser is required'),
+  environment: z.string().min(1, 'Environment is required'),
+  start_url: z.string().url('Start URL must be a valid URL'),
+  status: z.enum(['Draft', 'Recording', 'Completed']),
+});
+
+export const recorderStepSchema = z.object({
+  session_id: z.string().min(1),
+  step_number: z.number().int().min(1),
+  action_type: z.enum(['Navigate', 'Click', 'Input', 'Dropdown', 'Upload', 'Scroll', 'Assert', 'Custom']),
+  target_element: z.string().optional().nullable(),
+  value: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  attachment_url: z.string().optional().nullable(),
+  attachment_name: z.string().optional().nullable(),
+});
+
 
