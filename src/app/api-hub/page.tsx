@@ -1213,18 +1213,20 @@ test('HTTP Request Validation', async ({ request }) => {
             </div>
 
             {/* URL input bar */}
-            <div className="flex gap-2">
-              <Select 
-                value={requestMethod} 
-                onChange={(e: any) => setRequestMethod(e.target.value)}
-                className="w-28 font-bold text-xs shrink-0"
-              >
-                <option value="GET">GET</option>
-                <option value="POST">POST</option>
-                <option value="PUT">PUT</option>
-                <option value="PATCH">PATCH</option>
-                <option value="DELETE">DELETE</option>
-              </Select>
+            <div className="flex gap-2 items-center">
+              <div className="w-28 shrink-0">
+                <Select 
+                  value={requestMethod} 
+                  onChange={(e: any) => setRequestMethod(e.target.value)}
+                  className="font-bold text-xs"
+                >
+                  <option value="GET">GET</option>
+                  <option value="POST">POST</option>
+                  <option value="PUT">PUT</option>
+                  <option value="PATCH">PATCH</option>
+                  <option value="DELETE">DELETE</option>
+                </Select>
+              </div>
               
               <Input 
                 value={requestUrl}
@@ -1236,7 +1238,7 @@ test('HTTP Request Validation', async ({ request }) => {
               <Button 
                 onClick={handleSendRequest}
                 disabled={isSendingRequest}
-                className="cursor-pointer px-5 font-bold text-xs gap-1.5 h-10 shrink-0"
+                className="cursor-pointer px-5 font-bold text-xs gap-1.5 h-9 shrink-0"
               >
                 <Send className="h-3.5 w-3.5" />
                 {isSendingRequest ? 'Sending...' : 'Send'}
