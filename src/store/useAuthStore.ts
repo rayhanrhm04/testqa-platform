@@ -128,10 +128,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           
           if (newProfile) {
             set({ currentUser: newProfile, activeRole: newProfile.role });
+            localStorage.setItem('qa_current_user', JSON.stringify(newProfile));
             return;
           }
         } else {
           set({ currentUser: profile, activeRole: profile.role });
+          localStorage.setItem('qa_current_user', JSON.stringify(profile));
           return;
         }
       }
@@ -196,6 +198,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       
       if (profile) {
         set({ currentUser: profile, activeRole: profile.role });
+        localStorage.setItem('qa_current_user', JSON.stringify(profile));
       }
     } else {
       // Check mock seed users first
