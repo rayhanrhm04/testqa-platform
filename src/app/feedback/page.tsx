@@ -30,6 +30,9 @@ export default function FeedbackPage() {
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [editingFeedback, setEditingFeedback] = React.useState<Feedback | null>(null);
 
+  const [attachmentUrlState, setAttachmentUrlState] = React.useState('');
+  const [attachmentNameState, setAttachmentNameState] = React.useState('');
+
   // Form setup
   const { 
     register, 
@@ -46,8 +49,23 @@ export default function FeedbackPage() {
       reporter_id: currentUser?.id || '',
       priority: 'Medium' as FeedbackPriority,
       status: 'Open' as FeedbackStatus,
+      attachment_url: '',
+      attachment_name: '',
     }
   });
+
+  // Sync attachment state on create/edit open
+  React.useEffect(() => {
+    if (isCreateOpen) {
+      if (editingFeedback) {
+        setAttachmentUrlState(editingFeedback.attachment_url || '');
+        setAttachmentNameState(editingFeedback.attachment_name || '');
+      } else {
+        setAttachmentUrlState('');
+        setAttachmentNameState('');
+      }
+    }
+  }, [editingFeedback, isCreateOpen]);
 
   // Pre-fill form if editing
   React.useEffect(() => {
@@ -59,6 +77,8 @@ export default function FeedbackPage() {
         setValue('reporter_id', editingFeedback.reporter_id || '');
         setValue('priority', editingFeedback.priority);
         setValue('status', editingFeedback.status);
+        setValue('attachment_url', editingFeedback.attachment_url || '');
+        setValue('attachment_name', editingFeedback.attachment_name || '');
       } else {
         reset({
           title: '',
@@ -67,6 +87,8 @@ export default function FeedbackPage() {
           reporter_id: currentUser?.id || '',
           priority: 'Medium',
           status: 'Open',
+          attachment_url: '',
+          attachment_name: '',
         });
       }
     }
@@ -116,6 +138,34 @@ export default function FeedbackPage() {
       return matchSearch && matchStatus && matchPriority && matchProject;
     });
   }, [feedbacks, search, statusFilter, priorityFilter, projectFilter, accessibleProjectIds]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      addToast("File size too large (Max 5MB)", "error");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result as string;
+      setValue('attachment_url', base64);
+      setValue('attachment_name', file.name);
+      setAttachmentUrlState(base64);
+      setAttachmentNameState(file.name);
+      addToast(`File ${file.name} selected!`, "success");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleClearAttachment = () => {
+    setValue('attachment_url', '');
+    setValue('attachment_name', '');
+    setAttachmentUrlState('');
+    setAttachmentNameState('');
+  };
 
   const onSubmit = async (data: any) => {
     try {
@@ -422,6 +472,48 @@ export default function FeedbackPage() {
                 <option value="Rejected">Rejected</option>
               </Select>
             </FormGroup>
+          </div>
+
+          <div className="border-t border-border/40 pt-4 space-y-2">
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Attachment (Image/Document)</span>
+            
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-border hover:border-primary/40 rounded-lg cursor-pointer bg-zinc-50 dark:bg-zinc-900/40 text-xs font-bold text-foreground transition-colors shrink-0">
+                <Plus className="h-4 w-4 text-muted-foreground" />
+                <span>Upload File</span>
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  onChange={handleFileChange} 
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                />
+              </label>
+
+              {attachmentNameState ? (
+                <div className="flex items-center justify-between flex-1 min-w-0 px-3 py-1.5 border border-border rounded-lg bg-zinc-50 dark:bg-zinc-900/20 text-xs">
+                  <span className="truncate text-foreground font-semibold flex-1 mr-2">{attachmentNameState}</span>
+                  <button 
+                    type="button"
+                    onClick={handleClearAttachment}
+                    className="text-red-500 hover:text-red-600 font-bold shrink-0 cursor-pointer"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <span className="text-xs text-muted-foreground">No file attached (Max 5MB)</span>
+              )}
+            </div>
+
+            {attachmentUrlState && attachmentUrlState.startsWith('data:image/') && (
+              <div className="mt-2 relative w-full max-h-[140px] rounded-lg overflow-hidden border border-border bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center p-2">
+                <img 
+                  src={attachmentUrlState} 
+                  alt="Attachment Preview" 
+                  className="max-w-full max-h-[120px] object-contain rounded-md"
+                />
+              </div>
+            )}
           </div>
         </form>
       </Dialog>

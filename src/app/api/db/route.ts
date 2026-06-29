@@ -129,6 +129,12 @@ try {
         );
         ALTER TABLE public.implementation_reports ADD COLUMN IF NOT EXISTS reporter_name TEXT;
         
+        ALTER TABLE public.feedbacks ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+        ALTER TABLE public.feedbacks ADD COLUMN IF NOT EXISTS attachment_name TEXT;
+        
+        ALTER TABLE public.issues ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+        ALTER TABLE public.issues ADD COLUMN IF NOT EXISTS attachment_name TEXT;
+        
         CREATE TABLE IF NOT EXISTS public.implementation_report_items (
           id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
           report_id UUID REFERENCES public.implementation_reports(id) ON DELETE CASCADE,

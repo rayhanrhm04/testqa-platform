@@ -55,6 +55,8 @@ export default function IssuesPage() {
   const [expected, setExpected] = React.useState('');
   const [actual, setActual] = React.useState('');
   const [steps, setSteps] = React.useState('');
+  const [attachmentUrl, setAttachmentUrl] = React.useState('');
+  const [attachmentName, setAttachmentName] = React.useState('');
 
   // Permissions checks
   const accessibleProjects = React.useMemo(() => {
@@ -132,6 +134,8 @@ export default function IssuesPage() {
         setExpected(editingIssue.expected_result || '');
         setActual(editingIssue.actual_result || '');
         setSteps(editingIssue.steps_to_reproduce || '');
+        setAttachmentUrl(editingIssue.attachment_url || '');
+        setAttachmentName(editingIssue.attachment_name || '');
       } else {
         setTitle('');
         setDescription('');
@@ -144,6 +148,8 @@ export default function IssuesPage() {
         setExpected('');
         setActual('');
         setSteps('');
+        setAttachmentUrl('');
+        setAttachmentName('');
       }
     }
   }, [editingIssue, projects, isFormOpen, projectFilter]);
@@ -166,6 +172,30 @@ export default function IssuesPage() {
     });
   }, [issues, search, projectFilter, severityFilter, releaseFilter, accessibleProjects]);
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      addToast("File size too large (Max 5MB)", "error");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result as string;
+      setAttachmentUrl(base64);
+      setAttachmentName(file.name);
+      addToast(`File ${file.name} selected!`, "success");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleClearAttachment = () => {
+    setAttachmentUrl('');
+    setAttachmentName('');
+  };
+
   // Form submit
   const handleFormSubmit = async () => {
     if (!title.trim() || !description.trim() || !project) {
@@ -185,6 +215,8 @@ export default function IssuesPage() {
       status,
       assigned_to: assignee || undefined,
       release_id: release || undefined,
+      attachment_url: attachmentUrl || undefined,
+      attachment_name: attachmentName || undefined,
     };
 
     try {
@@ -738,6 +770,48 @@ export default function IssuesPage() {
               <option value="Closed">Closed</option>
             </Select>
           </FormGroup>
+
+          <div className="border-t border-border/40 pt-4 space-y-2 text-left">
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Attachment (Image/Document)</span>
+            
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-border hover:border-primary/40 rounded-lg cursor-pointer bg-zinc-50 dark:bg-zinc-900/40 text-xs font-bold text-foreground transition-colors shrink-0">
+                <Plus className="h-4 w-4 text-muted-foreground" />
+                <span>Upload File</span>
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  onChange={handleFileChange} 
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                />
+              </label>
+
+              {attachmentName ? (
+                <div className="flex items-center justify-between flex-1 min-w-0 px-3 py-1.5 border border-border rounded-lg bg-zinc-50 dark:bg-zinc-900/20 text-xs">
+                  <span className="truncate text-foreground font-semibold flex-1 mr-2">{attachmentName}</span>
+                  <button 
+                    type="button"
+                    onClick={handleClearAttachment}
+                    className="text-red-500 hover:text-red-600 font-bold shrink-0 cursor-pointer"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <span className="text-xs text-muted-foreground">No file attached (Max 5MB)</span>
+              )}
+            </div>
+
+            {attachmentUrl && attachmentUrl.startsWith('data:image/') && (
+              <div className="mt-2 relative w-full max-h-[140px] rounded-lg overflow-hidden border border-border bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center p-2">
+                <img 
+                  src={attachmentUrl} 
+                  alt="Attachment Preview" 
+                  className="max-w-full max-h-[120px] object-contain rounded-md"
+                />
+              </div>
+            )}
+          </div>
         </div>
       </Dialog>
 
@@ -824,6 +898,46 @@ export default function IssuesPage() {
                     </pre>
                   </div>
                 </>
+              )}
+
+              {/* Attachment */}
+              {activeDetailIssue.attachment_url && (
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground">Attachment</span>
+                  <div className="p-3 rounded-lg border border-border bg-zinc-50 dark:bg-zinc-900/20 text-xs">
+                    {activeDetailIssue.attachment_url.startsWith('data:image/') ? (
+                      <div className="space-y-2">
+                        <div className="max-w-md rounded-lg overflow-hidden border border-border bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center p-2">
+                          <img 
+                            src={activeDetailIssue.attachment_url} 
+                            alt="Issue Attachment" 
+                            className="max-h-[220px] object-contain rounded-md"
+                          />
+                        </div>
+                        <a 
+                          href={activeDetailIssue.attachment_url} 
+                          download={activeDetailIssue.attachment_name || 'attachment'} 
+                          className="inline-flex items-center gap-1.5 text-xs text-primary font-bold hover:underline"
+                        >
+                          Download Image ({activeDetailIssue.attachment_name || 'attachment'})
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="truncate text-foreground font-semibold flex-1">
+                          {activeDetailIssue.attachment_name || 'attachment'}
+                        </span>
+                        <a 
+                          href={activeDetailIssue.attachment_url} 
+                          download={activeDetailIssue.attachment_name || 'attachment'}
+                          className="px-3 py-1 bg-primary text-primary-foreground rounded font-bold hover:opacity-90 cursor-pointer shrink-0"
+                        >
+                          Download
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
 
               {/* Comments inside detail modal */}

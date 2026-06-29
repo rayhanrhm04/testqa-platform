@@ -207,6 +207,46 @@ export default function FeedbackDetailPage() {
               </div>
             </div>
 
+            {/* Attachment */}
+            {feedback.attachment_url && (
+              <div className="space-y-2 border-t border-border pt-4">
+                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Attachment</h3>
+                <div className="p-4 rounded-lg border border-border bg-zinc-50 dark:bg-zinc-900/20">
+                  {feedback.attachment_url.startsWith('data:image/') ? (
+                    <div className="space-y-2">
+                      <div className="max-w-md rounded-lg overflow-hidden border border-border bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center p-2">
+                        <img 
+                          src={feedback.attachment_url} 
+                          alt="Feedback Attachment" 
+                          className="max-h-[300px] object-contain rounded-md"
+                        />
+                      </div>
+                      <a 
+                        href={feedback.attachment_url} 
+                        download={feedback.attachment_name || 'attachment'} 
+                        className="inline-flex items-center gap-1.5 text-xs text-primary font-bold hover:underline"
+                      >
+                        Download Image ({feedback.attachment_name || 'attachment'})
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-3 text-xs">
+                      <span className="truncate text-foreground font-semibold flex-1">
+                        {feedback.attachment_name || 'attachment'}
+                      </span>
+                      <a 
+                        href={feedback.attachment_url} 
+                        download={feedback.attachment_name || 'attachment'}
+                        className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-bold hover:opacity-90 shrink-0 cursor-pointer"
+                      >
+                        Download File
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Conversion Panel */}
             {canConvert && feedback.status !== 'Implemented' && (
               <div className="border-t border-border pt-5 space-y-3">

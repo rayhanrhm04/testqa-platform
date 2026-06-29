@@ -73,6 +73,8 @@ export interface Feedback {
   reporter_id: string | null;
   priority: FeedbackPriority;
   status: FeedbackStatus;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -92,6 +94,8 @@ export interface Issue {
   status: IssueStatus;
   assigned_to?: string | null;
   release_id?: string;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -199,6 +203,8 @@ export const feedbackSchema = z.object({
   reporter_id: z.string().min(1, 'Reporter is required'),
   priority: z.enum(FEEDBACK_PRIORITIES),
   status: z.enum(FEEDBACK_STATUSES),
+  attachment_url: z.string().optional().nullable(),
+  attachment_name: z.string().optional().nullable(),
 });
 
 export const issueSchema = z.object({
@@ -214,6 +220,8 @@ export const issueSchema = z.object({
   assigned_to: z.string().optional(),
   release_id: z.string().optional(),
   feedback_id: z.string().optional(),
+  attachment_url: z.string().optional().nullable(),
+  attachment_name: z.string().optional().nullable(),
 });
 
 export const releaseSchema = z.object({
