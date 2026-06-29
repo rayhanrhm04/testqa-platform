@@ -396,4 +396,15 @@ export interface ImplementationReportItem {
   created_at: string;
 }
 
+export interface Notification {
+  id: string;
+  user_id: string | null;
+  title: string;
+  content: string;
+  type: 'feedback' | 'issue' | 'test_run' | 'report' | 'exploratory';
+  link: string;
+  is_read: boolean;
+  created_at: string;
+}
+
 

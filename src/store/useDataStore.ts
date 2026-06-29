@@ -4,7 +4,7 @@ import {
   FeedbackPriority, FeedbackStatus, IssueType, IssueSeverity, IssueStatus, ReleaseStatus, TestRunStatus, TestResultValue,
   ProjectShare, User, UserRole, UserFeedback, UserFeedbackTopic, ReleaseProject,
   ExploratorySession, ExploratoryNote, ExploratoryBug, ExploratoryEvidence,
-  ImplementationReport, ImplementationReportItem
+  ImplementationReport, ImplementationReportItem, Notification
 } from '@/lib/validators';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
@@ -35,6 +35,7 @@ interface DataState {
   exploratoryEvidence: ExploratoryEvidence[];
   implementationReports: ImplementationReport[];
   implementationReportItems: ImplementationReportItem[];
+  notifications: Notification[];
   isLoading: boolean;
 
   // Actions
@@ -118,6 +119,12 @@ interface DataState {
   addImplementationReportItem: (item: Omit<ImplementationReportItem, 'id' | 'created_at'>) => Promise<void>;
   deleteImplementationReportItem: (id: string) => Promise<void>;
   updateImplementationReportItem: (id: string, updates: Partial<ImplementationReportItem>) => Promise<void>;
+
+  // Notifications
+  addNotification: (notification: Omit<Notification, 'id' | 'is_read' | 'created_at'>) => Promise<void>;
+  markNotificationAsRead: (id: string) => Promise<void>;
+  markAllNotificationsAsRead: (userId: string | null) => Promise<void>;
+  deleteNotification: (id: string) => Promise<void>;
 }
 
 // ----------------------------------------------------
@@ -245,6 +252,7 @@ export const useDataStore = create<DataState>((set, get) => {
     exploratoryEvidence: [],
     implementationReports: [],
     implementationReportItems: [],
+    notifications: [],
     isLoading: true,
 
     fetchData: async () => {
@@ -350,6 +358,15 @@ export const useDataStore = create<DataState>((set, get) => {
             reports = JSON.parse(localStorage.getItem('qa_implementationReports') || '[]');
             reportItems = JSON.parse(localStorage.getItem('qa_implementationReportItems') || '[]');
           }
+
+          let notificationsData: any[] = [];
+          try {
+            const { data } = await supabase!.from('notifications').select('*').order('created_at', { ascending: false });
+            notificationsData = data || [];
+          } catch (e) {
+            console.warn("Table notifications fetch failed, loading fallback:", e);
+            notificationsData = JSON.parse(localStorage.getItem('qa_notifications') || '[]');
+          }
  
            set({
              projects: p || [],
@@ -372,6 +389,7 @@ export const useDataStore = create<DataState>((set, get) => {
              exploratoryEvidence: expEvidence,
              implementationReports: reports,
              implementationReportItems: reportItems,
+             notifications: notificationsData,
              isLoading: false,
            });
         } catch (e) {
@@ -423,6 +441,7 @@ export const useDataStore = create<DataState>((set, get) => {
             exploratoryEvidence: getLocal('exploratoryEvidence', []),
             implementationReports: getLocal('implementationReports', []),
             implementationReportItems: getLocal('implementationReportItems', []),
+            notifications: getLocal('notifications', []),
             isLoading: false,
           });
         }, 300);
@@ -574,12 +593,33 @@ export const useDataStore = create<DataState>((set, get) => {
         const { data, error } = await supabase!.from('feedbacks').insert(dbFb).select();
         if (!error && data) {
           set((state) => ({ feedbacks: [data[0], ...state.feedbacks] }));
+          const insertedFb = data[0];
+          const reporter = get().users.find((u) => u.id === insertedFb.reporter_id);
+          const reporterName = reporter ? reporter.name : 'A user';
+          get().addNotification({
+            user_id: null,
+            title: 'New Feedback Submitted',
+            content: `${reporterName} submitted new feedback: "${insertedFb.title}"`,
+            type: 'feedback',
+            link: `/feedback/${insertedFb.id}`
+          });
         }
       } else {
+        const generatedId = `fb-${Date.now()}`;
+        const newFbWithId = { ...newFb, id: generatedId };
         set((state) => {
-          const next = [newFb, ...state.feedbacks];
+          const next = [newFbWithId, ...state.feedbacks];
           persist({ feedbacks: next });
           return { feedbacks: next };
+        });
+        const reporter = get().users.find((u) => u.id === newFb.reporter_id);
+        const reporterName = reporter ? reporter.name : 'A user';
+        get().addNotification({
+          user_id: null,
+          title: 'New Feedback Submitted',
+          content: `${reporterName} submitted new feedback: "${newFb.title}"`,
+          type: 'feedback',
+          link: `/feedback/${generatedId}`
         });
       }
     },
@@ -1474,6 +1514,14 @@ export const useDataStore = create<DataState>((set, get) => {
         const { data, error } = await supabase!.from('exploratory_bugs').insert(newBug).select();
         if (!error && data && data[0]) {
           set((state) => ({ exploratoryBugs: [data[0], ...state.exploratoryBugs] }));
+          const insertedBug = data[0];
+          get().addNotification({
+            user_id: null,
+            title: 'New Bug Finding Logged',
+            content: `A new bug "${insertedBug.title}" was logged in exploratory testing.`,
+            type: 'exploratory',
+            link: '/exploratory'
+          });
         } else {
           console.error("Error inserting exploratory bug:", error);
         }
@@ -1483,6 +1531,13 @@ export const useDataStore = create<DataState>((set, get) => {
           const next = [bugWithId, ...state.exploratoryBugs];
           persist({ exploratoryBugs: next });
           return { exploratoryBugs: next };
+        });
+        get().addNotification({
+          user_id: null,
+          title: 'New Bug Finding Logged',
+          content: `A new bug "${bugWithId.title}" was logged in exploratory testing.`,
+          type: 'exploratory',
+          link: '/exploratory'
         });
       }
     },
@@ -1580,6 +1635,15 @@ export const useDataStore = create<DataState>((set, get) => {
         const { data, error } = await supabase!.from('implementation_reports').insert(newReport).select();
         if (!error && data && data[0]) {
           set((state) => ({ implementationReports: [data[0], ...state.implementationReports] }));
+          if (data[0].reporter_id) {
+            get().addNotification({
+              user_id: data[0].reporter_id,
+              title: 'New Implementation Report',
+              content: `An implementation report "${data[0].title}" was created for you.`,
+              type: 'report',
+              link: `/implementation-reports?id=${data[0].id}`
+            });
+          }
           return data[0];
         }
         console.error("Error inserting implementation report:", error);
@@ -1591,6 +1655,15 @@ export const useDataStore = create<DataState>((set, get) => {
           persist({ implementationReports: next });
           return { implementationReports: next };
         });
+        if (reportWithId.reporter_id) {
+          get().addNotification({
+            user_id: reportWithId.reporter_id,
+            title: 'New Implementation Report',
+            content: `An implementation report "${reportWithId.title}" was created for you.`,
+            type: 'report',
+            link: `/implementation-reports?id=${reportWithId.id}`
+          });
+        }
         return reportWithId;
       }
     },
@@ -1683,6 +1756,90 @@ export const useDataStore = create<DataState>((set, get) => {
           const next = state.implementationReportItems.map((i) => i.id === id ? { ...i, ...updates } : i);
           persist({ implementationReportItems: next });
           return { implementationReportItems: next };
+        });
+      }
+    },
+
+    addNotification: async (notification) => {
+      const newNotification: Notification = {
+        ...notification,
+        id: isSupabaseConfigured() ? undefined : `notif-${Date.now()}` as any,
+        is_read: false,
+        created_at: new Date().toISOString(),
+      };
+
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase!.from('notifications').insert(newNotification).select();
+        if (!error && data && data[0]) {
+          set((state) => ({ notifications: [data[0], ...state.notifications] }));
+        } else {
+          console.error("Error inserting notification:", error);
+        }
+      } else {
+        const notifWithId = { ...newNotification, id: `notif-${Date.now()}` };
+        set((state) => {
+          const next = [notifWithId, ...state.notifications];
+          persist({ notifications: next });
+          return { notifications: next };
+        });
+      }
+    },
+
+    markNotificationAsRead: async (id) => {
+      if (isSupabaseConfigured()) {
+        await supabase!.from('notifications').update({ is_read: true }).eq('id', id);
+        set((state) => ({
+          notifications: state.notifications.map((n) => n.id === id ? { ...n, is_read: true } : n),
+        }));
+      } else {
+        set((state) => {
+          const next = state.notifications.map((n) => n.id === id ? { ...n, is_read: true } : n);
+          persist({ notifications: next });
+          return { notifications: next };
+        });
+      }
+    },
+
+    markAllNotificationsAsRead: async (userId) => {
+      if (isSupabaseConfigured()) {
+        if (userId) {
+          await supabase!.from('notifications').update({ is_read: true }).eq('user_id', userId);
+        } else {
+          await supabase!.from('notifications').update({ is_read: true }).is('user_id', null);
+        }
+        set((state) => ({
+          notifications: state.notifications.map((n) => (!userId || n.user_id === userId) ? { ...n, is_read: true } : n),
+        }));
+      } else {
+        set((state) => {
+          const next = state.notifications.map((n) => (!userId || n.user_id === userId) ? { ...n, is_read: true } : n);
+          persist({ notifications: next });
+          return { notifications: next };
+        });
+      }
+    },
+
+    deleteNotification: async (id) => {
+      if (isSupabaseConfigured()) {
+        try {
+          const { error } = await supabase!.from('notifications').delete().eq('id', id);
+          if (error) throw error;
+          set((state) => ({
+            notifications: state.notifications.filter((n) => n.id !== id),
+          }));
+        } catch (e) {
+          console.warn("Table notifications delete failed, local fallback:", e);
+          set((state) => {
+            const next = state.notifications.filter((n) => n.id !== id);
+            persist({ notifications: next });
+            return { notifications: next };
+          });
+        }
+      } else {
+        set((state) => {
+          const next = state.notifications.filter((n) => n.id !== id);
+          persist({ notifications: next });
+          return { notifications: next };
         });
       }
     },

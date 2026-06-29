@@ -140,9 +140,20 @@ try {
           qa_note TEXT,
           created_at TIMESTAMPTZ DEFAULT NOW()
         );
+        
+        CREATE TABLE IF NOT EXISTS public.notifications (
+          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+          user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+          title TEXT NOT NULL,
+          content TEXT NOT NULL,
+          type TEXT NOT NULL,
+          link TEXT NOT NULL,
+          is_read BOOLEAN NOT NULL DEFAULT FALSE,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
       `)
-        .then(() => console.log('Database migration: implementation report tables check passed'))
-        .catch((err) => console.warn('Database migration warning for implementation report tables:', err));
+        .then(() => console.log('Database migration: implementation report and notifications tables check passed'))
+        .catch((err) => console.warn('Database migration warning for implementation report and notifications tables:', err));
     })
     .catch((err) => console.warn('Database migration warning for exploratory tables:', err));
 
