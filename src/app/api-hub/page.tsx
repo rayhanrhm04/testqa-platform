@@ -7,7 +7,7 @@ import { useUIStore } from '@/store/useUIStore';
 import { 
   Layers, Plus, Trash2, Import, Play, Activity, Folder, FileJson, Cpu, Globe, 
   History, Settings, ShieldAlert, CheckCircle, XCircle, ArrowRight, ExternalLink,
-  Copy, Info, AlertTriangle, AlertCircle, RefreshCw, Eye, ListFilter
+  Copy, Info, AlertTriangle, AlertCircle, RefreshCw, Eye, ListFilter, Send, Save
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -39,14 +39,15 @@ export default function ApiTestingHubPage() {
     importPostmanCollection,
     runApiEndpoint,
     runApiCollection,
-    addIssue
+    addIssue,
+    addTestCase
   } = useDataStore();
 
   const { currentUser, activeRole } = useAuthStore();
   const { addToast } = useUIStore();
 
   // Tab state
-  const [activeTab, setActiveTab] = React.useState<'dashboard' | 'collections' | 'environments' | 'history'>('dashboard');
+  const [activeTab, setActiveTab] = React.useState<'dashboard' | 'collections' | 'environments' | 'history' | 'request'>('dashboard');
 
   // Selected states
   const [selectedProjectId, setSelectedProjectId] = React.useState('');
@@ -86,6 +87,48 @@ export default function ApiTestingHubPage() {
   // Search & Filters
   const [collectionSearch, setCollectionSearch] = React.useState('');
 
+  // HTTP Request Client State
+  const [requestMethod, setRequestMethod] = React.useState<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'>('GET');
+  const [requestUrl, setRequestUrl] = React.useState('https://httpbin.org/post');
+  const [activeRequestSubtab, setActiveRequestSubtab] = React.useState<'auth' | 'headers' | 'params' | 'body' | 'settings'>('auth');
+  const [requestAuthType, setRequestAuthType] = React.useState<'none' | 'bearer' | 'basic' | 'apikey'>('none');
+  const [requestBearerToken, setRequestBearerToken] = React.useState('');
+  const [requestBasicUsername, setRequestBasicUsername] = React.useState('');
+  const [requestBasicPassword, setRequestBasicPassword] = React.useState('');
+  const [requestApiKeyName, setRequestApiKeyName] = React.useState('');
+  const [requestApiKeyValue, setRequestApiKeyValue] = React.useState('');
+
+  const [requestHeaders, setRequestHeaders] = React.useState<{ key: string; value: string }[]>([]);
+  const [newReqHeaderKey, setNewReqHeaderKey] = React.useState('');
+  const [newReqHeaderVal, setNewReqHeaderVal] = React.useState('');
+
+  const [requestParams, setRequestParams] = React.useState<{ key: string; value: string }[]>([]);
+  const [newReqParamKey, setNewReqParamKey] = React.useState('');
+  const [newReqParamVal, setNewReqParamVal] = React.useState('');
+
+  const [requestBodyType, setRequestBodyType] = React.useState<'none' | 'json' | 'form' | 'urlencoded'>('none');
+  const [requestBodyContent, setRequestBodyContent] = React.useState('');
+  const [requestTimeout, setRequestTimeout] = React.useState('30000');
+
+  // Response state
+  const [isSendingRequest, setIsSendingRequest] = React.useState(false);
+  const [requestResponse, setRequestResponse] = React.useState<{
+    status: number;
+    statusText: string;
+    time: number;
+    size: number;
+    headers: any;
+    body: string;
+    error: string | null;
+  } | null>(null);
+
+  // Save Request Modal state
+  const [isSaveRequestOpen, setIsSaveRequestOpen] = React.useState(false);
+  const [saveTargetColId, setSaveTargetColId] = React.useState('');
+  const [saveRequestName, setSaveRequestName] = React.useState('');
+  const [newColNameForSave, setNewColNameForSave] = React.useState('');
+  const [isCreatingNewColForSave, setIsCreatingNewColForSave] = React.useState(false);
+
   // Default project selection
   React.useEffect(() => {
     if (projects.length > 0 && !selectedProjectId) {
@@ -102,8 +145,10 @@ export default function ApiTestingHubPage() {
   React.useEffect(() => {
     if (projectCollections.length > 0) {
       setSelectedColId(projectCollections[0].id);
+      setSaveTargetColId(projectCollections[0].id);
     } else {
       setSelectedColId('');
+      setSaveTargetColId('');
     }
   }, [projectCollections]);
 
@@ -223,7 +268,6 @@ export default function ApiTestingHubPage() {
     try {
       const run = await runApiCollection(collectionId, selectedEnvId, currentUser?.id || null);
       addToast(`Collection execution finished! ${run.passed_count} Passed, ${run.failed_count} Failed.`, 'success');
-      // Set to view this run details automatically
       setActiveRunDetail(run);
       setIsRunDetailOpen(true);
     } catch (e) {
@@ -336,6 +380,330 @@ ${resolvedBody}
   };
 
   // ----------------------------------------------------
+  // HTTP MANUAL REQUEST HANDLERS
+  // ----------------------------------------------------
+  const resolveVariables = (text: string) => {
+    if (!text) return '';
+    let resolved = text;
+    const activeEnv = apiEnvironments.find(e => e.id === selectedEnvId);
+    if (activeEnv && activeEnv.variables) {
+      try {
+        const variables = JSON.parse(activeEnv.variables);
+        variables.forEach((v: any) => {
+          const regex = new RegExp(`\\{\\{\\s*${v.key}\\s*\\}\\}`, 'g');
+          resolved = resolved.replace(regex, v.value);
+        });
+      } catch (e) {}
+    }
+    return resolved;
+  };
+
+  const handleSendRequest = async () => {
+    if (!requestUrl.trim()) {
+      addToast('Please enter a request URL.', 'warning');
+      return;
+    }
+
+    setIsSendingRequest(true);
+    setRequestResponse(null);
+
+    // 1. Resolve URL & Query params
+    let resolvedUrl = resolveVariables(requestUrl.trim());
+    
+    const compiledParams = requestParams.filter(p => p.key.trim() !== '');
+    if (compiledParams.length > 0) {
+      try {
+        const urlObj = new URL(resolvedUrl.startsWith('http') ? resolvedUrl : `http://${resolvedUrl}`);
+        compiledParams.forEach(p => {
+          urlObj.searchParams.append(resolveVariables(p.key), resolveVariables(p.value));
+        });
+        resolvedUrl = urlObj.toString();
+      } catch (e) {
+        // Fallback simple query append if URL object throws
+        const queryStr = compiledParams.map(p => `${resolveVariables(p.key)}=${resolveVariables(p.value)}`).join('&');
+        resolvedUrl += (resolvedUrl.includes('?') ? '&' : '?') + queryStr;
+      }
+    }
+
+    // 2. Compile headers
+    const compiledHeaders: Record<string, string> = {};
+    
+    if (requestBodyType === 'json') {
+      compiledHeaders['Content-Type'] = 'application/json';
+    } else if (requestBodyType === 'urlencoded') {
+      compiledHeaders['Content-Type'] = 'application/x-www-form-urlencoded';
+    }
+
+    requestHeaders.forEach(h => {
+      if (h.key.trim() !== '') {
+        compiledHeaders[resolveVariables(h.key)] = resolveVariables(h.value);
+      }
+    });
+
+    if (requestAuthType === 'bearer' && requestBearerToken) {
+      compiledHeaders['Authorization'] = `Bearer ${resolveVariables(requestBearerToken)}`;
+    } else if (requestAuthType === 'basic') {
+      const credentials = btoa(`${resolveVariables(requestBasicUsername)}:${resolveVariables(requestBasicPassword)}`);
+      compiledHeaders['Authorization'] = `Basic ${credentials}`;
+    } else if (requestAuthType === 'apikey' && requestApiKeyName && requestApiKeyValue) {
+      compiledHeaders[resolveVariables(requestApiKeyName)] = resolveVariables(requestApiKeyValue);
+    }
+
+    // 3. Compile body
+    let compiledBody = '';
+    if (requestBodyType === 'json' || requestBodyType === 'urlencoded') {
+      compiledBody = resolveVariables(requestBodyContent);
+    }
+
+    try {
+      const res = await fetch('/api/proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url: resolvedUrl,
+          method: requestMethod,
+          headers: compiledHeaders,
+          body: compiledBody || undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.status > 0) {
+        const bodyStr = data.body || '';
+        const size = bodyStr ? new Blob([bodyStr]).size : 0;
+        
+        let statusText = 'OK';
+        if (data.status === 201) statusText = 'Created';
+        else if (data.status === 400) statusText = 'Bad Request';
+        else if (data.status === 401) statusText = 'Unauthorized';
+        else if (data.status === 403) statusText = 'Forbidden';
+        else if (data.status === 404) statusText = 'Not Found';
+        else if (data.status === 500) statusText = 'Internal Server Error';
+
+        setRequestResponse({
+          status: data.status,
+          statusText,
+          time: data.duration_ms || 120,
+          size,
+          headers: data.headers || {},
+          body: bodyStr,
+          error: data.status >= 400 ? `HTTP Error: Request failed with status code ${data.status}` : null,
+        });
+      } else {
+        setRequestResponse({
+          status: data.status || 500,
+          statusText: 'Error',
+          time: 0,
+          size: 0,
+          headers: {},
+          body: data.error || 'Connection failure or host is unreachable',
+          error: data.error || 'Connection timed out or host is unreachable',
+        });
+      }
+    } catch (err: any) {
+      setRequestResponse({
+        status: 500,
+        statusText: 'Failed',
+        time: 0,
+        size: 0,
+        headers: {},
+        body: err.message || 'Failed to dispatch request to proxy',
+        error: err.message || 'Failed to dispatch request to proxy',
+      });
+    } finally {
+      setIsSendingRequest(false);
+    }
+  };
+
+  const handleSaveRequestSubmit = async () => {
+    if (!saveRequestName.trim()) {
+      addToast('Request name is required.', 'warning');
+      return;
+    }
+
+    let targetColId = saveTargetColId;
+
+    if (isCreatingNewColForSave) {
+      if (!newColNameForSave.trim()) {
+        addToast('New collection name is required.', 'warning');
+        return;
+      }
+      const newCol = await addApiCollection({
+        project_id: selectedProjectId,
+        name: newColNameForSave,
+        description: 'Custom created collection from manual HTTP request',
+      });
+      if (newCol) {
+        targetColId = newCol.id;
+      } else {
+        addToast('Failed to create collection.', 'error');
+        return;
+      }
+    }
+
+    if (!targetColId) {
+      addToast('Please select a collection.', 'warning');
+      return;
+    }
+
+    const headersList = [...requestHeaders];
+    if (requestAuthType === 'bearer' && requestBearerToken) {
+      headersList.push({ key: 'Authorization', value: `Bearer ${requestBearerToken}` });
+    } else if (requestAuthType === 'basic') {
+      headersList.push({ key: 'Authorization', value: `Basic BasicAuth` });
+    } else if (requestAuthType === 'apikey' && requestApiKeyName && requestApiKeyValue) {
+      headersList.push({ key: requestApiKeyName, value: requestApiKeyValue });
+    }
+
+    try {
+      await addApiEndpoint({
+        collection_id: targetColId,
+        name: saveRequestName,
+        method: requestMethod,
+        path: requestUrl,
+        headers: JSON.stringify(headersList),
+        params: JSON.stringify(requestParams),
+        body: requestBodyContent,
+        test_case_id: null,
+      });
+
+      setIsSaveRequestOpen(false);
+      setSaveRequestName('');
+      setNewColNameForSave('');
+      addToast('Request saved to collection successfully!', 'success');
+    } catch (e) {
+      addToast('Failed to save request.', 'error');
+    }
+  };
+
+  const handleOpenIssueModalFromRequest = () => {
+    if (!requestResponse) return;
+    
+    setIssueTitle(`[HTTP Client Error] ${requestMethod} ${requestUrl}`);
+    
+    let resolvedBody = requestResponse.body || '';
+    try {
+      resolvedBody = JSON.stringify(JSON.parse(requestResponse.body || ''), null, 2);
+    } catch (e) {}
+
+    const mdDesc = `Manual API Request failed with status code ${requestResponse.status}.
+
+**API Request details**:
+- **Method**: ${requestMethod}
+- **URL**: ${requestUrl}
+- **Response Time**: ${requestResponse.time}ms
+- **Environment**: ${apiEnvironments.find(e => e.id === selectedEnvId)?.name || 'Mock (No Env)'}
+- **Error Message**: ${requestResponse.error || 'N/A'}
+
+**Request Body**:
+\`\`\`json
+${requestBodyContent || 'None'}
+\`\`\`
+
+**Response Headers**:
+\`\`\`json
+${JSON.stringify(requestResponse.headers, null, 2)}
+\`\`\`
+
+**Response Body**:
+\`\`\`json
+${resolvedBody}
+\`\`\``;
+
+    setIssueDesc(mdDesc);
+    setIsIssueOpen(true);
+  };
+
+  const handleGenerateTestCase = async () => {
+    if (!requestUrl) return;
+    try {
+      const nextCode = `TC-${Date.now().toString().slice(-4)}`;
+      await addTestCase({
+        project_id: selectedProjectId,
+        suite_id: 'default-suite',
+        code: nextCode,
+        title: `API Verification: ${requestMethod} ${requestUrl.split('/').pop() || 'Endpoint'}`,
+        description: `Verify that request to ${requestUrl} behaves correctly.`,
+        steps: `1. Send ${requestMethod} request to ${requestUrl}.\n2. Assert response status is 200 OK.`,
+        expected_result: `Request returns status ${requestResponse?.status || 200} with response payload.`,
+        tags: ['API-Automation'],
+        is_automated: true,
+        created_by: currentUser?.id || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as any);
+      addToast('Generated manual Test Case successfully!', 'success');
+    } catch (e) {
+      addToast('Failed to generate TestCase.', 'error');
+    }
+  };
+
+  const requestAiAnalysis = React.useMemo(() => {
+    if (!requestResponse) return null;
+    
+    const insights: { title: string; desc: string; severity: 'low' | 'medium' | 'high' }[] = [];
+    
+    if (requestResponse.status >= 500) {
+      insights.push({
+        title: 'Server-side failure diagnostic',
+        desc: 'The target server returned a 5xx response. Check server application logs, database connection thread pool configurations, or environment route paths.',
+        severity: 'high',
+      });
+    } else if (requestResponse.status === 401 || requestResponse.status === 403) {
+      insights.push({
+        title: 'Authentication Header mismatch',
+        desc: 'Access denied. Verify Bearer tokens or environment secret bindings are resolved correctly on the Environment subtab.',
+        severity: 'high',
+      });
+    } else if (requestResponse.status >= 400) {
+      insights.push({
+        title: 'Invalid Request Payload boundary',
+        desc: 'The server rejected the payload format. Double-check request query parameters spelling and raw body JSON brackets structure.',
+        severity: 'medium',
+      });
+    }
+
+    if (requestResponse.time > 200) {
+      insights.push({
+        title: 'Slow API Response Latency',
+        desc: `API took ${requestResponse.time}ms. Ensure this endpoint is added to regression runs to monitor payload processing durations.`,
+        severity: 'medium',
+      });
+    }
+
+    insights.push({
+      title: 'Suggested Negative Boundary Testing',
+      desc: 'Attempt running requests with empty payloads or invalid auth credentials to verify proper 4xx validation codes are raised.',
+      severity: 'low',
+    });
+
+    return insights;
+  }, [requestResponse]);
+
+  const playwrightCodeSnippet = React.useMemo(() => {
+    const headers: any = {};
+    requestHeaders.forEach(h => {
+      if (h.key) headers[h.key] = h.value;
+    });
+    if (requestAuthType === 'bearer' && requestBearerToken) {
+      headers['Authorization'] = `Bearer ${requestBearerToken}`;
+    }
+    
+    return `import { test, expect } from '@playwright/test';
+
+test('HTTP Request Validation', async ({ request }) => {
+  const response = await request.${requestMethod.toLowerCase()}('${requestUrl}', {
+    headers: ${JSON.stringify(headers, null, 4)},
+    data: ${requestBodyContent ? JSON.stringify(JSON.parse(requestBodyContent), null, 4) : 'undefined'}
+  });
+  expect(response.status()).toBe(${requestResponse?.status || 200});
+});`;
+  }, [requestMethod, requestUrl, requestHeaders, requestBearerToken, requestAuthType, requestBodyContent, requestResponse]);
+
+  // ----------------------------------------------------
   // ANALYTICS COMPUTATIONS
   // ----------------------------------------------------
   const projectRuns = React.useMemo(() => {
@@ -362,7 +730,7 @@ ${resolvedBody}
     const totalRunsCount = passedTotal + failedTotal;
     const successRate = totalRunsCount > 0 ? Math.round((passedTotal / totalRunsCount) * 100) : 100;
     const avgResponseTime = totalRunsCount > 0 ? Math.round(durationTotal / totalRunsCount) : 0;
-    const healthScore = successRate; // Health correlates directly to pass rate
+    const healthScore = successRate;
 
     return {
       collectionsCount,
@@ -373,11 +741,10 @@ ${resolvedBody}
     };
   }, [projectCollections, apiEndpoints, projectRuns]);
 
-  // Chart trend data
   const chartData = React.useMemo(() => {
     return [...projectRuns]
       .reverse()
-      .slice(-10) // last 10 runs
+      .slice(-10)
       .map((r, idx) => ({
         name: `Run #${idx + 1}`,
         Passed: r.passed_count,
@@ -385,7 +752,6 @@ ${resolvedBody}
       }));
   }, [projectRuns]);
 
-  // Leaderboard of failed endpoints
   const failedLeaderboard = React.useMemo(() => {
     const failCounts: Record<string, number> = {};
     const endpointsInProject = apiEndpoints.filter(e => projectCollections.some(c => c.id === e.collection_id));
@@ -406,12 +772,10 @@ ${resolvedBody}
       .slice(0, 5);
   }, [apiEndpoints, apiTestResults, projectCollections]);
 
-  // AI suggestions list
   const aiInsights = React.useMemo(() => {
     const insights: { type: string; title: string; desc: string; severity: 'low' | 'medium' | 'high' }[] = [];
     const endpoints = apiEndpoints.filter(e => projectCollections.some(c => c.id === e.collection_id));
     
-    // 1. Untested manual test cases mapping check
     const unlinked = endpoints.filter(e => !e.test_case_id);
     if (unlinked.length > 0) {
       insights.push({
@@ -422,7 +786,6 @@ ${resolvedBody}
       });
     }
 
-    // 2. Slow endpoints audit
     const slowResults = apiTestResults.filter(r => r.response_time_ms && r.response_time_ms > 100);
     if (slowResults.length > 0) {
       const slowIds = Array.from(new Set(slowResults.map(r => r.endpoint_id)));
@@ -437,7 +800,6 @@ ${resolvedBody}
       }
     }
 
-    // 3. Negative testing recommendations
     const postEndpoints = endpoints.filter(e => e.method === 'POST' || e.method === 'PUT');
     if (postEndpoints.length > 0) {
       insights.push({
@@ -511,6 +873,14 @@ ${resolvedBody}
           }`}
         >
           📂 Collections & Runs
+        </button>
+        <button 
+          onClick={() => setActiveTab('request')} 
+          className={`px-5 py-3 border-b-2 transition-all cursor-pointer ${
+            activeTab === 'request' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          ⚡ HTTP Request
         </button>
         <button 
           onClick={() => setActiveTab('environments')} 
@@ -818,7 +1188,456 @@ ${resolvedBody}
         </div>
       )}
 
-      {/* TAB 3: ENVIRONMENTS */}
+      {/* TAB 3: HTTP REQUEST WORKSPACE CLIENT */}
+      {activeTab === 'request' && (
+        <div className="grid gap-6 lg:grid-cols-3 items-start">
+          {/* Left panel: URL setup + Config options */}
+          <div className="lg:col-span-2 bg-card border border-border rounded-xl p-6 space-y-6">
+            <div className="flex items-center justify-between border-b border-border/40 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Manual HTTP Sandbox Client</h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Test API calls directly using Environment variables bindings.</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSaveRequestName(`Request-${Date.now().toString().slice(-4)}`);
+                  setIsSaveRequestOpen(true);
+                }}
+                className="cursor-pointer text-xs font-bold gap-1.5 h-8.5"
+              >
+                <Save className="h-3.5 w-3.5" />
+                Save Request
+              </Button>
+            </div>
+
+            {/* URL input bar */}
+            <div className="flex gap-2">
+              <Select 
+                value={requestMethod} 
+                onChange={(e: any) => setRequestMethod(e.target.value)}
+                className="w-28 font-bold text-xs shrink-0"
+              >
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+                <option value="PUT">PUT</option>
+                <option value="PATCH">PATCH</option>
+                <option value="DELETE">DELETE</option>
+              </Select>
+              
+              <Input 
+                value={requestUrl}
+                onChange={(e) => setRequestUrl(e.target.value)}
+                placeholder="https://httpbin.org/post"
+                className="font-mono text-xs flex-1"
+              />
+
+              <Button 
+                onClick={handleSendRequest}
+                disabled={isSendingRequest}
+                className="cursor-pointer px-5 font-bold text-xs gap-1.5 h-10 shrink-0"
+              >
+                <Send className="h-3.5 w-3.5" />
+                {isSendingRequest ? 'Sending...' : 'Send'}
+              </Button>
+            </div>
+
+            {/* Subtabs for Auth, Headers, Params, Body */}
+            <div className="space-y-4">
+              <div className="flex border-b border-border text-[11px] font-bold uppercase tracking-wider">
+                <button 
+                  onClick={() => setActiveRequestSubtab('auth')} 
+                  className={`px-4 py-2 border-b-2 transition-all cursor-pointer ${
+                    activeRequestSubtab === 'auth' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground'
+                  }`}
+                >
+                  🔒 Authorization
+                </button>
+                <button 
+                  onClick={() => setActiveRequestSubtab('headers')} 
+                  className={`px-4 py-2 border-b-2 transition-all cursor-pointer ${
+                    activeRequestSubtab === 'headers' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground'
+                  }`}
+                >
+                  📝 Headers ({requestHeaders.length})
+                </button>
+                <button 
+                  onClick={() => setActiveRequestSubtab('params')} 
+                  className={`px-4 py-2 border-b-2 transition-all cursor-pointer ${
+                    activeRequestSubtab === 'params' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground'
+                  }`}
+                >
+                  🔎 Query Params ({requestParams.length})
+                </button>
+                <button 
+                  onClick={() => setActiveRequestSubtab('body')} 
+                  className={`px-4 py-2 border-b-2 transition-all cursor-pointer ${
+                    activeRequestSubtab === 'body' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground'
+                  }`}
+                >
+                  📦 Body ({requestBodyType})
+                </button>
+                <button 
+                  onClick={() => setActiveRequestSubtab('settings')} 
+                  className={`px-4 py-2 border-b-2 transition-all cursor-pointer ${
+                    activeRequestSubtab === 'settings' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground'
+                  }`}
+                >
+                  ⚙️ Settings
+                </button>
+              </div>
+
+              {/* Subtabs Contents */}
+              {activeRequestSubtab === 'auth' && (
+                <div className="space-y-4 text-xs">
+                  <FormGroup label="Auth Mode">
+                    <Select 
+                      value={requestAuthType} 
+                      onChange={(e: any) => setRequestAuthType(e.target.value)}
+                      className="text-xs h-8.5"
+                    >
+                      <option value="none">No Auth</option>
+                      <option value="bearer">Bearer Token</option>
+                      <option value="basic">Basic Auth</option>
+                      <option value="apikey">API Key</option>
+                    </Select>
+                  </FormGroup>
+
+                  {requestAuthType === 'bearer' && (
+                    <FormGroup label="Bearer Token">
+                      <Input 
+                        value={requestBearerToken} 
+                        onChange={(e) => setRequestBearerToken(e.target.value)} 
+                        placeholder="mapid-secret"
+                        className="font-mono text-xs h-8.5"
+                      />
+                    </FormGroup>
+                  )}
+
+                  {requestAuthType === 'basic' && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <FormGroup label="Username">
+                        <Input 
+                          value={requestBasicUsername} 
+                          onChange={(e) => setRequestBasicUsername(e.target.value)} 
+                          placeholder="e.g. admin"
+                          className="text-xs h-8.5"
+                        />
+                      </FormGroup>
+                      <FormGroup label="Password">
+                        <Input 
+                          type="password"
+                          value={requestBasicPassword} 
+                          onChange={(e) => setRequestBasicPassword(e.target.value)} 
+                          placeholder="e.g. password"
+                          className="text-xs h-8.5"
+                        />
+                      </FormGroup>
+                    </div>
+                  )}
+
+                  {requestAuthType === 'apikey' && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <FormGroup label="Key Name">
+                        <Input 
+                          value={requestApiKeyName} 
+                          onChange={(e) => setRequestApiKeyName(e.target.value)} 
+                          placeholder="e.g. X-API-KEY"
+                          className="font-mono text-xs h-8.5"
+                        />
+                      </FormGroup>
+                      <FormGroup label="Key Value">
+                        <Input 
+                          value={requestApiKeyValue} 
+                          onChange={(e) => setRequestApiKeyValue(e.target.value)} 
+                          placeholder="e.g. mapid-value"
+                          className="font-mono text-xs h-8.5"
+                        />
+                      </FormGroup>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeRequestSubtab === 'headers' && (
+                <div className="space-y-4">
+                  {requestHeaders.length > 0 && (
+                    <div className="border border-border rounded-xl overflow-hidden text-xs">
+                      <table className="w-full text-left">
+                        <thead className="bg-muted/40 border-b border-border font-bold text-muted-foreground uppercase tracking-wider text-[10px]">
+                          <tr>
+                            <th className="px-3 py-1.5">Header Key</th>
+                            <th className="px-3 py-1.5">Header Value</th>
+                            <th className="px-3 py-1.5 w-12 text-center">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/60">
+                          {requestHeaders.map((h, idx) => (
+                            <tr key={idx} className="hover:bg-muted/5">
+                              <td className="px-3 py-2 font-mono">{h.key}</td>
+                              <td className="px-3 py-2 font-mono text-muted-foreground">{h.value}</td>
+                              <td className="px-3 py-2 text-center">
+                                <button 
+                                  onClick={() => setRequestHeaders(requestHeaders.filter((_, i) => i !== idx))}
+                                  className="text-red-500 hover:underline cursor-pointer"
+                                >
+                                  Delete
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 text-xs items-end">
+                    <div className="flex-1 space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground">Header Key</span>
+                      <Input value={newReqHeaderKey} onChange={(e) => setNewReqHeaderKey(e.target.value)} placeholder="e.g. Content-Type" className="h-8 text-xs" />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground">Header Value</span>
+                      <Input value={newReqHeaderVal} onChange={(e) => setNewReqHeaderVal(e.target.value)} placeholder="e.g. application/json" className="h-8 text-xs" />
+                    </div>
+                    <Button
+                      onClick={() => {
+                        if (!newReqHeaderKey.trim()) return;
+                        setRequestHeaders([...requestHeaders, { key: newReqHeaderKey.trim(), value: newReqHeaderVal }]);
+                        setNewReqHeaderKey('');
+                        setNewReqHeaderVal('');
+                      }}
+                      size="sm"
+                      className="cursor-pointer h-8 text-[11px] font-bold px-4"
+                    >
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {activeRequestSubtab === 'params' && (
+                <div className="space-y-4">
+                  {requestParams.length > 0 && (
+                    <div className="border border-border rounded-xl overflow-hidden text-xs">
+                      <table className="w-full text-left">
+                        <thead className="bg-muted/40 border-b border-border font-bold text-muted-foreground uppercase tracking-wider text-[10px]">
+                          <tr>
+                            <th className="px-3 py-1.5">Param Key</th>
+                            <th className="px-3 py-1.5">Param Value</th>
+                            <th className="px-3 py-1.5 w-12 text-center">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/60">
+                          {requestParams.map((p, idx) => (
+                            <tr key={idx} className="hover:bg-muted/5">
+                              <td className="px-3 py-2 font-mono">{p.key}</td>
+                              <td className="px-3 py-2 font-mono text-muted-foreground">{p.value}</td>
+                              <td className="px-3 py-2 text-center">
+                                <button 
+                                  onClick={() => setRequestParams(requestParams.filter((_, i) => i !== idx))}
+                                  className="text-red-500 hover:underline cursor-pointer"
+                                >
+                                  Delete
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 text-xs items-end">
+                    <div className="flex-1 space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground">Param Key</span>
+                      <Input value={newReqParamKey} onChange={(e) => setNewReqParamKey(e.target.value)} placeholder="e.g. limit" className="h-8 text-xs" />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground">Param Value</span>
+                      <Input value={newReqParamVal} onChange={(e) => setNewReqParamVal(e.target.value)} placeholder="e.g. 50" className="h-8 text-xs" />
+                    </div>
+                    <Button
+                      onClick={() => {
+                        if (!newReqParamKey.trim()) return;
+                        setRequestParams([...requestParams, { key: newReqParamKey.trim(), value: newReqParamVal }]);
+                        setNewReqParamKey('');
+                        setNewReqParamVal('');
+                      }}
+                      size="sm"
+                      className="cursor-pointer h-8 text-[11px] font-bold px-4"
+                    >
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {activeRequestSubtab === 'body' && (
+                <div className="space-y-4 text-xs">
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-1.5 font-semibold text-muted-foreground cursor-pointer">
+                      <input type="radio" checked={requestBodyType === 'none'} onChange={() => setRequestBodyType('none')} />
+                      None
+                    </label>
+                    <label className="flex items-center gap-1.5 font-semibold text-muted-foreground cursor-pointer">
+                      <input type="radio" checked={requestBodyType === 'json'} onChange={() => setRequestBodyType('json')} />
+                      Raw JSON
+                    </label>
+                    <label className="flex items-center gap-1.5 font-semibold text-muted-foreground cursor-pointer">
+                      <input type="radio" checked={requestBodyType === 'urlencoded'} onChange={() => setRequestBodyType('urlencoded')} />
+                      x-www-form-urlencoded
+                    </label>
+                  </div>
+
+                  {requestBodyType !== 'none' && (
+                    <FormGroup label={requestBodyType === 'json' ? 'Raw JSON String payload' : 'Raw Urlenoced query string (e.g. key1=val1&key2=val2)'}>
+                      <Textarea
+                        value={requestBodyContent}
+                        onChange={(e) => setRequestBodyContent(e.target.value)}
+                        placeholder={requestBodyType === 'json' ? '{\n  "email": "qa@mapid.io"\n}' : 'email=qa@mapid.io'}
+                        rows={6}
+                        className="font-mono text-xs"
+                      />
+                    </FormGroup>
+                  )}
+                </div>
+              )}
+
+              {activeRequestSubtab === 'settings' && (
+                <div className="space-y-4 text-xs">
+                  <FormGroup label="Connection Timeout (ms)">
+                    <Input value={requestTimeout} onChange={(e) => setRequestTimeout(e.target.value)} type="number" className="h-8.5" />
+                  </FormGroup>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right panel: Response details */}
+          <div className="space-y-6">
+            {!requestResponse ? (
+              <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground space-y-2">
+                <Globe className="h-10 w-10 mx-auto text-zinc-300 dark:text-zinc-700" />
+                <p className="text-sm font-semibold">Response Sandbox</p>
+                <p className="text-xs">Fill in URL parameters above and click Send to visual response logs.</p>
+              </div>
+            ) : (
+              <div className="bg-card border border-border rounded-xl p-6 space-y-6">
+                <div className="border-b border-border pb-4 space-y-3">
+                  <span className="text-xs font-bold text-foreground uppercase tracking-wider block">API Response</span>
+                  
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className={`px-2 py-0.5 rounded ${
+                      requestResponse.status >= 200 && requestResponse.status < 400 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
+                    }`}>
+                      {requestResponse.status} {requestResponse.statusText}
+                    </span>
+                    <span className="text-muted-foreground">{requestResponse.time} ms</span>
+                    <span className="text-muted-foreground">{(requestResponse.size / 1024).toFixed(2)} KB</span>
+                  </div>
+                </div>
+
+                {requestResponse.error && (
+                  <div className="bg-red-500/5 border border-red-500/20 text-red-500 rounded-lg p-3 flex gap-2 font-semibold text-xs leading-relaxed">
+                    <AlertTriangle className="h-4.5 w-4.5 shrink-0" />
+                    <span>Error details: {requestResponse.error}</span>
+                  </div>
+                )}
+
+                {/* Quick actions panel */}
+                <div className="space-y-2">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground block">Response Quick Actions</span>
+                  <div className="flex flex-wrap gap-2">
+                    {requestResponse.status >= 400 && (
+                      <Button 
+                        onClick={handleOpenIssueModalFromRequest}
+                        size="sm"
+                        className="cursor-pointer text-[10px] h-7 bg-red-500 hover:bg-red-600 font-bold gap-1"
+                      >
+                        <AlertCircle className="h-3 w-3" />
+                        Create Issue
+                      </Button>
+                    )}
+                    <Button 
+                      onClick={handleGenerateTestCase}
+                      size="sm"
+                      variant="outline"
+                      className="cursor-pointer text-[10px] h-7 font-bold gap-1"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Generate Test Case
+                    </Button>
+                    <Button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(playwrightCodeSnippet);
+                        addToast('Playwright automation script copied!', 'success');
+                      }}
+                      size="sm"
+                      variant="outline"
+                      className="cursor-pointer text-[10px] h-7 font-bold gap-1"
+                    >
+                      <Copy className="h-3 w-3" />
+                      Copy Playwright Script
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Body display */}
+                <div className="space-y-1 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground">Response Body</span>
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(requestResponse.body);
+                        addToast('Response body copied to clipboard!', 'success');
+                      }}
+                      className="text-primary hover:underline text-[10px] font-bold cursor-pointer"
+                    >
+                      Copy JSON
+                    </button>
+                  </div>
+                  <pre className="p-3 bg-zinc-900 text-zinc-100 rounded-lg overflow-x-auto font-mono text-[10px] leading-relaxed max-h-[300px] text-left">
+                    {(() => {
+                      try {
+                        return JSON.stringify(JSON.parse(requestResponse.body), null, 2);
+                      } catch (e) {
+                        return requestResponse.body || 'Empty Response';
+                      }
+                    })()}
+                  </pre>
+                </div>
+
+                {/* AI Recommendations */}
+                {requestAiAnalysis && requestAiAnalysis.length > 0 && (
+                  <div className="border border-border/60 bg-zinc-50/50 dark:bg-zinc-900/40 p-4 rounded-xl space-y-3">
+                    <span className="text-xs font-bold text-foreground flex items-center gap-1.5 border-b border-border/40 pb-2">
+                      <Cpu className="h-4 w-4 text-indigo-500 animate-pulse" />
+                      AI Sandbox Diagnostic Recommendations
+                    </span>
+                    <div className="space-y-2.5">
+                      {requestAiAnalysis.map((ins, i) => (
+                        <div key={i} className="text-xs leading-normal">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              ins.severity === 'high' ? 'bg-red-500' : ins.severity === 'medium' ? 'bg-amber-500' : 'bg-blue-500'
+                            }`} />
+                            <p className="font-bold text-foreground">{ins.title}</p>
+                          </div>
+                          <p className="text-muted-foreground pl-3 mt-0.5 text-[11px]">{ins.desc}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: ENVIRONMENTS */}
       {activeTab === 'environments' && (
         <div className="bg-card border border-border rounded-xl p-6 space-y-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-4">
@@ -941,7 +1760,7 @@ ${resolvedBody}
         </div>
       )}
 
-      {/* TAB 4: AUTOMATION HISTORY */}
+      {/* TAB 5: AUTOMATION HISTORY */}
       {activeTab === 'history' && (
         <div className="bg-card border border-border rounded-xl p-6">
           <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-4 border-b border-border/40 pb-2.5">
@@ -1097,6 +1916,56 @@ ${resolvedBody}
           <FormGroup label="Environment Name">
             <Input value={envName} onChange={(e) => setEnvName(e.target.value)} placeholder="e.g. UAT Server" />
           </FormGroup>
+        </div>
+      </Dialog>
+
+      {/* SAVE REQUEST TO COLLECTION DIALOG */}
+      <Dialog
+        isOpen={isSaveRequestOpen}
+        onClose={() => setIsSaveRequestOpen(false)}
+        title="Save Sandbox Request to Collection"
+        footer={
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setIsSaveRequestOpen(false)} className="cursor-pointer text-xs font-bold">
+              Cancel
+            </Button>
+            <Button onClick={handleSaveRequestSubmit} className="cursor-pointer text-xs font-bold">
+              Save Request
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4 text-left text-xs">
+          <FormGroup label="Request Name">
+            <Input value={saveRequestName} onChange={(e) => setSaveRequestName(e.target.value)} placeholder="e.g. Get User details" />
+          </FormGroup>
+
+          <div className="flex items-center gap-2 border-b border-border/40 pb-2">
+            <input 
+              type="checkbox" 
+              checked={isCreatingNewColForSave} 
+              onChange={() => setIsCreatingNewColForSave(!isCreatingNewColForSave)} 
+              id="new-col-save-checkbox"
+            />
+            <label htmlFor="new-col-save-checkbox" className="font-bold text-foreground cursor-pointer">
+              Save inside a new Collection container
+            </label>
+          </div>
+
+          {isCreatingNewColForSave ? (
+            <FormGroup label="New Collection Name">
+              <Input value={newColNameForSave} onChange={(e) => setNewColNameForSave(e.target.value)} placeholder="e.g. User Profiles Scope" />
+            </FormGroup>
+          ) : (
+            <FormGroup label="Target Collection">
+              <Select value={saveTargetColId} onChange={(e) => setSaveTargetColId(e.target.value)}>
+                <option value="" disabled>Select target...</option>
+                {projectCollections.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </Select>
+            </FormGroup>
+          )}
         </div>
       </Dialog>
 
