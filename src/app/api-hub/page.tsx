@@ -640,10 +640,19 @@ ${resolvedBody}
         }
       }
 
+      let cleanPath = requestUrl;
+      try {
+        const urlWithoutQuery = requestUrl.split('?')[0];
+        const urlObj = new URL(urlWithoutQuery.startsWith('http') ? urlWithoutQuery : 'http://' + urlWithoutQuery);
+        cleanPath = urlObj.pathname;
+      } catch (e) {
+        cleanPath = requestUrl.split('?')[0];
+      }
+
       await addTestCase({
         project_id: selectedProjectId,
         suite_id: targetSuiteId,
-        title: `API Verification: ${requestMethod} ${requestUrl.split('/').pop() || 'Endpoint'}`,
+        title: `API Verification: ${requestMethod} ${cleanPath}`,
         description: `Verify that request to ${requestUrl} behaves correctly.`,
         steps: `1. Send ${requestMethod} request to ${requestUrl}.\n2. Assert response status is ${requestResponse?.status || 200}.\n3. Validate response payloads content.`,
         expected_result: `Request returns status ${requestResponse?.status || 200} with response body.`,
