@@ -37,6 +37,7 @@ export default function IssuesPage() {
   const [isDetailOpen, setIsDetailOpen] = React.useState(false);
   const [activeDetailIssue, setActiveDetailIssue] = React.useState<any | null>(null);
   const [commentText, setCommentText] = React.useState('');
+  const [previewImageUrl, setPreviewImageUrl] = React.useState<string | null>(null);
   
   // Quick Project states
   const [isQuickProjOpen, setIsQuickProjOpen] = React.useState(false);
@@ -981,7 +982,9 @@ export default function IssuesPage() {
                           <img 
                             src={activeDetailIssue.attachment_url} 
                             alt="Issue Attachment" 
-                            className="max-h-[220px] object-contain rounded-md"
+                            className="max-h-[220px] object-contain rounded-md cursor-zoom-in hover:opacity-90 transition-opacity"
+                            onClick={() => setPreviewImageUrl(activeDetailIssue.attachment_url)}
+                            title="Click to view full size"
                           />
                         </div>
                         <a 
@@ -1167,6 +1170,40 @@ export default function IssuesPage() {
           </div>
         )}
       </Dialog>
+
+      {/* IMAGE PREVIEW DIALOG */}
+      {previewImageUrl && (
+        <Dialog
+          isOpen={previewImageUrl !== null}
+          onClose={() => setPreviewImageUrl(null)}
+          title="Image Attachment Preview"
+          size="xl"
+        >
+          <div className="flex flex-col items-center justify-center p-2 bg-zinc-900/5 dark:bg-zinc-900/35 rounded-xl border border-border/40 overflow-hidden">
+            <img 
+              src={previewImageUrl} 
+              alt="Full Preview" 
+              className="max-h-[70vh] object-contain rounded-lg shadow-lg"
+            />
+            <div className="mt-4 flex gap-3 text-xs font-semibold">
+              <a 
+                href={previewImageUrl} 
+                download={activeDetailIssue?.attachment_name || 'attachment'}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-bold hover:opacity-90 cursor-pointer"
+              >
+                Download Full Image
+              </a>
+              <Button 
+                variant="outline" 
+                onClick={() => setPreviewImageUrl(null)}
+                className="cursor-pointer"
+              >
+                Close Preview
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }

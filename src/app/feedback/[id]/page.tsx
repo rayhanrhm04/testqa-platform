@@ -26,6 +26,7 @@ export default function FeedbackDetailPage() {
 
   const [convertType, setConvertType] = React.useState<'Bug' | 'Improvement' | null>(null);
   const [commentText, setCommentText] = React.useState('');
+  const [previewImageUrl, setPreviewImageUrl] = React.useState<string | null>(null);
   
   // Issue conversion form state
   const [issueTitle, setIssueTitle] = React.useState('');
@@ -218,7 +219,9 @@ export default function FeedbackDetailPage() {
                         <img 
                           src={feedback.attachment_url} 
                           alt="Feedback Attachment" 
-                          className="max-h-[300px] object-contain rounded-md"
+                          className="max-h-[300px] object-contain rounded-md cursor-zoom-in hover:opacity-90 transition-opacity"
+                          onClick={() => setPreviewImageUrl(feedback.attachment_url || null)}
+                          title="Click to view full size"
                         />
                       </div>
                       <a 
@@ -510,6 +513,40 @@ export default function FeedbackDetailPage() {
           </FormGroup>
         </div>
       </Dialog>
+
+      {/* IMAGE PREVIEW DIALOG */}
+      {previewImageUrl && (
+        <Dialog
+          isOpen={previewImageUrl !== null}
+          onClose={() => setPreviewImageUrl(null)}
+          title="Image Attachment Preview"
+          size="xl"
+        >
+          <div className="flex flex-col items-center justify-center p-2 bg-zinc-900/5 dark:bg-zinc-900/35 rounded-xl border border-border/40 overflow-hidden">
+            <img 
+              src={previewImageUrl} 
+              alt="Full Preview" 
+              className="max-h-[70vh] object-contain rounded-lg shadow-lg"
+            />
+            <div className="mt-4 flex gap-3 text-xs font-semibold">
+              <a 
+                href={previewImageUrl} 
+                download={feedback?.attachment_name || 'attachment'}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-bold hover:opacity-90 cursor-pointer"
+              >
+                Download Full Image
+              </a>
+              <Button 
+                variant="outline" 
+                onClick={() => setPreviewImageUrl(null)}
+                className="cursor-pointer"
+              >
+                Close Preview
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }
