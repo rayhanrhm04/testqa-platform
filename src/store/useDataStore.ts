@@ -70,7 +70,7 @@ interface DataState {
   convertFeedbackToIssue: (feedbackId: string, issueType: IssueType, issueData: Partial<Issue>) => Promise<void>;
 
   // Issues
-  addIssue: (issue: Omit<Issue, 'id' | 'code' | 'created_at' | 'updated_at'>) => Promise<void>;
+  addIssue: (issue: Omit<Issue, 'id' | 'code' | 'created_at' | 'updated_at'>) => Promise<Issue | null>;
   updateIssue: (id: string, updates: Partial<Issue>) => Promise<void>;
   deleteIssue: (id: string) => Promise<void>;
   updateIssueStatus: (id: string, status: IssueStatus) => Promise<void>;
@@ -800,15 +800,19 @@ export const useDataStore = create<DataState>((set, get) => {
           assigned_to: toUuidOrNull(newIssue.assigned_to)
         };
         const { data, error } = await supabase!.from('issues').insert(dbIssue).select();
-        if (!error && data) {
+        if (!error && data && data[0]) {
           set((state) => ({ issues: [data[0], ...state.issues] }));
+          return data[0];
         }
+        return null;
       } else {
+        const issueToSave = { ...newIssue, id: `i-${Date.now()}` };
         set((state) => {
-          const next = [newIssue, ...state.issues];
+          const next = [issueToSave, ...state.issues];
           persist({ issues: next });
           return { issues: next };
         });
+        return issueToSave;
       }
     },
 

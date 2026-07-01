@@ -20,7 +20,8 @@ export default function IssuesPage() {
   const router = useRouter();
   const { 
     issues, projects, releases, feedbacks, comments, projectShares,
-    addIssue, updateIssue, deleteIssue, updateIssueStatus, addComment, logActivity, addProject
+    addIssue, updateIssue, deleteIssue, updateIssueStatus, addComment, logActivity, addProject,
+    users, addNotification
   } = useDataStore();
   const { activeRole, currentUser, mockUsers } = useAuthStore();
   const { addToast } = useUIStore();
@@ -225,9 +226,31 @@ export default function IssuesPage() {
     try {
       if (editingIssue) {
         await updateIssue(editingIssue.id, payload);
+        
+        if (payload.assigned_to && payload.assigned_to !== editingIssue.assigned_to) {
+          await addNotification({
+            user_id: payload.assigned_to,
+            title: 'New Issue Assignment',
+            content: `You have been assigned to issue ${editingIssue.code}: "${payload.title}"`,
+            type: 'feedback',
+            link: `/issues?project=${payload.project_id}`
+          });
+        }
+        
         addToast(`Issue ${editingIssue.code} updated!`, 'success');
       } else {
-        await addIssue(payload);
+        const newIssueObj = await addIssue(payload);
+        
+        if (newIssueObj && payload.assigned_to) {
+          await addNotification({
+            user_id: payload.assigned_to,
+            title: 'New Issue Assignment',
+            content: `You have been assigned to issue ${newIssueObj.code}: "${payload.title}"`,
+            type: 'feedback',
+            link: `/issues?project=${payload.project_id}`
+          });
+        }
+        
         addToast('Created new issue target!', 'success');
       }
       setIsFormOpen(false);
@@ -475,7 +498,7 @@ export default function IssuesPage() {
                   {colIssues.length > 0 ? (
                     colIssues.map((issue) => {
                       const proj = projects.find((p) => p.id === issue.project_id);
-                      const user = mockUsers.find((u) => u.id === issue.assigned_to);
+                      const user = users.find((u) => u.id === issue.assigned_to);
                       const rel = releases.find((r) => r.id === issue.release_id);
                       return (
                         <div 
@@ -595,7 +618,7 @@ export default function IssuesPage() {
                 {filteredIssues.length > 0 ? (
                   filteredIssues.map((issue) => {
                     const proj = projects.find((p) => p.id === issue.project_id);
-                    const user = mockUsers.find((u) => u.id === issue.assigned_to);
+                    const user = users.find((u) => u.id === issue.assigned_to);
                     const rel = releases.find((r) => r.id === issue.release_id);
                     return (
                       <tr 
@@ -775,7 +798,7 @@ export default function IssuesPage() {
             <FormGroup label="Assignee">
               <Select value={assignee} onChange={(e) => setAssignee(e.target.value)}>
                 <option value="">Unassigned</option>
-                {mockUsers.filter(u => u.role === 'Developer').map(u => (
+                {users.filter(u => u.role === 'Developer').map(u => (
                   <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
               </Select>
@@ -1061,7 +1084,7 @@ export default function IssuesPage() {
                 {/* List Comments */}
                 <div className="space-y-3 max-h-[160px] overflow-y-auto pr-1">
                   {comments.filter(c => c.entity_type === 'issue' && c.entity_id === activeDetailIssue.id).map((c) => {
-                    const user = mockUsers.find(u => u.id === c.user_id);
+                    const user = users.find(u => u.id === c.user_id);
                     return (
                       <div key={c.id} className="flex gap-2 text-xs bg-muted/10 p-2 border border-border/40 rounded-lg">
                         <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">{user?.name.charAt(0)}</div>
@@ -1119,7 +1142,7 @@ export default function IssuesPage() {
                     <User className="h-3.5 w-3.5" /> Assignee
                   </span>
                   <span className="font-bold">
-                    {mockUsers.find(u => u.id === activeDetailIssue.assigned_to)?.name || 'Unassigned'}
+                    {users.find(u => u.id === activeDetailIssue.assigned_to)?.name || 'Unassigned'}
                   </span>
                 </div>
 
