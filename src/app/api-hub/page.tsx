@@ -724,12 +724,21 @@ ${resolvedBody}
       headers['Authorization'] = `Bearer ${requestBearerToken}`;
     }
     
+    let formattedData = 'undefined';
+    if (requestBodyContent) {
+      try {
+        formattedData = JSON.stringify(JSON.parse(requestBodyContent), null, 4);
+      } catch (e) {
+        formattedData = JSON.stringify(requestBodyContent);
+      }
+    }
+
     return `import { test, expect } from '@playwright/test';
 
 test('HTTP Request Validation', async ({ request }) => {
   const response = await request.${requestMethod.toLowerCase()}('${requestUrl}', {
     headers: ${JSON.stringify(headers, null, 4)},
-    data: ${requestBodyContent ? JSON.stringify(JSON.parse(requestBodyContent), null, 4) : 'undefined'}
+    data: ${formattedData}
   });
   expect(response.status()).toBe(${requestResponse?.status || 200});
 });`;
