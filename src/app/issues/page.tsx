@@ -484,6 +484,27 @@ export default function IssuesPage() {
                           onClick={() => { setActiveDetailIssue(issue); setIsDetailOpen(true); }}
                           className="group relative bg-card rounded-lg border border-border/80 p-3 shadow-sm hover:shadow-md hover:border-primary/20 transition-all cursor-grab active:cursor-grabbing kanban-card text-left"
                         >
+                          {/* Edit Action button on Hover */}
+                          {canModifyIssue(issue.project_id) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="absolute top-2 right-8 h-6 w-6 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!currentUser) {
+                                  router.push('/login');
+                                  return;
+                                }
+                                setEditingIssue(issue);
+                                setIsFormOpen(true);
+                              }}
+                              title="Edit Issue"
+                            >
+                              <Edit className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+
                           {/* Delete Action button on Hover */}
                           {canModifyIssue(issue.project_id) && (
                             <Button
@@ -858,7 +879,28 @@ export default function IssuesPage() {
       <Dialog
         isOpen={isDetailOpen && activeDetailIssue !== null}
         onClose={() => { setIsDetailOpen(false); setActiveDetailIssue(null); }}
-        title={activeDetailIssue ? `Issue details: ${activeDetailIssue.code}` : ''}
+        title={
+          activeDetailIssue ? (
+            <div className="flex items-center justify-between w-[92%]">
+              <span>Issue details: {activeDetailIssue.code}</span>
+              {canModifyIssue(activeDetailIssue.project_id) && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-7 text-xs font-semibold mr-2 cursor-pointer gap-1 flex items-center"
+                  onClick={() => {
+                    setEditingIssue(activeDetailIssue);
+                    setIsFormOpen(true);
+                    setIsDetailOpen(false);
+                  }}
+                >
+                  <Edit className="h-3 w-3" />
+                  Edit Issue
+                </Button>
+              )}
+            </div>
+          ) : ''
+        }
         size="lg"
       >
         {activeDetailIssue && (
@@ -1045,7 +1087,21 @@ export default function IssuesPage() {
 
             {/* Sidebar properties */}
             <div className="space-y-4 border-l border-border pl-4 text-xs">
-              <h3 className="text-[10px] uppercase font-bold text-muted-foreground border-b border-border pb-1">Ticket Info</h3>
+              <div className="flex items-center justify-between border-b border-border pb-1">
+                <h3 className="text-[10px] uppercase font-bold text-muted-foreground">Ticket Info</h3>
+                {canModifyIssue(activeDetailIssue.project_id) && (
+                  <button 
+                    onClick={() => {
+                      setEditingIssue(activeDetailIssue);
+                      setIsFormOpen(true);
+                      setIsDetailOpen(false);
+                    }}
+                    className="text-primary font-bold hover:underline cursor-pointer flex items-center gap-0.5 text-[10px] bg-transparent border-0 p-0"
+                  >
+                    <Edit className="h-2.5 w-2.5" /> Edit
+                  </button>
+                )}
+              </div>
               
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
