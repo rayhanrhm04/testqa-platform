@@ -122,6 +122,34 @@ export default function FeedbackPage() {
     return fb.reporter_id === currentUser?.id || canModifyProject(fb.project_id);
   }, [currentUser, canModifyProject]);
 
+  const handleProjectFilterChange = (projId: string) => {
+    setProjectFilter(projId);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (projId === 'all') {
+        url.searchParams.delete('project');
+      } else {
+        url.searchParams.set('project', projId);
+      }
+      window.history.replaceState(null, '', url.pathname + url.search);
+    }
+  };
+
+  // Sync projectFilter with query parameters on load
+  React.useEffect(() => {
+    if (accessibleProjects.length > 0) {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const projectParam = params.get('project');
+        if (projectParam && accessibleProjects.some(p => p.id === projectParam)) {
+          setProjectFilter(projectParam);
+        } else {
+          setProjectFilter(accessibleProjects[0].id);
+        }
+      }
+    }
+  }, [accessibleProjects]);
+
   // Filters calculation
   const filteredFeedbacks = React.useMemo(() => {
     return feedbacks.filter((fb) => {
@@ -223,12 +251,29 @@ export default function FeedbackPage() {
   return (
     <div className="space-y-6">
       {/* Title Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-5">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Feedback Management</h1>
           <p className="text-sm text-muted-foreground">Log, review, and convert feedback submitted by users and reporter teams.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Project Scope Selector */}
+          <div className="flex items-center gap-2 bg-card border border-border px-3 py-1.5 rounded-xl shrink-0">
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Project:</span>
+            <div className="w-48 shrink-0">
+              <Select 
+                value={projectFilter} 
+                onChange={(e) => handleProjectFilterChange(e.target.value)}
+                className="text-xs font-bold"
+              >
+                <option value="all">All Projects</option>
+                {accessibleProjects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </Select>
+            </div>
+          </div>
+
           <Button 
             onClick={() => {
               if (!currentUser) {
@@ -247,7 +292,7 @@ export default function FeedbackPage() {
       </div>
 
       {/* Advanced Filters */}
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4 bg-card p-4 rounded-xl border border-border">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 bg-card p-4 rounded-xl border border-border">
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -257,17 +302,6 @@ export default function FeedbackPage() {
             placeholder="Search code, title..."
             className="pl-9"
           />
-        </div>
-
-        {/* Project Filter */}
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
-          <Select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
-            <option value="all">All Projects</option>
-            {accessibleProjects.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </Select>
         </div>
 
         {/* Status Filter */}

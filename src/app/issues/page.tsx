@@ -114,6 +114,8 @@ export default function IssuesPage() {
         const projectParam = params.get('project');
         if (projectParam && accessibleProjects.some(p => p.id === projectParam)) {
           setProjectFilter(projectParam);
+        } else {
+          setProjectFilter(accessibleProjects[0].id);
         }
       }
     }
@@ -339,14 +341,31 @@ export default function IssuesPage() {
   return (
     <div className="space-y-6">
       {/* Header section */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-5">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Scrum & Issue Board</h1>
           <p className="text-sm text-muted-foreground">Track bug fixes and feature improvements across active milestones.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Project Scope Selector */}
+          <div className="flex items-center gap-2 bg-card border border-border px-3 py-1.5 rounded-xl shrink-0">
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Project:</span>
+            <div className="w-48 shrink-0">
+              <Select 
+                value={projectFilter} 
+                onChange={(e) => handleProjectFilterChange(e.target.value)}
+                className="text-xs font-bold"
+              >
+                <option value="all">All Projects</option>
+                {accessibleProjects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </Select>
+            </div>
+          </div>
+
           {/* View Toggle tabs */}
-          <div className="flex bg-muted rounded-lg p-0.5 border border-border mr-2">
+          <div className="flex bg-muted rounded-lg p-0.5 border border-border">
             <button 
               onClick={() => setActiveTab('kanban')}
               className={`p-1.5 rounded-md text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
@@ -392,7 +411,7 @@ export default function IssuesPage() {
       </div>
 
       {/* Advanced Filters */}
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4 bg-card p-4 rounded-xl border border-border">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 bg-card p-4 rounded-xl border border-border">
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -402,17 +421,6 @@ export default function IssuesPage() {
             placeholder="Search code, title..."
             className="pl-9"
           />
-        </div>
-
-        {/* Project Filter */}
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
-          <Select value={projectFilter} onChange={(e) => handleProjectFilterChange(e.target.value)}>
-            <option value="all">All Projects</option>
-            {accessibleProjects.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </Select>
         </div>
 
         {/* Severity Filter */}
@@ -432,7 +440,7 @@ export default function IssuesPage() {
           <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
           <Select value={releaseFilter} onChange={(e) => setReleaseFilter(e.target.value)}>
             <option value="all">All Releases</option>
-            {releases.map(r => (
+            {releases.filter(r => projectFilter === 'all' || r.project_id === projectFilter).map(r => (
               <option key={r.id} value={r.id}>Version {r.version}</option>
             ))}
           </Select>
@@ -754,7 +762,7 @@ export default function IssuesPage() {
             <FormGroup label="Target Release">
               <Select value={release} onChange={(e) => setRelease(e.target.value)}>
                 <option value="">Backlog (No Release)</option>
-                {releases.map(r => (
+                {releases.filter(r => r.project_id === project).map(r => (
                   <option key={r.id} value={r.id}>Version {r.version}</option>
                 ))}
               </Select>
