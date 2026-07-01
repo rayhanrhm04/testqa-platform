@@ -728,6 +728,11 @@ export const useDataStore = create<DataState>((set, get) => {
       // 1. Create issue
       const codePrefix = issueType === 'Bug' ? 'BUG' : 'IMP';
       const code = getNextCode(codePrefix, get().issues);
+      
+      const feedback = get().feedbacks.find((f) => f.id === feedbackId);
+      const attachment_url = feedback?.attachment_url || undefined;
+      const attachment_name = feedback?.attachment_name || undefined;
+
       const newIssue: Issue = {
         id: isSupabaseConfigured() ? undefined : `i-${Date.now()}` as any,
         code,
@@ -743,6 +748,8 @@ export const useDataStore = create<DataState>((set, get) => {
         status: 'Open',
         assigned_to: issueData.assigned_to,
         release_id: issueData.release_id,
+        attachment_url,
+        attachment_name,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
