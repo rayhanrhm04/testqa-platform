@@ -1876,16 +1876,19 @@ export const useDataStore = create<DataState>((set, get) => {
     markAllNotificationsAsRead: async (userId) => {
       if (isSupabaseConfigured()) {
         if (userId) {
-          await supabase!.from('notifications').update({ is_read: true }).eq('user_id', userId);
+          await Promise.all([
+            supabase!.from('notifications').update({ is_read: true }).eq('user_id', userId),
+            supabase!.from('notifications').update({ is_read: true }).is('user_id', null)
+          ]);
         } else {
           await supabase!.from('notifications').update({ is_read: true }).is('user_id', null);
         }
         set((state) => ({
-          notifications: state.notifications.map((n) => (!userId || n.user_id === userId) ? { ...n, is_read: true } : n),
+          notifications: state.notifications.map((n) => (!userId || n.user_id === userId || n.user_id === null) ? { ...n, is_read: true } : n),
         }));
       } else {
         set((state) => {
-          const next = state.notifications.map((n) => (!userId || n.user_id === userId) ? { ...n, is_read: true } : n);
+          const next = state.notifications.map((n) => (!userId || n.user_id === userId || n.user_id === null) ? { ...n, is_read: true } : n);
           persist({ notifications: next });
           return { notifications: next };
         });
