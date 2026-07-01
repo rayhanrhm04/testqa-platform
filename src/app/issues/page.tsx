@@ -909,9 +909,29 @@ export default function IssuesPage() {
               )}
 
               {/* Attachment */}
-              {activeDetailIssue.attachment_url && (
-                <div className="space-y-1">
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground">Attachment</span>
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center justify-between">
+                  <span>Attachment</span>
+                  {activeDetailIssue.attachment_url && (
+                    <button 
+                      onClick={async () => {
+                        if (confirm('Remove attachment?')) {
+                          try {
+                            await updateIssue(activeDetailIssue.id, { attachment_url: null as any, attachment_name: null as any });
+                            setActiveDetailIssue({ ...activeDetailIssue, attachment_url: null, attachment_name: null });
+                            addToast('Attachment removed!', 'success');
+                          } catch (err) {
+                            addToast('Failed to remove attachment.', 'error');
+                          }
+                        }
+                      }}
+                      className="text-red-500 font-bold hover:underline cursor-pointer lowercase text-[10px]"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </span>
+                {activeDetailIssue.attachment_url ? (
                   <div className="p-3 rounded-lg border border-border bg-zinc-50 dark:bg-zinc-900/20 text-xs">
                     {activeDetailIssue.attachment_url.startsWith('data:image/') ? (
                       <div className="space-y-2">
@@ -945,8 +965,47 @@ export default function IssuesPage() {
                       </div>
                     )}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="flex items-center justify-center border border-dashed border-border/80 rounded-lg p-4 bg-muted/5 hover:bg-muted/15 transition-colors relative cursor-pointer group">
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 5 * 1024 * 1024) {
+                          addToast('File size too large (Max 5MB)', 'error');
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onloadend = async () => {
+                          const base64 = reader.result as string;
+                          try {
+                            await updateIssue(activeDetailIssue.id, { 
+                              attachment_url: base64, 
+                              attachment_name: file.name 
+                            });
+                            setActiveDetailIssue({ 
+                              ...activeDetailIssue, 
+                              attachment_url: base64, 
+                              attachment_name: file.name 
+                            });
+                            addToast('Attachment uploaded successfully!', 'success');
+                          } catch (err) {
+                            addToast('Failed to upload attachment.', 'error');
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                    <div className="text-center text-xs space-y-1">
+                      <p className="font-semibold text-primary group-hover:underline">Click to upload attachment</p>
+                      <p className="text-[10px] text-muted-foreground">PNG, JPG, GIF (Max 5MB)</p>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Comments inside detail modal */}
               <div className="border-t border-border pt-4 space-y-4">
