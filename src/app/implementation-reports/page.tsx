@@ -15,6 +15,65 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FormGroup, Input, Textarea } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import Link from 'next/link';
+
+interface EditableCellProps {
+  initialValue: string;
+  onSave: (val: string) => void;
+  placeholder?: string;
+  className?: string;
+  isTextArea?: boolean;
+}
+
+const EditableCell: React.FC<EditableCellProps> = ({ 
+  initialValue, 
+  onSave, 
+  placeholder, 
+  className, 
+  isTextArea = false 
+}) => {
+  const [val, setVal] = React.useState(initialValue);
+
+  React.useEffect(() => {
+    setVal(initialValue);
+  }, [initialValue]);
+
+  const handleBlur = () => {
+    if (val !== initialValue) {
+      onSave(val);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.currentTarget.blur();
+    }
+  };
+
+  if (isTextArea) {
+    return (
+      <textarea
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={handleBlur}
+        placeholder={placeholder}
+        className={className}
+      />
+    );
+  }
+
+  return (
+    <input
+      type="text"
+      value={val}
+      onChange={(e) => setVal(e.target.value)}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
+};
 
 export default function ImplementationReportsPage() {
   const searchParams = useSearchParams();
@@ -419,8 +478,8 @@ export default function ImplementationReportsPage() {
                                 <thead>
                                   <tr className="border-b border-border bg-white dark:bg-zinc-950 font-bold text-muted-foreground print:bg-zinc-100 print:text-black">
                                     <th className="p-3 w-2/5">Feedback Title</th>
-                                    <th className="p-3">Feature</th>
-                                    <th className="p-3">Ver</th>
+                                    <th className="p-3 w-28">Feature</th>
+                                    <th className="p-3 w-20">Ver</th>
                                     <th className="p-3 w-1/3 print:w-1/2">QA Comments / Notes</th>
                                     {canEdit && <th className="p-3 w-32 print:hidden">Move / Delete</th>}
                                   </tr>
@@ -430,10 +489,9 @@ export default function ImplementationReportsPage() {
                                     <tr key={item.id} className="border-b border-border bg-white dark:bg-zinc-950/20 last:border-0 print:border-zinc-100">
                                       <td className="p-3">
                                         {canEdit ? (
-                                          <input
-                                            type="text"
-                                            value={item.title}
-                                            onChange={(e) => updateImplementationReportItem(item.id, { title: e.target.value })}
+                                          <EditableCell
+                                            initialValue={item.title}
+                                            onSave={(val) => updateImplementationReportItem(item.id, { title: val })}
                                             placeholder="Feedback Title"
                                             className="w-full bg-transparent border-0 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 focus:bg-zinc-100 dark:focus:bg-zinc-800/50 focus-visible:outline-none p-1 text-xs font-semibold rounded text-foreground/90"
                                           />
@@ -445,10 +503,9 @@ export default function ImplementationReportsPage() {
                                       </td>
                                       <td className="p-3">
                                         {canEdit ? (
-                                          <input
-                                            type="text"
-                                            value={item.feature || ''}
-                                            onChange={(e) => updateImplementationReportItem(item.id, { feature: e.target.value })}
+                                          <EditableCell
+                                            initialValue={item.feature || ''}
+                                            onSave={(val) => updateImplementationReportItem(item.id, { feature: val })}
                                             placeholder="General"
                                             className="w-full bg-transparent border-0 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 focus:bg-zinc-100 dark:focus:bg-zinc-800/50 focus-visible:outline-none p-1 text-xs rounded text-muted-foreground font-medium"
                                           />
@@ -460,10 +517,9 @@ export default function ImplementationReportsPage() {
                                       </td>
                                       <td className="p-3">
                                         {canEdit ? (
-                                          <input
-                                            type="text"
-                                            value={item.implementation_version || ''}
-                                            onChange={(e) => updateImplementationReportItem(item.id, { implementation_version: e.target.value })}
+                                          <EditableCell
+                                            initialValue={item.implementation_version || ''}
+                                            onSave={(val) => updateImplementationReportItem(item.id, { implementation_version: val })}
                                             placeholder="Version"
                                             className="w-16 bg-transparent border-0 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 focus:bg-zinc-100 dark:focus:bg-zinc-800/50 focus-visible:outline-none p-1 text-xs font-mono rounded text-foreground/80 font-bold"
                                           />
@@ -475,11 +531,12 @@ export default function ImplementationReportsPage() {
                                       </td>
                                       <td className="p-3">
                                         {canEdit ? (
-                                          <textarea
-                                            value={item.qa_note || ''}
-                                            onChange={(e) => updateImplementationReportItem(item.id, { qa_note: e.target.value })}
+                                          <EditableCell
+                                            isTextArea
+                                            initialValue={item.qa_note || ''}
+                                            onSave={(val) => updateImplementationReportItem(item.id, { qa_note: val })}
                                             placeholder="Type QA update comments..."
-                                            className="w-full bg-zinc-50 dark:bg-zinc-900 border border-border/60 hover:border-primary/50 focus:border-primary rounded px-2 py-1 text-[11px] leading-relaxed transition-colors min-h-[45px] resize-none focus-visible:outline-none print:bg-transparent print:border-0 print:p-0 print:min-h-0"
+                                            className="w-full bg-zinc-50 dark:bg-zinc-900 border border-border/60 hover:border-primary/50 focus:border-primary rounded px-2 py-1 text-[11px] leading-relaxed transition-colors min-h-[45px] resize-none focus-visible:outline-none print:bg-transparent print:border-0 print:p-0 print:min-h-0 text-foreground"
                                           />
                                         ) : (
                                           <p className="text-[11px] text-muted-foreground leading-relaxed italic print:not-italic print:text-zinc-700">
