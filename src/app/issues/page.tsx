@@ -207,7 +207,7 @@ export default function IssuesPage() {
       return;
     }
 
-    const payload = {
+    const payload: any = {
       project_id: project,
       type,
       title,
@@ -222,6 +222,10 @@ export default function IssuesPage() {
       attachment_url: attachmentUrl || undefined,
       attachment_name: attachmentName || undefined,
     };
+
+    if (!editingIssue) {
+      payload.created_by = currentUser?.id || undefined;
+    }
 
     try {
       if (editingIssue) {
@@ -1152,6 +1156,15 @@ export default function IssuesPage() {
                   </span>
                   <span className="font-bold text-primary">
                     {releases.find(r => r.id === activeDetailIssue.release_id)?.version ? `v${releases.find(r => r.id === activeDetailIssue.release_id)?.version}` : 'Backlog'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground font-semibold flex items-center gap-1">
+                    <User className="h-3.5 w-3.5" /> Created By
+                  </span>
+                  <span className="font-bold">
+                    {users.find(u => u.id === activeDetailIssue.created_by)?.name || 'System'}
                   </span>
                 </div>
 

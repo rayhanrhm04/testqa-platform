@@ -96,6 +96,7 @@ export interface Issue {
   release_id?: string;
   attachment_url?: string | null;
   attachment_name?: string | null;
+  created_by?: string | null;
   created_at: string;
   updated_at: string;
 }

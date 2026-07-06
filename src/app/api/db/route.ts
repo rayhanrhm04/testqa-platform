@@ -239,7 +239,12 @@ try {
           error_message TEXT
         );
       `)
-        .then(() => console.log('Database migration: implementation report, notifications, recorder, and api hub tables check passed'))
+        .then(() => {
+          console.log('Database migration: implementation report, notifications, recorder, and api hub tables check passed');
+          pool.query('ALTER TABLE public.issues ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES public.users(id) ON DELETE SET NULL;')
+            .then(() => console.log('Database migration: public.issues.created_by check passed'))
+            .catch((err) => console.warn('Database migration warning for issues.created_by:', err));
+        })
         .catch((err) => console.warn('Database migration warning for implementation report, notifications, recorder, and api hub tables:', err));
     })
     .catch((err) => console.warn('Database migration warning for exploratory tables:', err));

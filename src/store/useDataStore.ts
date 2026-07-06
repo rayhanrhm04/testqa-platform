@@ -750,6 +750,7 @@ export const useDataStore = create<DataState>((set, get) => {
         release_id: issueData.release_id,
         attachment_url,
         attachment_name,
+        created_by: feedback ? feedback.reporter_id : null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -758,7 +759,8 @@ export const useDataStore = create<DataState>((set, get) => {
       if (isSupabaseConfigured()) {
         const dbIssue = {
           ...newIssue,
-          assigned_to: toUuidOrNull(newIssue.assigned_to)
+          assigned_to: toUuidOrNull(newIssue.assigned_to),
+          created_by: feedback ? toUuidOrNull(feedback.reporter_id) : null
         };
         const [{ data: issueRes }, { error: fbError }] = await Promise.all([
           supabase!.from('issues').insert(dbIssue).select(),
@@ -797,7 +799,8 @@ export const useDataStore = create<DataState>((set, get) => {
       if (isSupabaseConfigured()) {
         const dbIssue = {
           ...newIssue,
-          assigned_to: toUuidOrNull(newIssue.assigned_to)
+          assigned_to: toUuidOrNull(newIssue.assigned_to),
+          created_by: toUuidOrNull(newIssue.created_by)
         };
         const { data, error } = await supabase!.from('issues').insert(dbIssue).select();
         if (!error && data && data[0]) {
