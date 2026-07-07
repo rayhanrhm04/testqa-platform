@@ -242,7 +242,43 @@ try {
         .then(() => {
           console.log('Database migration: implementation report, notifications, recorder, and api hub tables check passed');
           pool.query('ALTER TABLE public.issues ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES public.users(id) ON DELETE SET NULL;')
-            .then(() => console.log('Database migration: public.issues.created_by check passed'))
+            .then(() => {
+              console.log('Database migration: public.issues.created_by check passed');
+              
+              // Register RPC helper function
+              pool.query(`
+                CREATE OR REPLACE FUNCTION public.get_all_qa_data()
+                RETURNS JSONB AS $$
+                DECLARE
+                  result JSONB;
+                BEGIN
+                  SELECT jsonb_build_object(
+                    'projects', COALESCE((SELECT json_agg(x) FROM (SELECT * FROM public.projects ORDER BY created_at DESC) x), '[]'::jsonb),
+                    'feedbacks', COALESCE((SELECT json_agg(x) FROM (SELECT * FROM public.feedbacks ORDER BY created_at DESC) x), '[]'::jsonb),
+                    'issues', COALESCE((SELECT json_agg(x) FROM (SELECT * FROM public.issues ORDER BY created_at DESC) x), '[]'::jsonb),
+                    'releases', COALESCE((SELECT json_agg(x) FROM (SELECT * FROM public.releases ORDER BY release_date DESC) x), '[]'::jsonb),
+                    'test_suites', COALESCE((SELECT json_agg(x) FROM (SELECT * FROM public.test_suites) x), '[]'::jsonb),
+                    'test_cases', COALESCE((SELECT json_agg(x) FROM (SELECT * FROM public.test_cases ORDER BY code ASC) x), '[]'::jsonb),
+                    'test_runs', COALESCE((SELECT json_agg(x) FROM (SELECT * FROM public.test_runs ORDER BY created_at DESC) x), '[]'::jsonb),
+                    'test_run_results', COALESCE((SELECT json_agg(x) FROM (SELECT * FROM public.test_run_results) x), '[]'::jsonb),
+                    'comments', COALESCE((SELECT json_agg(x) FROM (SELECT * FROM public.comments ORDER BY created_at ASC) x), '[]'::jsonb),
+                    'activity_logs', COALESCE((SELECT json_agg(x) FROM (SELECT * FROM public.activity_logs ORDER BY created_at DESC LIMIT 100) x), '[]'::jsonb),
+                    'users', COALESCE((SELECT json_agg(x) FROM (SELECT * FROM public.users ORDER BY created_at DESC) x), '[]'::jsonb),
+                    'recorder_sessions', COALESCE((SELECT json_agg(x) FROM (SELECT * FROM public.recorder_sessions ORDER BY created_at DESC) x), '[]'::jsonb),
+                    'recorder_steps', COALESCE((SELECT json_agg(x) FROM (SELECT * FROM public.recorder_steps ORDER BY step_number ASC) x), '[]'::jsonb),
+                    'api_collections', COALESCE((SELECT json_agg(x) FROM (SELECT * FROM public.api_collections ORDER BY created_at DESC) x), '[]'::jsonb),
+                    'api_endpoints', COALESCE((SELECT json_agg(x) FROM (SELECT * FROM public.api_endpoints ORDER BY created_at ASC) x), '[]'::jsonb),
+                    'api_environments', COALESCE((SELECT json_agg(x) FROM (SELECT * FROM public.api_environments ORDER BY created_at DESC) x), '[]'::jsonb),
+                    'api_test_runs', COALESCE((SELECT json_agg(x) FROM (SELECT * FROM public.api_test_runs ORDER BY created_at DESC) x), '[]'::jsonb),
+                    'api_test_results', COALESCE((SELECT json_agg(x) FROM (SELECT * FROM public.api_test_results) x), '[]'::jsonb)
+                  ) INTO result;
+                  RETURN result;
+                END;
+                $$ LANGUAGE plpgsql SECURITY DEFINER;
+              `)
+                .then(() => console.log('Database migration: get_all_qa_data RPC registered'))
+                .catch(err => console.warn('Database migration warning registering RPC helper:', err));
+            })
             .catch((err) => console.warn('Database migration warning for issues.created_by:', err));
         })
         .catch((err) => console.warn('Database migration warning for implementation report, notifications, recorder, and api hub tables:', err));

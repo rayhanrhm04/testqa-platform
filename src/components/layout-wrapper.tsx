@@ -119,7 +119,7 @@ export const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ childre
             <div className="flex h-[70vh] items-center justify-center">
               <div className="flex flex-col items-center gap-3">
                 <div className="h-7 w-7 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                <span className="text-xs text-muted-foreground">Syncing Database Tables...</span>
+                <span className="text-xs font-semibold text-muted-foreground animate-pulse">Tunggu sebentar yaa...</span>
               </div>
             </div>
           ) : isReporterRestricted ? (
