@@ -242,43 +242,7 @@ try {
         .then(() => {
           console.log('Database migration: implementation report, notifications, recorder, and api hub tables check passed');
           pool.query('ALTER TABLE public.issues ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES public.users(id) ON DELETE SET NULL;')
-            .then(() => {
-              console.log('Database migration: public.issues.created_by check passed');
-              
-              // Register RPC helper function
-              pool.query(`
-                CREATE OR REPLACE FUNCTION public.get_all_qa_data()
-                RETURNS JSONB AS $$
-                DECLARE
-                  result JSONB;
-                BEGIN
-                  SELECT jsonb_build_object(
-                    'projects', (SELECT COALESCE(json_agg(x)::jsonb, '[]'::jsonb) FROM (SELECT * FROM public.projects ORDER BY created_at DESC) x),
-                    'feedbacks', (SELECT COALESCE(json_agg(x)::jsonb, '[]'::jsonb) FROM (SELECT * FROM public.feedbacks ORDER BY created_at DESC) x),
-                    'issues', (SELECT COALESCE(json_agg(x)::jsonb, '[]'::jsonb) FROM (SELECT * FROM public.issues ORDER BY created_at DESC) x),
-                    'releases', (SELECT COALESCE(json_agg(x)::jsonb, '[]'::jsonb) FROM (SELECT * FROM public.releases ORDER BY release_date DESC) x),
-                    'test_suites', (SELECT COALESCE(json_agg(x)::jsonb, '[]'::jsonb) FROM (SELECT * FROM public.test_suites) x),
-                    'test_cases', (SELECT COALESCE(json_agg(x)::jsonb, '[]'::jsonb) FROM (SELECT * FROM public.test_cases ORDER BY code ASC) x),
-                    'test_runs', (SELECT COALESCE(json_agg(x)::jsonb, '[]'::jsonb) FROM (SELECT * FROM public.test_runs ORDER BY created_at DESC) x),
-                    'test_run_results', (SELECT COALESCE(json_agg(x)::jsonb, '[]'::jsonb) FROM (SELECT * FROM public.test_run_results) x),
-                    'comments', (SELECT COALESCE(json_agg(x)::jsonb, '[]'::jsonb) FROM (SELECT * FROM public.comments ORDER BY created_at ASC) x),
-                    'activity_logs', (SELECT COALESCE(json_agg(x)::jsonb, '[]'::jsonb) FROM (SELECT * FROM public.activity_logs ORDER BY created_at DESC LIMIT 100) x),
-                    'users', (SELECT COALESCE(json_agg(x)::jsonb, '[]'::jsonb) FROM (SELECT * FROM public.users ORDER BY created_at DESC) x),
-                    'recorder_sessions', (SELECT COALESCE(json_agg(x)::jsonb, '[]'::jsonb) FROM (SELECT * FROM public.recorder_sessions ORDER BY created_at DESC) x),
-                    'recorder_steps', (SELECT COALESCE(json_agg(x)::jsonb, '[]'::jsonb) FROM (SELECT * FROM public.recorder_steps ORDER BY step_number ASC) x),
-                    'api_collections', (SELECT COALESCE(json_agg(x)::jsonb, '[]'::jsonb) FROM (SELECT * FROM public.api_collections ORDER BY created_at DESC) x),
-                    'api_endpoints', (SELECT COALESCE(json_agg(x)::jsonb, '[]'::jsonb) FROM (SELECT * FROM public.api_endpoints ORDER BY created_at ASC) x),
-                    'api_environments', (SELECT COALESCE(json_agg(x)::jsonb, '[]'::jsonb) FROM (SELECT * FROM public.api_environments ORDER BY created_at DESC) x),
-                    'api_test_runs', (SELECT COALESCE(json_agg(x)::jsonb, '[]'::jsonb) FROM (SELECT * FROM public.api_test_runs ORDER BY created_at DESC) x),
-                    'api_test_results', (SELECT COALESCE(json_agg(x)::jsonb, '[]'::jsonb) FROM (SELECT * FROM public.api_test_results) x)
-                  ) INTO result;
-                  RETURN result;
-                END;
-                $$ LANGUAGE plpgsql SECURITY DEFINER;
-              `)
-                .then(() => console.log('Database migration: get_all_qa_data RPC registered'))
-                .catch(err => console.warn('Database migration warning registering RPC helper:', err));
-            })
+            .then(() => console.log('Database migration: public.issues.created_by check passed'))
             .catch((err) => console.warn('Database migration warning for issues.created_by:', err));
         })
         .catch((err) => console.warn('Database migration warning for implementation report, notifications, recorder, and api hub tables:', err));
@@ -373,14 +337,6 @@ export async function POST(req: NextRequest) {
     } else if (action === 'delete') {
       const { clause } = buildWhereClause(1);
       queryText = `DELETE FROM "${table}" ${clause} RETURNING *`;
-
-    } else if (action === 'rpc') {
-      const { functionName } = body;
-      if (functionName === 'get_all_qa_data') {
-        const result = await pool.query('SELECT public.get_all_qa_data() AS result');
-        return NextResponse.json({ data: result.rows[0].result });
-      }
-      return NextResponse.json({ error: `RPC function not supported: ${functionName}` }, { status: 400 });
 
     } else {
       return NextResponse.json({ error: `Invalid action: ${action}` }, { status: 400 });
