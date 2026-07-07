@@ -297,45 +297,95 @@ export const useDataStore = create<DataState>((set, get) => {
       set({ isLoading: true });
       if (isSupabaseConfigured()) {
         try {
-          const [
-            { data: p },
-            { data: fb },
-            { data: iss },
-            { data: rel },
-            { data: ts },
-            { data: tc },
-            { data: tr },
-            { data: trr },
-            { data: comm },
-            { data: act },
-            { data: u },
-            { data: recS },
-            { data: recSt },
-            { data: apiCol },
-            { data: apiEnd },
-            { data: apiEnv },
-            { data: apiRuns },
-            { data: apiRes }
-          ] = await Promise.all([
-            supabase!.from('projects').select('*').order('created_at', { ascending: false }),
-            supabase!.from('feedbacks').select('*').order('created_at', { ascending: false }),
-            supabase!.from('issues').select('*').order('created_at', { ascending: false }),
-            supabase!.from('releases').select('*').order('release_date', { ascending: false }),
-            supabase!.from('test_suites').select('*'),
-            supabase!.from('test_cases').select('*').order('code', { ascending: true }),
-            supabase!.from('test_runs').select('*').order('created_at', { ascending: false }),
-            supabase!.from('test_run_results').select('*'),
-            supabase!.from('comments').select('*').order('created_at', { ascending: true }),
-            supabase!.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(100),
-            supabase!.from('users').select('*').order('created_at', { ascending: false }),
-            supabase!.from('recorder_sessions').select('*').order('created_at', { ascending: false }),
-            supabase!.from('recorder_steps').select('*').order('step_number', { ascending: true }),
-            supabase!.from('api_collections').select('*').order('created_at', { ascending: false }),
-            supabase!.from('api_endpoints').select('*').order('created_at', { ascending: true }),
-            supabase!.from('api_environments').select('*').order('created_at', { ascending: false }),
-            supabase!.from('api_test_runs').select('*').order('created_at', { ascending: false }),
-            supabase!.from('api_test_results').select('*'),
-          ]);
+          let p: any[] = [];
+          let fb: any[] = [];
+          let iss: any[] = [];
+          let rel: any[] = [];
+          let ts: any[] = [];
+          let tc: any[] = [];
+          let tr: any[] = [];
+          let trr: any[] = [];
+          let comm: any[] = [];
+          let act: any[] = [];
+          let u: any[] = [];
+          let recS: any[] = [];
+          let recSt: any[] = [];
+          let apiCol: any[] = [];
+          let apiEnd: any[] = [];
+          let apiEnv: any[] = [];
+          let apiRuns: any[] = [];
+          let apiRes: any[] = [];
+
+          let rpcSuccess = false;
+          try {
+            const { data, error: rpcError } = await supabase!.rpc('get_all_qa_data');
+            if (!rpcError && data) {
+              p = data.projects || [];
+              fb = data.feedbacks || [];
+              iss = data.issues || [];
+              rel = data.releases || [];
+              ts = data.test_suites || [];
+              tc = data.test_cases || [];
+              tr = data.test_runs || [];
+              trr = data.test_run_results || [];
+              comm = data.comments || [];
+              act = data.activity_logs || [];
+              u = data.users || [];
+              recS = data.recorder_sessions || [];
+              recSt = data.recorder_steps || [];
+              apiCol = data.api_collections || [];
+              apiEnd = data.api_endpoints || [];
+              apiEnv = data.api_environments || [];
+              apiRuns = data.api_test_runs || [];
+              apiRes = data.api_test_results || [];
+              rpcSuccess = true;
+            }
+          } catch (rpcErr) {
+            console.warn("RPC get_all_qa_data failed, using separate query fallback:", rpcErr);
+          }
+
+          if (!rpcSuccess) {
+            const [
+              resP, resFb, resIss, resRel, resTs, resTc, resTr, resTrr, resComm, resAct, resU, resRecS, resRecSt, resApiCol, resApiEnd, resApiEnv, resApiRuns, resApiRes
+            ] = await Promise.all([
+              supabase!.from('projects').select('*').order('created_at', { ascending: false }),
+              supabase!.from('feedbacks').select('*').order('created_at', { ascending: false }),
+              supabase!.from('issues').select('*').order('created_at', { ascending: false }),
+              supabase!.from('releases').select('*').order('release_date', { ascending: false }),
+              supabase!.from('test_suites').select('*'),
+              supabase!.from('test_cases').select('*').order('code', { ascending: true }),
+              supabase!.from('test_runs').select('*').order('created_at', { ascending: false }),
+              supabase!.from('test_run_results').select('*'),
+              supabase!.from('comments').select('*').order('created_at', { ascending: true }),
+              supabase!.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(100),
+              supabase!.from('users').select('*').order('created_at', { ascending: false }),
+              supabase!.from('recorder_sessions').select('*').order('created_at', { ascending: false }),
+              supabase!.from('recorder_steps').select('*').order('step_number', { ascending: true }),
+              supabase!.from('api_collections').select('*').order('created_at', { ascending: false }),
+              supabase!.from('api_endpoints').select('*').order('created_at', { ascending: true }),
+              supabase!.from('api_environments').select('*').order('created_at', { ascending: false }),
+              supabase!.from('api_test_runs').select('*').order('created_at', { ascending: false }),
+              supabase!.from('api_test_results').select('*'),
+            ]);
+            p = resP.data || [];
+            fb = resFb.data || [];
+            iss = resIss.data || [];
+            rel = resRel.data || [];
+            ts = resTs.data || [];
+            tc = resTc.data || [];
+            tr = resTr.data || [];
+            trr = resTrr.data || [];
+            comm = resComm.data || [];
+            act = resAct.data || [];
+            u = resU.data || [];
+            recS = resRecS.data || [];
+            recSt = resRecSt.data || [];
+            apiCol = resApiCol.data || [];
+            apiEnd = resApiEnd.data || [];
+            apiEnv = resApiEnv.data || [];
+            apiRuns = resApiRuns.data || [];
+            apiRes = resApiRes.data || [];
+          }
           
           let shares: any[] = [];
           try {

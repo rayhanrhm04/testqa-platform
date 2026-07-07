@@ -374,6 +374,14 @@ export async function POST(req: NextRequest) {
       const { clause } = buildWhereClause(1);
       queryText = `DELETE FROM "${table}" ${clause} RETURNING *`;
 
+    } else if (action === 'rpc') {
+      const { functionName } = body;
+      if (functionName === 'get_all_qa_data') {
+        const result = await pool.query('SELECT public.get_all_qa_data() AS result');
+        return NextResponse.json({ data: result.rows[0].result });
+      }
+      return NextResponse.json({ error: `RPC function not supported: ${functionName}` }, { status: 400 });
+
     } else {
       return NextResponse.json({ error: `Invalid action: ${action}` }, { status: 400 });
     }

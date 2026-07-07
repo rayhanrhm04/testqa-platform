@@ -193,6 +193,30 @@ class MockSupabaseClient {
   from(table: string) {
     return new MockQueryBuilder(table);
   }
+
+  async rpc(functionName: string, params?: any) {
+    try {
+      const response = await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'rpc',
+          functionName,
+          params
+        })
+      });
+
+      const json = await response.json();
+      if (!response.ok) {
+        throw new Error(json.error || 'RPC error');
+      }
+
+      return { data: json.data, error: null };
+    } catch (err: any) {
+      console.error(`Mock Client RPC Error for ${functionName}:`, err);
+      return { data: null, error: { message: err.message || 'RPC error' } };
+    }
+  }
 }
 
 export const isSupabaseConfigured = (): boolean => {
