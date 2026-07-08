@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useDataStore } from '@/store/useDataStore';
+import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUIStore } from '@/store/useUIStore';
 import { 
@@ -38,6 +39,23 @@ export default function IssuesPage() {
   const [isDetailOpen, setIsDetailOpen] = React.useState(false);
   const [activeDetailIssue, setActiveDetailIssue] = React.useState<any | null>(null);
   const [commentText, setCommentText] = React.useState('');
+
+  const handleOpenDetail = async (issue: any) => {
+    setActiveDetailIssue(issue);
+    setIsDetailOpen(true);
+    try {
+      const { data, error } = await supabase!
+        .from('issues')
+        .select('*')
+        .eq('id', issue.id)
+        .single();
+      if (!error && data && data.attachment_url) {
+        setActiveDetailIssue((prev: any) => prev && prev.id === issue.id ? { ...prev, attachment_url: data.attachment_url } : prev);
+      }
+    } catch (e) {
+      console.warn("Failed to lazy load issue attachments:", e);
+    }
+  };
   const [previewImageUrl, setPreviewImageUrl] = React.useState<string | null>(null);
   
   // Quick Project states
@@ -509,7 +527,7 @@ export default function IssuesPage() {
                           key={issue.id}
                           draggable
                           onDragStart={(e) => handleDragStart(e, issue.id)}
-                          onClick={() => { setActiveDetailIssue(issue); setIsDetailOpen(true); }}
+                          onClick={() => handleOpenDetail(issue)}
                           className="group relative bg-card rounded-lg border border-border/80 p-3 shadow-sm hover:shadow-md hover:border-primary/20 transition-all cursor-grab active:cursor-grabbing kanban-card text-left"
                         >
                           {/* Edit Action button on Hover */}
@@ -628,7 +646,7 @@ export default function IssuesPage() {
                       <tr 
                         key={issue.id} 
                         className="hover:bg-muted/10 transition-colors cursor-pointer"
-                        onClick={() => { setActiveDetailIssue(issue); setIsDetailOpen(true); }}
+                        onClick={() => handleOpenDetail(issue)}
                       >
                         <td className="p-4 font-bold text-primary">{issue.code}</td>
                         <td className="p-4 font-medium">{issue.title}</td>
@@ -688,7 +706,7 @@ export default function IssuesPage() {
                             variant="outline" 
                             size="sm" 
                             className="h-8 font-semibold text-xs cursor-pointer"
-                            onClick={() => { setActiveDetailIssue(issue); setIsDetailOpen(true); }}
+                            onClick={() => handleOpenDetail(issue)}
                           >
                             Inspect
                           </Button>
