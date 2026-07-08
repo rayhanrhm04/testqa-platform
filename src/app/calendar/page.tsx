@@ -49,6 +49,12 @@ export default function CalendarHubPage() {
   const [eventReminder, setEventReminder] = React.useState('');
   const [eventColor, setEventColor] = React.useState('#3b82f6');
   const [eventStatus, setEventStatus] = React.useState<CalendarEventStatus>('Upcoming');
+  const [eventIsAllDay, setEventIsAllDay] = React.useState(false);
+  const [eventTimeZone, setEventTimeZone] = React.useState('GMT+07:00');
+  const [eventRecurrence, setEventRecurrence] = React.useState<'none' | 'daily' | 'weekly' | 'monthly' | 'monthly_weekday' | 'annually' | 'weekday' | 'custom'>('none');
+  const [eventRecurrenceEnd, setEventRecurrenceEnd] = React.useState('');
+  const [eventRecurrenceInterval, setEventRecurrenceInterval] = React.useState(1);
+  const [eventRecurrenceType, setEventRecurrenceType] = React.useState<'day' | 'week' | 'month' | 'year'>('week');
   const [formError, setFormError] = React.useState('');
 
   // Export PDF selector modal state
@@ -60,6 +66,45 @@ export default function CalendarHubPage() {
     fetchProjects();
     fetchData();
   }, [fetchData, fetchProjects]);
+
+  React.useEffect(() => {
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const offsetMinutes = new Date().getTimezoneOffset();
+      const offsetHours = -offsetMinutes / 60;
+      const sign = offsetHours >= 0 ? '+' : '-';
+      const absHours = Math.abs(Math.floor(offsetHours));
+      const absMinutes = Math.abs(offsetMinutes % 60);
+      const offsetStr = `GMT${sign}${String(absHours).padStart(2, '0')}:${String(absMinutes).padStart(2, '0')}`;
+      setEventTimeZone(`${tz} (${offsetStr})`);
+    } catch (e) {
+      setEventTimeZone('GMT+07:00');
+    }
+  }, []);
+
+  const dateCalculatedOptions = React.useMemo(() => {
+    if (!eventDate) return { weekly: '', monthlyWeekday: '', annually: '' };
+    try {
+      const parts = eventDate.split('-');
+      if (parts.length !== 3) return { weekly: '', monthlyWeekday: '', annually: '' };
+      const date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      if (isNaN(date.getTime())) return { weekly: '', monthlyWeekday: '', annually: '' };
+
+      const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+      const ordinals = ['first', 'second', 'third', 'fourth', 'fifth'];
+      const ordinal = ordinals[Math.ceil(date.getDate() / 7) - 1] || 'first';
+      const monthName = date.toLocaleDateString('en-US', { month: 'long' });
+      const dayNum = date.getDate();
+
+      return {
+        weekly: `Weekly on ${dayName}`,
+        monthlyWeekday: `Monthly on the ${ordinal} ${dayName}`,
+        annually: `Annually on ${monthName} ${dayNum}`,
+      };
+    } catch (e) {
+      return { weekly: '', monthlyWeekday: '', annually: '' };
+    }
+  }, [eventDate]);
 
   const handlePrev = () => {
     if (viewMode === 'month') {
@@ -110,6 +155,11 @@ export default function CalendarHubPage() {
     setEventReminder('');
     setEventColor('#3b82f6');
     setEventStatus('Upcoming');
+    setEventIsAllDay(false);
+    setEventRecurrence('none');
+    setEventRecurrenceEnd('');
+    setEventRecurrenceInterval(1);
+    setEventRecurrenceType('week');
     setFormError('');
     setIsEventModalOpen(true);
   };
@@ -134,6 +184,11 @@ export default function CalendarHubPage() {
     setEventReminder(event.reminderNote || '');
     setEventColor(event.colorLabel || '#3b82f6');
     setEventStatus(event.status);
+    setEventIsAllDay(!!event.isAllDay);
+    setEventRecurrence(event.recurrence || 'none');
+    setEventRecurrenceEnd(event.recurrenceEnd || '');
+    setEventRecurrenceInterval(event.recurrenceInterval || 1);
+    setEventRecurrenceType(event.recurrenceType || 'week');
     setFormError('');
     setIsEventModalOpen(true);
   };
@@ -160,14 +215,20 @@ export default function CalendarHubPage() {
       projectId: eventProjectId || undefined,
       projectName: relatedProject ? relatedProject.name : undefined,
       date: eventDate,
-      startTime: eventStartTime || undefined,
-      endTime: eventEndTime || undefined,
+      startTime: eventIsAllDay ? undefined : (eventStartTime || undefined),
+      endTime: eventIsAllDay ? undefined : (eventEndTime || undefined),
       workload: eventWorkload,
       description: eventDescription.trim() || undefined,
       locationOrLink: eventLocation.trim() || undefined,
       reminderNote: eventReminder.trim() || undefined,
       colorLabel: eventColor,
       status: eventStatus,
+      isAllDay: eventIsAllDay,
+      timeZone: eventTimeZone,
+      recurrence: eventRecurrence,
+      recurrenceEnd: eventRecurrenceEnd || undefined,
+      recurrenceInterval: eventRecurrence === 'custom' ? eventRecurrenceInterval : undefined,
+      recurrenceType: eventRecurrence === 'custom' ? eventRecurrenceType : undefined,
     };
 
     try {
@@ -752,6 +813,104 @@ export default function CalendarHubPage() {
             />
           </div>
 
+          {/* All day, Time zone & Recurrence Selection Row */}
+          <div className="bg-slate-50/50 dark:bg-zinc-900/10 p-3.5 rounded-xl border border-border/40 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={eventIsAllDay}
+                  onChange={(e) => setEventIsAllDay(e.target.checked)}
+                  className="rounded border-input text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                />
+                <span className="text-xs font-bold text-foreground">All day</span>
+              </label>
+
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-muted-foreground font-semibold">Time zone:</span>
+                <span className="text-xs font-black text-primary hover:underline cursor-pointer" title="Calculated from browser locale">
+                  {eventTimeZone}
+                </span>
+              </div>
+            </div>
+
+            {/* Recurrence Dropdown */}
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase font-bold text-muted-foreground">Repeat Option</label>
+              <select
+                value={eventRecurrence}
+                onChange={(e) => setEventRecurrence(e.target.value as any)}
+                className="h-9 w-full rounded-lg border border-input bg-card px-2.5 py-1 text-xs shadow-xs focus-visible:outline-none text-foreground appearance-none"
+              >
+                <option value="none">Does not repeat</option>
+                <option value="daily">Daily</option>
+                {dateCalculatedOptions.weekly && (
+                  <option value="weekly">{dateCalculatedOptions.weekly}</option>
+                )}
+                {dateCalculatedOptions.monthlyWeekday && (
+                  <option value="monthly_weekday">{dateCalculatedOptions.monthlyWeekday}</option>
+                )}
+                <option value="monthly">Monthly on the same date</option>
+                {dateCalculatedOptions.annually && (
+                  <option value="annually">{dateCalculatedOptions.annually}</option>
+                )}
+                <option value="weekday">Every weekday (Monday to Friday)</option>
+                <option value="custom">Custom...</option>
+              </select>
+            </div>
+
+            {/* Custom Recurrence Options */}
+            {eventRecurrence === 'custom' && (
+              <div className="grid gap-3 sm:grid-cols-3 p-3 rounded-lg border border-dashed border-border/50 bg-card mt-2">
+                <div className="space-y-1">
+                  <label className="text-[9px] uppercase font-bold text-muted-foreground">Repeat every</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={eventRecurrenceInterval}
+                    onChange={(e) => setEventRecurrenceInterval(Number(e.target.value))}
+                    className="w-full h-8 rounded-md border border-input bg-card px-2 text-xs focus-visible:outline-none text-foreground"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] uppercase font-bold text-muted-foreground">Unit</label>
+                  <select
+                    value={eventRecurrenceType}
+                    onChange={(e) => setEventRecurrenceType(e.target.value as any)}
+                    className="h-8 w-full rounded-md border border-input bg-card px-2 text-xs focus-visible:outline-none text-foreground"
+                  >
+                    <option value="day">Day(s)</option>
+                    <option value="week">Week(s)</option>
+                    <option value="month">Month(s)</option>
+                    <option value="year">Year(s)</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] uppercase font-bold text-muted-foreground">Until Date</label>
+                  <input
+                    type="date"
+                    value={eventRecurrenceEnd}
+                    onChange={(e) => setEventRecurrenceEnd(e.target.value)}
+                    className="w-full h-8 rounded-md border border-input bg-card px-2 text-[10px] focus-visible:outline-none text-foreground"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Repeat End Date selector for standard recurrence */}
+            {eventRecurrence !== 'none' && eventRecurrence !== 'custom' && (
+              <div className="space-y-1 mt-2">
+                <label className="text-[9px] uppercase font-bold text-muted-foreground">Repeat Until Date (Optional)</label>
+                <input
+                  type="date"
+                  value={eventRecurrenceEnd}
+                  onChange={(e) => setEventRecurrenceEnd(e.target.value)}
+                  className="w-full h-8 rounded-md border border-input bg-card px-2 text-[10px] focus-visible:outline-none text-foreground"
+                />
+              </div>
+            )}
+          </div>
+
           {/* Row 1: Type & Related Project */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1">
@@ -792,24 +951,28 @@ export default function CalendarHubPage() {
                 className="w-full h-9 rounded-lg border border-input bg-card px-3 py-1 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-foreground"
               />
             </div>
-            <div className="space-y-1">
-              <label className="text-[10px] uppercase font-bold text-muted-foreground">Start Time</label>
-              <input 
-                type="time"
-                value={eventStartTime}
-                onChange={(e) => setEventStartTime(e.target.value)}
-                className="w-full h-9 rounded-lg border border-input bg-card px-3 py-1 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-foreground"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] uppercase font-bold text-muted-foreground">End Time</label>
-              <input 
-                type="time"
-                value={eventEndTime}
-                onChange={(e) => setEventEndTime(e.target.value)}
-                className="w-full h-9 rounded-lg border border-input bg-card px-3 py-1 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-foreground"
-              />
-            </div>
+            {!eventIsAllDay && (
+              <>
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-muted-foreground">Start Time</label>
+                  <input 
+                    type="time"
+                    value={eventStartTime}
+                    onChange={(e) => setEventStartTime(e.target.value)}
+                    className="w-full h-9 rounded-lg border border-input bg-card px-3 py-1 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-foreground"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-muted-foreground">End Time</label>
+                  <input 
+                    type="time"
+                    value={eventEndTime}
+                    onChange={(e) => setEventEndTime(e.target.value)}
+                    className="w-full h-9 rounded-lg border border-input bg-card px-3 py-1 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-foreground"
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           {/* Row 3: Workload & Color Label */}
@@ -945,13 +1108,25 @@ export default function CalendarHubPage() {
               <div>
                 <p className="text-[10px] uppercase font-bold text-muted-foreground">Time Slot</p>
                 <p className="text-foreground font-semibold mt-0.5">
-                  {selectedEvent.startTime ? `${selectedEvent.startTime} - ${selectedEvent.endTime || 'End'}` : 'All Day Schedule'}
+                  {selectedEvent.isAllDay ? 'All Day Schedule' : (selectedEvent.startTime ? `${selectedEvent.startTime} - ${selectedEvent.endTime || 'End'}` : 'All Day Schedule')}
                 </p>
               </div>
               <div>
                 <p className="text-[10px] uppercase font-bold text-muted-foreground">Daily Workload</p>
                 <p className="text-foreground font-semibold mt-0.5">{selectedEvent.workload}</p>
               </div>
+              {selectedEvent.recurrence && selectedEvent.recurrence !== 'none' && (
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground">Recurrence</p>
+                  <p className="text-foreground font-semibold mt-0.5 uppercase text-[10px]">
+                    {selectedEvent.recurrence === 'custom' 
+                      ? `Every ${selectedEvent.recurrenceInterval} ${selectedEvent.recurrenceType}(s)`
+                      : selectedEvent.recurrence.replace('_', ' ')
+                    }
+                    {selectedEvent.recurrenceEnd && ` (until ${selectedEvent.recurrenceEnd})`}
+                  </p>
+                </div>
+              )}
               {selectedEvent.locationOrLink && (
                 <div>
                   <p className="text-[10px] uppercase font-bold text-muted-foreground">Meeting Link / Room</p>

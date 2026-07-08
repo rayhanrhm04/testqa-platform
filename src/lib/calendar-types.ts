@@ -34,6 +34,12 @@ export interface CalendarEvent {
   colorLabel?: string; // hex color
   status: CalendarEventStatus;
   source: CalendarEventSource;
+  isAllDay?: boolean;
+  timeZone?: string;
+  recurrence?: 'none' | 'daily' | 'weekly' | 'monthly' | 'monthly_weekday' | 'annually' | 'weekday' | 'custom';
+  recurrenceEnd?: string; // YYYY-MM-DD
+  recurrenceInterval?: number;
+  recurrenceType?: 'day' | 'week' | 'month' | 'year';
   createdAt: string; // ISO String
   updatedAt: string; // ISO String
 }

@@ -24,6 +24,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     
     // 1. Fetch manual events
     const manualEvents = storage.getCalendarEvents();
+    const expandedManualEvents = storage.expandRecurringEvents(manualEvents);
     
     // 2. Load latest projects/worklogs from the project monitor store
     const monitorStore = useProjectMonitorStore.getState();
@@ -35,7 +36,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     const worklogEvents = storage.generateCalendarEventsFromWorklogs(worklogs, projects);
 
     // 4. Combine all sources
-    const allEvents = [...manualEvents, ...projectEvents, ...worklogEvents]
+    const allEvents = [...expandedManualEvents, ...projectEvents, ...worklogEvents]
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime() || 
                       (a.startTime || '').localeCompare(b.startTime || ''));
 

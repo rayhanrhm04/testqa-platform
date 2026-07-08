@@ -123,3 +123,97 @@ export function getCalendarWorkloadByDate(date: string, allEvents: CalendarEvent
   if (count >= 3) return 'Busy';
   return 'Normal';
 }
+
+function getNthDayOfWeek(year: number, month: number, dayOfWeek: number, n: number): Date {
+  const d = new Date(year, month, 1);
+  while (d.getDay() !== dayOfWeek) {
+    d.setDate(d.getDate() + 1);
+  }
+  const targetDate = d.getDate() + (n - 1) * 7;
+  d.setDate(targetDate);
+  if (d.getMonth() !== month) {
+    const last = new Date(year, month + 1, 0);
+    while (last.getDay() !== dayOfWeek) {
+      last.setDate(last.getDate() - 1);
+    }
+    return last;
+  }
+  return d;
+}
+
+export function expandRecurringEvents(events: CalendarEvent[]): CalendarEvent[] {
+  const expanded: CalendarEvent[] = [];
+
+  events.forEach(event => {
+    if (!event.recurrence || event.recurrence === 'none') {
+      expanded.push(event);
+      return;
+    }
+
+    const start = new Date(event.date);
+    let limit = new Date(start);
+    if (event.recurrenceEnd) {
+      limit = new Date(event.recurrenceEnd);
+    } else {
+      limit.setFullYear(limit.getFullYear() + 1); // 1 year limit by default
+    }
+
+    let curr = new Date(start);
+    let index = 0;
+
+    // Ordinal weekday parameters
+    const startDay = start.getDay();
+    const startOrdinal = Math.ceil(start.getDate() / 7);
+
+    while (curr.getTime() <= limit.getTime()) {
+      const y = curr.getFullYear();
+      const m = String(curr.getMonth() + 1).padStart(2, '0');
+      const d = String(curr.getDate()).padStart(2, '0');
+      const dateStr = `${y}-${m}-${d}`;
+
+      expanded.push({
+        ...event,
+        id: index === 0 ? event.id : `${event.id}-occ-${index}`,
+        date: dateStr,
+      });
+
+      index++;
+
+      if (event.recurrence === 'daily') {
+        curr.setDate(curr.getDate() + 1);
+      } else if (event.recurrence === 'weekly') {
+        curr.setDate(curr.getDate() + 7);
+      } else if (event.recurrence === 'weekday') {
+        do {
+          curr.setDate(curr.getDate() + 1);
+        } while ((curr.getDay() === 0 || curr.getDay() === 6) && curr.getTime() <= limit.getTime());
+      } else if (event.recurrence === 'monthly') {
+        curr.setMonth(curr.getMonth() + 1);
+      } else if (event.recurrence === 'monthly_weekday') {
+        // Go to next month, then find the corresponding ordinal day
+        const targetYear = curr.getMonth() === 11 ? curr.getFullYear() + 1 : curr.getFullYear();
+        const targetMonth = (curr.getMonth() + 1) % 12;
+        curr = getNthDayOfWeek(targetYear, targetMonth, startDay, startOrdinal);
+      } else if (event.recurrence === 'annually') {
+        curr.setFullYear(curr.getFullYear() + 1);
+      } else if (event.recurrence === 'custom' && event.recurrenceInterval) {
+        const val = event.recurrenceInterval;
+        if (event.recurrenceType === 'day') {
+          curr.setDate(curr.getDate() + val);
+        } else if (event.recurrenceType === 'week') {
+          curr.setDate(curr.getDate() + val * 7);
+        } else if (event.recurrenceType === 'month') {
+          curr.setMonth(curr.getMonth() + val);
+        } else if (event.recurrenceType === 'year') {
+          curr.setFullYear(curr.getFullYear() + val);
+        } else {
+          curr.setDate(curr.getDate() + 1);
+        }
+      } else {
+        break;
+      }
+    }
+  });
+
+  return expanded;
+}
