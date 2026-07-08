@@ -12,6 +12,7 @@ interface CalendarState {
   addEvent: (event: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt' | 'source'>) => CalendarEvent;
   updateEvent: (id: string, updates: Partial<CalendarEvent>) => CalendarEvent;
   deleteEvent: (id: string) => void;
+  setManualWorkload: (date: string, workload: string) => void;
 }
 
 export const useCalendarStore = create<CalendarState>((set, get) => ({
@@ -57,6 +58,11 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
 
   deleteEvent: (id) => {
     storage.deleteCalendarEvent(id);
+    get().fetchData();
+  },
+
+  setManualWorkload: (date, workload) => {
+    storage.saveManualWorkload(date, workload);
     get().fetchData();
   },
 }));

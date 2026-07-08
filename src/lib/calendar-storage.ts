@@ -110,8 +110,33 @@ export function generateCalendarEventsFromWorklogs(worklogs: QAWorklog[], projec
   });
 }
 
+const WORKLOAD_OVERRIDE_KEY = 'qa_calendar_manual_workloads';
+
+export function getManualWorkloads(): Record<string, string> {
+  if (!isBrowser()) return {};
+  const stored = localStorage.getItem(WORKLOAD_OVERRIDE_KEY);
+  return stored ? JSON.parse(stored) : {};
+}
+
+export function saveManualWorkload(date: string, workload: string): void {
+  if (!isBrowser()) return;
+  const workloads = getManualWorkloads();
+  if (workload === 'Auto') {
+    delete workloads[date];
+  } else {
+    workloads[date] = workload;
+  }
+  localStorage.setItem(WORKLOAD_OVERRIDE_KEY, JSON.stringify(workloads));
+}
+
 // 4. Grouped querying helpers
 export function getCalendarWorkloadByDate(date: string, allEvents: CalendarEvent[]): 'Empty' | 'Normal' | 'Busy' | 'Very Busy' | 'Critical' {
+  // Check manual overrides first
+  const overrides = getManualWorkloads();
+  if (overrides[date] && overrides[date] !== 'Auto') {
+    return overrides[date] as any;
+  }
+
   const dayEvents = allEvents.filter(e => e.date === date);
   if (dayEvents.length === 0) return 'Empty';
 

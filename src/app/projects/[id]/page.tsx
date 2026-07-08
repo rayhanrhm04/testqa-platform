@@ -19,7 +19,7 @@ import { getWeekNumber, generateWeeklySummary, WeeklySummaryResult } from '@/lib
 
 // jsPDF imports
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 export default function ProjectDetailPage() {
   const router = useRouter();
@@ -800,7 +800,7 @@ export default function ProjectDetailPage() {
     doc.line(14, 24, 196, 24);
 
     // Table of general project attributes
-    doc.autoTable({
+    autoTable(doc, {
       startY: 30,
       head: [['Parameter', 'Description / Value']],
       body: [
@@ -915,7 +915,7 @@ export default function ProjectDetailPage() {
         log.mood,
       ]);
 
-      doc.autoTable({
+      autoTable(doc, {
         startY: 30,
         head: [['Date', 'Mode', 'Task Details', 'Achievements', 'Blockers', 'Prog', 'Mood']],
         body: tableBody,

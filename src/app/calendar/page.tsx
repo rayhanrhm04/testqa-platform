@@ -9,7 +9,7 @@ import {
   CalendarEvent, CalendarEventType, CalendarWorkload, 
   CalendarEventStatus, CALENDAR_EVENT_TYPES, EVENT_TYPE_COLORS 
 } from '@/lib/calendar-types';
-import { getCalendarWorkloadByDate } from '@/lib/calendar-storage';
+import { getCalendarWorkloadByDate, getManualWorkloads } from '@/lib/calendar-storage';
 import { 
   Calendar as CalendarIcon, Plus, FileText, ChevronLeftSquare, 
   ChevronRightSquare, Edit3, Trash2, CheckCircle, Info, ExternalLink, 
@@ -19,12 +19,12 @@ import { Dialog } from '@/components/ui/dialog';
 
 // jsPDF imports
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 export default function CalendarHubPage() {
   const router = useRouter();
   
-  const { allEvents, isLoading, fetchData, addEvent, updateEvent, deleteEvent } = useCalendarStore();
+  const { allEvents, isLoading, fetchData, addEvent, updateEvent, deleteEvent, setManualWorkload } = useCalendarStore();
   const { projects, fetchData: fetchProjects } = useProjectMonitorStore();
 
   const [currentDate, setCurrentDate] = React.useState(new Date());
@@ -322,7 +322,11 @@ export default function CalendarHubPage() {
       cells.push(
         <div 
           key={`day-${day}`}
-          className={`min-h-[100px] border border-border/40 p-2 flex flex-col justify-between transition-all group ${
+          onClick={() => {
+            setCurrentDate(new Date(year, month, day));
+            setViewMode('day');
+          }}
+          className={`min-h-[100px] border border-border/40 p-2 flex flex-col justify-between transition-all group cursor-pointer ${
             workload !== 'Empty' ? getWorkloadBorderColor(workload) : 'bg-card hover:bg-slate-50'
           }`}
         >
@@ -348,7 +352,10 @@ export default function CalendarHubPage() {
               return (
                 <button
                   key={e.id}
-                  onClick={() => handleOpenDetail(e)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleOpenDetail(e);
+                  }}
                   className={`w-full text-[9px] font-black px-1.5 py-0.5 rounded-sm text-left truncate flex items-center gap-1 cursor-pointer transition-colors ${colors.bg} ${colors.text}`}
                   title={e.title}
                 >
@@ -361,7 +368,10 @@ export default function CalendarHubPage() {
 
           {/* Quick Add floating button inside cells */}
           <button
-            onClick={() => handleOpenAddEvent(dateStr)}
+            onClick={(event) => {
+              event.stopPropagation();
+              handleOpenAddEvent(dateStr);
+            }}
             className="w-full text-center py-0.5 mt-1 border border-dashed border-border/30 hover:border-primary/50 text-[9px] text-muted-foreground hover:text-primary transition-all rounded-sm opacity-0 group-hover:opacity-100 cursor-pointer"
           >
             + Add Event
@@ -488,6 +498,38 @@ export default function CalendarHubPage() {
               {getWorkloadText(workload)}
             </div>
           )}
+        </div>
+
+        {/* Workload Override Selector */}
+        <div className="bg-slate-50/50 dark:bg-zinc-900/10 p-3.5 rounded-xl border border-border/40 space-y-2">
+          <p className="text-[10px] uppercase font-bold text-muted-foreground">Override Date Workload Indicator</p>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {(['Auto', 'Normal', 'Busy', 'Very Busy', 'Critical'] as const).map(level => {
+              const currentOverride = getManualWorkloads()[dateStr] || 'Auto';
+              const isActive = currentOverride === level;
+              
+              let activeColor = 'bg-primary text-primary-foreground';
+              if (level === 'Normal') activeColor = 'bg-emerald-500 text-white';
+              if (level === 'Busy') activeColor = 'bg-amber-500 text-white';
+              if (level === 'Very Busy') activeColor = 'bg-orange-500 text-white';
+              if (level === 'Critical') activeColor = 'bg-red-500 text-white';
+
+              return (
+                <button
+                  key={level}
+                  type="button"
+                  onClick={() => setManualWorkload(dateStr, level)}
+                  className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md border transition-all cursor-pointer ${
+                    isActive 
+                      ? `${activeColor} border-transparent shadow-xs scale-105` 
+                      : 'bg-card text-muted-foreground border-border hover:bg-slate-50 hover:text-foreground'
+                  }`}
+                >
+                  {level === 'Auto' ? 'Calculated (Auto)' : level}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Schedule List */}
@@ -676,7 +718,7 @@ export default function CalendarHubPage() {
       e.status,
     ]);
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: 32,
       head: [['Date', 'Time Slot', 'Event Description', 'Type', 'Project', 'Workload', 'Status']],
       body: tableBody,
