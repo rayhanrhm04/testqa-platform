@@ -4,6 +4,8 @@ import * as React from 'react';
 import { useDataStore } from '@/store/useDataStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUIStore } from '@/store/useUIStore';
+import { useSyncStore } from '@/store/useSyncStore';
+import { exportAllData, importAllData } from '@/lib/safe-cache';
 import { 
   Settings, Folder, Users, Database, Plus, Edit, 
   Trash2, Copy, Download, ShieldCheck, ShieldAlert, Share2, Globe
@@ -19,10 +21,11 @@ export default function SettingsPage() {
   const router = useRouter();
   const { 
     projects, users, updateUserRole, addProject, updateProject, deleteProject, logActivity,
-    projectShares, shareProject, unshareProject, updateProjectShareRole
+    projectShares, shareProject, unshareProject, updateProjectShareRole, fetchData
   } = useDataStore();
   const { activeRole, currentUser, setRole } = useAuthStore();
   const { addToast } = useUIStore();
+  const { debugMode, toggleDebugMode, logs, clearLogs } = useSyncStore();
 
   const [activeTab, setActiveTab] = React.useState('projects');
   const [origin, setOrigin] = React.useState('');
@@ -146,10 +149,70 @@ CREATE TABLE public.users (
     addToast('SQL schema script exported!', 'success');
   };
 
+  const handleExportJSON = () => {
+    try {
+      const json = exportAllData();
+      const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `MAPID_QA_Backup_${Date.now()}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      addToast('All local cache exported as JSON!', 'success');
+    } catch (e) {
+      addToast('Failed to export cache data.', 'error');
+    }
+  };
+
+  const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const content = evt.target?.result as string;
+        if (importAllData(content)) {
+          addToast('Backup data imported! Syncing store...', 'success');
+          await fetchData();
+        } else {
+          addToast('Failed to import backup. Invalid JSON data schema.', 'error');
+        }
+      } catch (err) {
+        addToast('Invalid backup file formatting.', 'error');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleClearCache = () => {
+    if (confirm('Are you sure you want to clear your local browser read cache?\n\nThis will remove local browser copies. Live records in the PostgreSQL database will remain untouched.')) {
+      if (confirm('Double confirmation: Clean browser localStorage settings for this application now?')) {
+        try {
+          for (let i = localStorage.length - 1; i >= 0; i--) {
+            const key = localStorage.key(i);
+            if (key && (key.startsWith('qa_') || key.startsWith('backup_qa_'))) {
+              localStorage.removeItem(key);
+            }
+          }
+          addToast('Browser local caches cleared successfully. Reloading...', 'success');
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } catch (e) {
+          addToast('Error resetting localStorage parameters.', 'error');
+        }
+      }
+    }
+  };
+
   const settingTabs = [
     { id: 'projects', label: 'Projects Manager', icon: <Folder className="h-4 w-4" /> },
     { id: 'users', label: 'Users & Roles', icon: <Users className="h-4 w-4" /> },
     { id: 'database', label: 'Supabase DB Sync', icon: <Database className="h-4 w-4" /> },
+    { id: 'backup', label: 'Backup & Recovery', icon: <Download className="h-4 w-4" /> },
   ];
 
   return (
@@ -363,6 +426,118 @@ CREATE TABLE public.users (
               2. Navigate to your **Supabase Console** &rarr; **SQL Editor** &rarr; **New Query**.<br/>
               3. Paste and click **Run**. This generates all necessary schemas, tables, permissions policies, and hooks.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Tab Contents: Backup & Recovery */}
+      {activeTab === 'backup' && (
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Local Cache Backup & Recovery</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Manage local browser cache datasets, export backup files, and inspect background sync logs.</p>
+          </div>
+
+          <div className="grid gap-6 sm:grid-cols-2">
+            {/* Export/Import panel */}
+            <div className="bg-card rounded-xl border border-border p-5 space-y-4">
+              <h4 className="font-bold text-xs uppercase tracking-wider text-foreground">Import & Export</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Export all browser configurations, preferences, and local read-cache records to a single portable JSON file.
+              </p>
+              
+              <div className="flex flex-wrap gap-2 pt-2">
+                <Button 
+                  onClick={handleExportJSON}
+                  className="text-xs font-bold cursor-pointer h-8.5"
+                >
+                  <Download className="h-4 w-4 mr-1.5" /> Export JSON Backup
+                </Button>
+                
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleImportJSON}
+                    id="import-backup-file"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  <Button 
+                    variant="outline"
+                    className="text-xs font-bold cursor-pointer h-8.5"
+                  >
+                    Upload JSON Backup
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Cache Control panel */}
+            <div className="bg-card rounded-xl border border-border p-5 space-y-4">
+              <h4 className="font-bold text-xs uppercase tracking-wider text-foreground">Cache Clean Up</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Reset or clear local browser read caches. Live data inside the Sumopod PostgreSQL database will not be affected.
+              </p>
+              
+              <div className="pt-2">
+                <Button 
+                  variant="destructive"
+                  onClick={handleClearCache}
+                  className="text-xs font-bold cursor-pointer h-8.5"
+                >
+                  <Trash2 className="h-4 w-4 mr-1.5" /> Clear Browser Cache
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Sync debug logs */}
+          <div className="bg-card rounded-xl border border-border p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <h4 className="font-bold text-xs uppercase tracking-wider text-foreground flex items-center gap-2">
+                  Sync Engine Logs
+                </h4>
+                <p className="text-[11px] text-muted-foreground">Enable debug mode to inspect background network sync speeds and payload counts.</p>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold select-none text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={debugMode}
+                    onChange={toggleDebugMode}
+                    className="rounded border-input text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                  />
+                  <span>Debug Console</span>
+                </label>
+                
+                {logs.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    onClick={clearLogs}
+                    className="h-7 text-[10px] font-bold text-red-500 hover:text-red-600 px-2 cursor-pointer"
+                  >
+                    Clear Logs
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Log display */}
+            <div className="bg-muted/30 border border-border/60 rounded-lg p-3 max-h-[220px] overflow-y-auto font-mono text-[9px] text-foreground/80 space-y-1 scrollbar-thin">
+              {logs.length > 0 ? (
+                logs.map((log, idx) => (
+                  <div key={idx} className="border-b border-border/10 pb-0.5 last:border-0 truncate" title={log}>
+                    {log}
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-muted-foreground font-sans">
+                  No sync logs available. Debug mode logs are generated as you navigate.
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

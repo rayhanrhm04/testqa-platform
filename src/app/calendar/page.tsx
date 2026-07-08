@@ -17,9 +17,7 @@ import {
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 
-// jsPDF imports
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+// jsPDF will be imported dynamically during export
 
 export default function CalendarHubPage() {
   const router = useRouter();
@@ -653,7 +651,9 @@ export default function CalendarHubPage() {
   };
 
   // 5. EXPORT CALENDAR PDF
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
+    const jsPDF = (await import('jspdf')).jsPDF;
+    const autoTable = (await import('jspdf-autotable')).default;
     const doc = new jsPDF() as any;
 
     // Cover Page

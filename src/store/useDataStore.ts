@@ -9,6 +9,9 @@ import {
   ApiCollection, ApiEndpoint, ApiEnvironment, ApiTestRun, ApiTestResult
 } from '@/lib/validators';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { safeReadCache, safeWriteCache } from '@/lib/safe-cache';
+import { syncEntity } from '@/lib/safe-sync';
+import { useSyncStore } from './useSyncStore';
 
 const toUuidOrNull = (id: string | null | undefined) => {
   if (!id) return null;
@@ -294,223 +297,105 @@ export const useDataStore = create<DataState>((set, get) => {
     isLoading: true,
 
     fetchData: async () => {
-      set({ isLoading: true });
+      const getLocal = <T>(key: string, fallback: T): T => {
+        return safeReadCache<T>(key, fallback).data;
+      };
+
+      const seedMockUsers = [
+        { id: 'user-admin-1', name: 'Sarah Connor (Admin)', email: 'sarah.connor@portal.qa', role: 'Admin', created_at: new Date('2026-01-01').toISOString() },
+        { id: 'user-qa-1', name: 'Alex Mercer (QA Engineer)', email: 'alex.mercer@portal.qa', role: 'QA Engineer', created_at: new Date('2026-01-05').toISOString() },
+        { id: 'user-dev-1', name: 'Linus Torvalds (Developer)', email: 'linus.t@portal.qa', role: 'Developer', created_at: new Date('2026-01-10').toISOString() },
+        { id: 'user-rep-1', name: 'GIS Team (Reporter)', email: 'gis.team@portal.qa', role: 'Reporter', created_at: new Date('2026-01-15').toISOString() },
+      ];
+      const registered = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('qa_registered_users') || '[]') : [];
+      const cleanRegistered = registered.map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        created_at: u.created_at,
+      }));
+      const allUsersFallback = [...seedMockUsers, ...cleanRegistered];
+
+      // 1. Instant Bootstrap from Cache
+      set({
+        projects: getLocal('projects', seedProjects),
+        feedbacks: getLocal('feedbacks', seedFeedbacks),
+        issues: getLocal('issues', seedIssues),
+        releases: getLocal('releases', seedReleases),
+        releaseProjects: getLocal('releaseProjects', seedReleaseProjects),
+        testSuites: getLocal('testSuites', seedTestSuites),
+        testCases: getLocal('testCases', seedTestCases),
+        testRuns: getLocal('testRuns', seedTestRuns),
+        testRunResults: getLocal('testRunResults', seedTestRunResults),
+        comments: getLocal('comments', seedComments),
+        activityLogs: getLocal('activityLogs', seedActivityLogs),
+        users: getLocal('users', allUsersFallback),
+        projectShares: getLocal('projectShares', []),
+        userFeedbacks: getLocal('userFeedbacks', seedUserFeedbacks),
+        exploratorySessions: getLocal('exploratorySessions', []),
+        exploratoryNotes: getLocal('exploratoryNotes', []),
+        exploratoryBugs: getLocal('exploratoryBugs', []),
+        exploratoryEvidence: getLocal('exploratoryEvidence', []),
+        implementationReports: getLocal('implementationReports', []),
+        implementationReportItems: getLocal('implementationReportItems', []),
+        notifications: getLocal('notifications', []),
+        recorderSessions: getLocal('recorderSessions', []),
+        recorderSteps: getLocal('recorderSteps', []),
+        apiCollections: getLocal('apiCollections', []),
+        apiEndpoints: getLocal('apiEndpoints', []),
+        apiEnvironments: getLocal('apiEnvironments', []),
+        apiTestRuns: getLocal('apiTestRuns', []),
+        apiTestResults: getLocal('apiTestResults', []),
+        isLoading: false,
+      });
+
+      // 2. Background Sync
       if (isSupabaseConfigured()) {
-        try {
-          const [
-            { data: p },
-            { data: fb },
-            { data: iss },
-            { data: rel },
-            { data: ts },
-            { data: tc },
-            { data: tr },
-            { data: trr },
-            { data: comm },
-            { data: act },
-            { data: u },
-            { data: recS },
-            { data: recSt },
-            { data: apiCol },
-            { data: apiEnd },
-            { data: apiEnv },
-            { data: apiRuns },
-            { data: apiRes }
-          ] = await Promise.all([
-            supabase!.from('projects').select('*').order('created_at', { ascending: false }),
-            supabase!.from('feedbacks').select('*').order('created_at', { ascending: false }),
-            supabase!.from('issues').select('*').order('created_at', { ascending: false }),
-            supabase!.from('releases').select('*').order('release_date', { ascending: false }),
-            supabase!.from('test_suites').select('*'),
-            supabase!.from('test_cases').select('*').order('code', { ascending: true }),
-            supabase!.from('test_runs').select('*').order('created_at', { ascending: false }),
-            supabase!.from('test_run_results').select('*'),
-            supabase!.from('comments').select('*').order('created_at', { ascending: true }),
-            supabase!.from('activity_logs').select('*').order('created_at', { ascending: false }),
-            supabase!.from('users').select('*').order('created_at', { ascending: false }),
-            supabase!.from('recorder_sessions').select('*').order('created_at', { ascending: false }),
-            supabase!.from('recorder_steps').select('*').order('step_number', { ascending: true }),
-            supabase!.from('api_collections').select('*').order('created_at', { ascending: false }),
-            supabase!.from('api_endpoints').select('*').order('created_at', { ascending: true }),
-            supabase!.from('api_environments').select('*').order('created_at', { ascending: false }),
-            supabase!.from('api_test_runs').select('*').order('created_at', { ascending: false }),
-            supabase!.from('api_test_results').select('*'),
-          ]);
-          
-          let shares: any[] = [];
-          try {
-            const { data } = await supabase!.from('project_shares').select('*');
-            shares = data || [];
-          } catch (e) {
-            console.warn("Table project_shares does not exist or fetch failed:", e);
-          }
+        const runBackgroundSync = async () => {
+          const syncStore = useSyncStore.getState();
+          syncStore.setSyncStatus('syncing');
 
-          let userFbs: any[] = [];
           try {
-            const { data } = await supabase!.from('user_feedbacks').select('*').order('created_at', { ascending: false });
-            userFbs = data || [];
-          } catch (e) {
-            console.warn("Table user_feedbacks does not exist or fetch failed, loading fallback:", e);
-            const local = localStorage.getItem('qa_userFeedbacks');
-            userFbs = local ? JSON.parse(local) : seedUserFeedbacks;
-          }
-
-          let releaseProjectsData: any[] = [];
-          try {
-            const { data } = await supabase!.from('release_projects').select('*').order('created_at', { ascending: true });
-            releaseProjectsData = data || [];
-          } catch (e) {
-            console.warn("Table release_projects does not exist or fetch failed, loading fallback:", e);
-            const local = localStorage.getItem('qa_releaseProjects');
-            releaseProjectsData = local ? JSON.parse(local) : seedReleaseProjects;
-          }
-
-          let expSessions: any[] = [];
-          let expNotes: any[] = [];
-          let expBugs: any[] = [];
-          let expEvidence: any[] = [];
-          try {
-            const [
-              { data: es },
-              { data: en },
-              { data: eb },
-              { data: ee }
-            ] = await Promise.all([
-              supabase!.from('exploratory_sessions').select('*').order('created_at', { ascending: false }),
-              supabase!.from('exploratory_notes').select('*').order('created_at', { ascending: true }),
-              supabase!.from('exploratory_bugs').select('*').order('created_at', { ascending: false }),
-              supabase!.from('exploratory_evidence').select('*').order('created_at', { ascending: false }),
+            await Promise.allSettled([
+              syncEntity('projects', Promise.resolve(supabase!.from('projects').select('*').order('created_at', { ascending: false })), (data: any) => set({ projects: data })),
+              syncEntity('feedbacks', Promise.resolve(supabase!.from('feedbacks').select('*').order('created_at', { ascending: false })), (data: any) => set({ feedbacks: data })),
+              syncEntity('issues', Promise.resolve(supabase!.from('issues').select('*').order('created_at', { ascending: false })), (data: any) => set({ issues: data })),
+              syncEntity('releases', Promise.resolve(supabase!.from('releases').select('*').order('release_date', { ascending: false })), (data: any) => set({ releases: data })),
+              syncEntity('testSuites', Promise.resolve(supabase!.from('test_suites').select('*')), (data: any) => set({ testSuites: data })),
+              syncEntity('testCases', Promise.resolve(supabase!.from('test_cases').select('*').order('code', { ascending: true })), (data: any) => set({ testCases: data })),
+              syncEntity('testRuns', Promise.resolve(supabase!.from('test_runs').select('*').order('created_at', { ascending: false })), (data: any) => set({ testRuns: data })),
+              syncEntity('testRunResults', Promise.resolve(supabase!.from('test_run_results').select('*')), (data: any) => set({ testRunResults: data })),
+              syncEntity('comments', Promise.resolve(supabase!.from('comments').select('*').order('created_at', { ascending: true })), (data: any) => set({ comments: data })),
+              syncEntity('activityLogs', Promise.resolve(supabase!.from('activity_logs').select('*').order('created_at', { ascending: false })), (data: any) => set({ activityLogs: data })),
+              syncEntity('users', Promise.resolve(supabase!.from('users').select('*').order('created_at', { ascending: false })), (data: any) => set({ users: data })),
+              syncEntity('releaseProjects', Promise.resolve(supabase!.from('release_projects').select('*').order('created_at', { ascending: true })), (data: any) => set({ releaseProjects: data })),
+              syncEntity('projectShares', Promise.resolve(supabase!.from('project_shares').select('*')), (data: any) => set({ projectShares: data })),
+              syncEntity('userFeedbacks', Promise.resolve(supabase!.from('user_feedbacks').select('*').order('created_at', { ascending: false })), (data: any) => set({ userFeedbacks: data })),
+              syncEntity('exploratorySessions', Promise.resolve(supabase!.from('exploratory_sessions').select('*').order('created_at', { ascending: false })), (data: any) => set({ exploratorySessions: data })),
+              syncEntity('exploratoryNotes', Promise.resolve(supabase!.from('exploratory_notes').select('*').order('created_at', { ascending: true })), (data: any) => set({ exploratoryNotes: data })),
+              syncEntity('exploratoryBugs', Promise.resolve(supabase!.from('exploratory_bugs').select('*').order('created_at', { ascending: false })), (data: any) => set({ exploratoryBugs: data })),
+              syncEntity('exploratoryEvidence', Promise.resolve(supabase!.from('exploratory_evidence').select('*').order('created_at', { ascending: false })), (data: any) => set({ exploratoryEvidence: data })),
+              syncEntity('implementationReports', Promise.resolve(supabase!.from('implementation_reports').select('*').order('created_at', { ascending: false })), (data: any) => set({ implementationReports: data })),
+              syncEntity('implementationReportItems', Promise.resolve(supabase!.from('implementation_report_items').select('*').order('created_at', { ascending: true })), (data: any) => set({ implementationReportItems: data })),
+              syncEntity('notifications', Promise.resolve(supabase!.from('notifications').select('*').order('created_at', { ascending: false })), (data: any) => set({ notifications: data })),
+              syncEntity('recorderSessions', Promise.resolve(supabase!.from('recorder_sessions').select('*').order('created_at', { ascending: false })), (data: any) => set({ recorderSessions: data })),
+              syncEntity('recorderSteps', Promise.resolve(supabase!.from('recorder_steps').select('*').order('step_number', { ascending: true })), (data: any) => set({ recorderSteps: data })),
+              syncEntity('apiCollections', Promise.resolve(supabase!.from('api_collections').select('*').order('created_at', { ascending: false })), (data: any) => set({ apiCollections: data })),
+              syncEntity('apiEndpoints', Promise.resolve(supabase!.from('api_endpoints').select('*').order('created_at', { ascending: true })), (data: any) => set({ apiEndpoints: data })),
+              syncEntity('apiEnvironments', Promise.resolve(supabase!.from('api_environments').select('*').order('created_at', { ascending: false })), (data: any) => set({ apiEnvironments: data })),
+              syncEntity('apiTestRuns', Promise.resolve(supabase!.from('api_test_runs').select('*').order('created_at', { ascending: false })), (data: any) => set({ apiTestRuns: data })),
+              syncEntity('apiTestResults', Promise.resolve(supabase!.from('api_test_results').select('*')), (data: any) => set({ apiTestResults: data })),
             ]);
-            expSessions = es || [];
-            expNotes = en || [];
-            expBugs = eb || [];
-            expEvidence = ee || [];
-          } catch (e) {
-            console.warn("Exploratory testing tables fetch failed, loading fallback:", e);
-            expSessions = JSON.parse(localStorage.getItem('qa_exploratorySessions') || '[]');
-            expNotes = JSON.parse(localStorage.getItem('qa_exploratoryNotes') || '[]');
-            expBugs = JSON.parse(localStorage.getItem('qa_exploratoryBugs') || '[]');
-            expEvidence = JSON.parse(localStorage.getItem('qa_exploratoryEvidence') || '[]');
+
+            syncStore.setSyncStatus('synced');
+            syncStore.setLastSyncedAt(new Date().toISOString());
+          } catch (err) {
+            syncStore.setSyncStatus('sync_failed');
           }
+        };
 
-          let reports: any[] = [];
-          let reportItems: any[] = [];
-          try {
-            const [
-              { data: reps },
-              { data: items }
-            ] = await Promise.all([
-              supabase!.from('implementation_reports').select('*').order('created_at', { ascending: false }),
-              supabase!.from('implementation_report_items').select('*').order('created_at', { ascending: true }),
-            ]);
-            reports = reps || [];
-            reportItems = items || [];
-          } catch (e) {
-            console.warn("Implementation report tables fetch failed, loading fallback:", e);
-            reports = JSON.parse(localStorage.getItem('qa_implementationReports') || '[]');
-            reportItems = JSON.parse(localStorage.getItem('qa_implementationReportItems') || '[]');
-          }
-
-          let notificationsData: any[] = [];
-          try {
-            const { data } = await supabase!.from('notifications').select('*').order('created_at', { ascending: false });
-            notificationsData = data || [];
-          } catch (e) {
-            console.warn("Table notifications fetch failed, loading fallback:", e);
-            notificationsData = JSON.parse(localStorage.getItem('qa_notifications') || '[]');
-          }
- 
-           set({
-             projects: p || [],
-             feedbacks: fb || [],
-             issues: iss || [],
-             releases: rel || [],
-             releaseProjects: releaseProjectsData,
-             testSuites: ts || [],
-             testCases: tc || [],
-             testRuns: tr || [],
-             testRunResults: trr || [],
-             comments: comm || [],
-             activityLogs: act || [],
-             users: u || [],
-             projectShares: shares,
-             userFeedbacks: userFbs,
-             exploratorySessions: expSessions,
-             exploratoryNotes: expNotes,
-             exploratoryBugs: expBugs,
-             exploratoryEvidence: expEvidence,
-             implementationReports: reports,
-             implementationReportItems: reportItems,
-             notifications: notificationsData,
-             recorderSessions: recS || [],
-             recorderSteps: recSt || [],
-             apiCollections: apiCol || [],
-             apiEndpoints: apiEnd || [],
-             apiEnvironments: apiEnv || [],
-             apiTestRuns: apiRuns || [],
-             apiTestResults: apiRes || [],
-             isLoading: false,
-           });
-        } catch (e) {
-          console.error("Failed fetching Supabase tables, falling back to storage", e);
-          set({ isLoading: false });
-        }
-      } else {
-        // LocalStorage loading
-        setTimeout(() => {
-          const getLocal = <T>(key: string, fallback: T): T => {
-            const data = localStorage.getItem(`qa_${key}`);
-            return data ? JSON.parse(data) : fallback;
-          };
-
-          const registered = JSON.parse(localStorage.getItem('qa_registered_users') || '[]');
-          const cleanRegistered = registered.map((u: any) => ({
-            id: u.id,
-            name: u.name,
-            email: u.email,
-            role: u.role,
-            created_at: u.created_at,
-          }));
-          const seedMockUsers = [
-            { id: 'user-admin-1', name: 'Sarah Connor (Admin)', email: 'sarah.connor@portal.qa', role: 'Admin', created_at: new Date('2026-01-01').toISOString() },
-            { id: 'user-qa-1', name: 'Alex Mercer (QA Engineer)', email: 'alex.mercer@portal.qa', role: 'QA Engineer', created_at: new Date('2026-01-05').toISOString() },
-            { id: 'user-dev-1', name: 'Linus Torvalds (Developer)', email: 'linus.t@portal.qa', role: 'Developer', created_at: new Date('2026-01-10').toISOString() },
-            { id: 'user-rep-1', name: 'GIS Team (Reporter)', email: 'gis.team@portal.qa', role: 'Reporter', created_at: new Date('2026-01-15').toISOString() },
-          ];
-          const allUsers = [...seedMockUsers, ...cleanRegistered];
-
-          set({
-            projects: getLocal('projects', seedProjects),
-            feedbacks: getLocal('feedbacks', seedFeedbacks),
-            issues: getLocal('issues', seedIssues),
-            releases: getLocal('releases', seedReleases),
-            releaseProjects: getLocal('releaseProjects', seedReleaseProjects),
-            testSuites: getLocal('testSuites', seedTestSuites),
-            testCases: getLocal('testCases', seedTestCases),
-            testRuns: getLocal('testRuns', seedTestRuns),
-            testRunResults: getLocal('testRunResults', seedTestRunResults),
-            comments: getLocal('comments', seedComments),
-            activityLogs: getLocal('activityLogs', seedActivityLogs),
-            users: allUsers,
-            projectShares: getLocal('projectShares', []),
-            userFeedbacks: getLocal('userFeedbacks', seedUserFeedbacks),
-            exploratorySessions: getLocal('exploratorySessions', []),
-            exploratoryNotes: getLocal('exploratoryNotes', []),
-            exploratoryBugs: getLocal('exploratoryBugs', []),
-            exploratoryEvidence: getLocal('exploratoryEvidence', []),
-            implementationReports: getLocal('implementationReports', []),
-            implementationReportItems: getLocal('implementationReportItems', []),
-            notifications: getLocal('notifications', []),
-            recorderSessions: getLocal('recorderSessions', []),
-            recorderSteps: getLocal('recorderSteps', []),
-            apiCollections: getLocal('apiCollections', []),
-            apiEndpoints: getLocal('apiEndpoints', []),
-            apiEnvironments: getLocal('apiEnvironments', []),
-            apiTestRuns: getLocal('apiTestRuns', []),
-            apiTestResults: getLocal('apiTestResults', []),
-            isLoading: false,
-          });
-        }, 300);
+        runBackgroundSync();
       }
     },
 
@@ -544,14 +429,20 @@ export const useDataStore = create<DataState>((set, get) => {
 
       if (isSupabaseConfigured()) {
         const { data, error } = await supabase!.from('projects').insert(newProj).select();
-        if (!error && data && data[0]) {
-          set((state) => ({ projects: [data[0], ...state.projects] }));
+        if (error) throw new Error(error.message || 'Failed to add project');
+        if (data && data[0]) {
+          set((state) => {
+            const next = [data[0], ...state.projects];
+            safeWriteCache('projects', next);
+            return { projects: next };
+          });
           return data[0];
         }
         return null;
       } else {
         set((state) => {
           const next = [newProj, ...state.projects];
+          safeWriteCache('projects', next);
           persist({ projects: next });
           return { projects: next };
         });
@@ -561,13 +452,17 @@ export const useDataStore = create<DataState>((set, get) => {
 
     updateProject: async (id, name, description) => {
       if (isSupabaseConfigured()) {
-        await supabase!.from('projects').update({ name, description }).eq('id', id);
-        set((state) => ({
-          projects: state.projects.map((p) => p.id === id ? { ...p, name, description } : p),
-        }));
+        const { error } = await supabase!.from('projects').update({ name, description }).eq('id', id);
+        if (error) throw new Error(error.message || 'Failed to update project');
+        set((state) => {
+          const next = state.projects.map((p) => p.id === id ? { ...p, name, description } : p);
+          safeWriteCache('projects', next);
+          return { projects: next };
+        });
       } else {
         set((state) => {
           const next = state.projects.map((p) => p.id === id ? { ...p, name, description } : p);
+          safeWriteCache('projects', next);
           persist({ projects: next });
           return { projects: next };
         });
@@ -576,11 +471,17 @@ export const useDataStore = create<DataState>((set, get) => {
 
     deleteProject: async (id) => {
       if (isSupabaseConfigured()) {
-        await supabase!.from('projects').delete().eq('id', id);
-        set((state) => ({ projects: state.projects.filter((p) => p.id !== id) }));
+        const { error } = await supabase!.from('projects').delete().eq('id', id);
+        if (error) throw new Error(error.message || 'Failed to delete project');
+        set((state) => {
+          const next = state.projects.filter((p) => p.id !== id);
+          safeWriteCache('projects', next);
+          return { projects: next };
+        });
       } else {
         set((state) => {
           const next = state.projects.filter((p) => p.id !== id);
+          safeWriteCache('projects', next);
           persist({ projects: next });
           return { projects: next };
         });

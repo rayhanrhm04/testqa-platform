@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUIStore } from '@/store/useUIStore';
+import { useSyncStore } from '@/store/useSyncStore';
 import { 
   LayoutDashboard, MessageSquare, Bug, Rocket, FolderHeart, 
   FileSpreadsheet, PlayCircle, FileText, BarChart3, Settings, 
@@ -18,6 +19,7 @@ export const Sidebar: React.FC = () => {
   const pathname = usePathname();
   const { activeRole, currentUser, logout } = useAuthStore();
   const { sidebarOpen, toggleSidebar, addToast } = useUIStore();
+  const { syncStatus, lastSyncedAt } = useSyncStore();
 
   const navItems = [
     { name: 'Dashboard', path: '/', icon: <LayoutDashboard className="h-4.5 w-4.5" /> },
@@ -126,6 +128,31 @@ export const Sidebar: React.FC = () => {
           );
         })}
       </nav>
+
+      {/* Sync Status Badge */}
+      {sidebarOpen && (
+        <div className="px-4 py-2 border-t border-border/40 bg-slate-50/50 dark:bg-zinc-900/10 flex items-center justify-between text-[9px] font-bold text-muted-foreground select-none">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+              syncStatus === 'synced' ? 'bg-emerald-500' :
+              syncStatus === 'syncing' ? 'bg-primary animate-pulse' :
+              syncStatus === 'sync_failed' ? 'bg-red-500' :
+              'bg-zinc-400'
+            }`} />
+            <span className="truncate">
+              {syncStatus === 'synced' ? 'Sync: Synced' :
+               syncStatus === 'syncing' ? 'Sync: Syncing...' :
+               syncStatus === 'sync_failed' ? 'Sync: Offline/Failed' :
+               'Sync: Standby'}
+            </span>
+          </div>
+          {lastSyncedAt && (
+            <span className="shrink-0 opacity-75 text-[8px]">
+              {new Date(lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* User Info Footer */}
       <div className="border-t border-border p-3 bg-white dark:bg-zinc-950">

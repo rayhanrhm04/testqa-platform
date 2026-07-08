@@ -8,6 +8,7 @@ let pool: Pool;
 try {
   pool = new Pool({
     connectionString,
+    max: 30, // Support concurrent background sync queries
     ssl: false // SumoPod db does not support SSL connections
   });
   // Migration: Add avatar_url column to users table if it doesn't exist

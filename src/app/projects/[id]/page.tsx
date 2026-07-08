@@ -17,9 +17,7 @@ import { Tabs } from '@/components/ui/tabs';
 import { Dialog } from '@/components/ui/dialog';
 import { getWeekNumber, generateWeeklySummary, WeeklySummaryResult } from '@/lib/project-monitor-storage';
 
-// jsPDF imports
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+// jsPDF will be imported dynamically during export
 
 export default function ProjectDetailPage() {
   const router = useRouter();
@@ -744,7 +742,9 @@ export default function ProjectDetailPage() {
   };
 
   // 5. Export PDF Handler
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
+    const jsPDF = (await import('jspdf')).jsPDF;
+    const autoTable = (await import('jspdf-autotable')).default;
     const doc = new jsPDF() as any;
 
     // A. COVER PAGE
