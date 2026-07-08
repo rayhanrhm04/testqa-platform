@@ -357,20 +357,29 @@ export const useDataStore = create<DataState>((set, get) => {
           syncStore.setSyncStatus('syncing');
 
           try {
-            const results = await Promise.allSettled([
+            // 1. Sync Critical Tables first (needed for Dashboard, Projects, Issues, Releases, Users)
+            await Promise.all([
               syncEntity('projects', Promise.resolve(supabase!.from('projects').select('*').order('created_at', { ascending: false })), (data: any) => set({ projects: data })),
               syncEntity('feedbacks', Promise.resolve(supabase!.from('feedbacks').select('*').order('created_at', { ascending: false })), (data: any) => set({ feedbacks: data })),
               syncEntity('issues', Promise.resolve(supabase!.from('issues').select('*').order('created_at', { ascending: false })), (data: any) => set({ issues: data })),
               syncEntity('releases', Promise.resolve(supabase!.from('releases').select('*').order('release_date', { ascending: false })), (data: any) => set({ releases: data })),
+              syncEntity('users', Promise.resolve(supabase!.from('users').select('*').order('created_at', { ascending: false })), (data: any) => set({ users: data })),
+              syncEntity('releaseProjects', Promise.resolve(supabase!.from('release_projects').select('*').order('created_at', { ascending: true })), (data: any) => set({ releaseProjects: data })),
+              syncEntity('projectShares', Promise.resolve(supabase!.from('project_shares').select('*')), (data: any) => set({ projectShares: data })),
+            ]);
+
+            // Mark as synced immediately once critical tables are successfully loaded
+            syncStore.setSyncStatus('synced');
+            syncStore.setLastSyncedAt(new Date().toISOString());
+
+            // 2. Sync Non-Critical Tables in the background (failures are ignored and won't affect status)
+            Promise.allSettled([
               syncEntity('testSuites', Promise.resolve(supabase!.from('test_suites').select('*')), (data: any) => set({ testSuites: data })),
               syncEntity('testCases', Promise.resolve(supabase!.from('test_cases').select('*').order('code', { ascending: true })), (data: any) => set({ testCases: data })),
               syncEntity('testRuns', Promise.resolve(supabase!.from('test_runs').select('*').order('created_at', { ascending: false })), (data: any) => set({ testRuns: data })),
               syncEntity('testRunResults', Promise.resolve(supabase!.from('test_run_results').select('*')), (data: any) => set({ testRunResults: data })),
               syncEntity('comments', Promise.resolve(supabase!.from('comments').select('*').order('created_at', { ascending: true })), (data: any) => set({ comments: data })),
               syncEntity('activityLogs', Promise.resolve(supabase!.from('activity_logs').select('*').order('created_at', { ascending: false })), (data: any) => set({ activityLogs: data })),
-              syncEntity('users', Promise.resolve(supabase!.from('users').select('*').order('created_at', { ascending: false })), (data: any) => set({ users: data })),
-              syncEntity('releaseProjects', Promise.resolve(supabase!.from('release_projects').select('*').order('created_at', { ascending: true })), (data: any) => set({ releaseProjects: data })),
-              syncEntity('projectShares', Promise.resolve(supabase!.from('project_shares').select('*')), (data: any) => set({ projectShares: data })),
               syncEntity('userFeedbacks', Promise.resolve(supabase!.from('user_feedbacks').select('*').order('created_at', { ascending: false })), (data: any) => set({ userFeedbacks: data })),
               syncEntity('exploratorySessions', Promise.resolve(supabase!.from('exploratory_sessions').select('*').order('created_at', { ascending: false })), (data: any) => set({ exploratorySessions: data })),
               syncEntity('exploratoryNotes', Promise.resolve(supabase!.from('exploratory_notes').select('*').order('created_at', { ascending: true })), (data: any) => set({ exploratoryNotes: data })),
@@ -386,15 +395,8 @@ export const useDataStore = create<DataState>((set, get) => {
               syncEntity('apiEnvironments', Promise.resolve(supabase!.from('api_environments').select('*').order('created_at', { ascending: false })), (data: any) => set({ apiEnvironments: data })),
               syncEntity('apiTestRuns', Promise.resolve(supabase!.from('api_test_runs').select('*').order('created_at', { ascending: false })), (data: any) => set({ apiTestRuns: data })),
               syncEntity('apiTestResults', Promise.resolve(supabase!.from('api_test_results').select('*')), (data: any) => set({ apiTestResults: data })),
-            ]);
+            ]).catch(err => console.warn('Non-critical sync warning:', err));
 
-            const hasRejected = results.some(r => r.status === 'rejected');
-            if (hasRejected) {
-              syncStore.setSyncStatus('sync_failed');
-            } else {
-              syncStore.setSyncStatus('synced');
-              syncStore.setLastSyncedAt(new Date().toISOString());
-            }
           } catch (err) {
             syncStore.setSyncStatus('sync_failed');
           }
