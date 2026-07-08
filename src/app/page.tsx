@@ -4,15 +4,17 @@ import * as React from 'react';
 import { useDataStore } from '@/store/useDataStore';
 import { 
   MessageSquare, Bug, Rocket, AlertTriangle, 
-  CheckCircle, ArrowUpRight, TrendingUp, BarChart4, ClipboardList
+  CheckCircle, ArrowUpRight, TrendingUp, BarChart4, ClipboardList,
+  FolderHeart
 } from 'lucide-react';
 import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, 
   Legend, PieChart, Pie, Cell, AreaChart, Area, CartesianGrid 
 } from 'recharts';
 import Link from 'next/link';
-
 import { useAuthStore } from '@/store/useAuthStore';
+import { useProjectMonitorStore } from '@/store/useProjectMonitorStore';
+import { MOODS } from '@/lib/project-monitor-types';
 
 export default function DashboardPage() {
   const { 
@@ -27,6 +29,41 @@ export default function DashboardPage() {
     projectShares
   } = useDataStore();
   const { activeRole, currentUser } = useAuthStore();
+
+  const { 
+    projects: monitorProjects, 
+    worklogs: monitorWorklogs, 
+    fetchData: fetchMonitorData 
+  } = useProjectMonitorStore();
+
+  React.useEffect(() => {
+    fetchMonitorData();
+  }, [fetchMonitorData]);
+
+  // QA Project Monitoring Statistics calculations
+  const activeProjectsCount = monitorProjects.filter(p => p.qaStatus !== 'Released').length;
+  const highWorkloadCount = monitorProjects.filter(p => p.workload === 'High' || p.workload === 'Critical').length;
+  const criticalProjectsCount = monitorProjects.filter(p => p.priority === 'Critical').length;
+  const readyReleaseCount = monitorProjects.filter(p => p.qaStatus === 'Ready Release').length;
+  const waitingFixCount = monitorProjects.filter(p => p.qaStatus === 'Waiting Fix').length;
+
+  const todaysFocusProject = React.useMemo(() => {
+    if (monitorProjects.length === 0) return null;
+    return [...monitorProjects].sort((a, b) => new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime())[0];
+  }, [monitorProjects]);
+
+  const upcomingReleases = React.useMemo(() => {
+    return monitorProjects
+      .filter(p => p.qaStatus !== 'Released')
+      .sort((a, b) => new Date(a.releaseTarget).getTime() - new Date(b.releaseTarget).getTime())
+      .slice(0, 5);
+  }, [monitorProjects]);
+
+  const recentWorklogs = React.useMemo(() => {
+    return [...monitorWorklogs]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5);
+  }, [monitorWorklogs]);
 
   // Filter projects by sharing rules
   const accessibleProjects = React.useMemo(() => {
@@ -416,6 +453,152 @@ export default function DashboardPage() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      </div>
+
+      {/* QA Project Monitoring Section */}
+      <div className="border-t border-border/60 pt-6 mt-8">
+        <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between mb-6">
+          <div>
+            <h2 className="text-xl lg:text-2xl font-extrabold tracking-tight text-foreground flex items-center gap-2">
+              <FolderHeart className="h-5.5 w-5.5 text-primary" /> QA Project Monitoring
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Workloads, timeline updates, and upcoming releases across your projects.</p>
+          </div>
+          <Link href="/projects">
+            <button className="inline-flex h-9 items-center justify-center rounded-xl bg-primary px-4 text-xs font-bold text-primary-foreground hover:bg-primary-hover cursor-pointer transition-colors shadow-sm shadow-primary/10">
+              Manage QA Projects
+            </button>
+          </Link>
+        </div>
+
+        {/* Project Statistics Widgets */}
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-5 mb-6">
+          <div className="bg-card rounded-xl border border-border/50 p-4 shadow-xs">
+            <p className="text-[10px] uppercase font-bold text-muted-foreground">Active Projects</p>
+            <h4 className="text-2xl font-black mt-2 text-foreground">{activeProjectsCount}</h4>
+            <p className="text-[9px] text-muted-foreground mt-1">In progress (not released)</p>
+          </div>
+          <div className="bg-card rounded-xl border border-border/50 p-4 shadow-xs">
+            <p className="text-[10px] uppercase font-bold text-muted-foreground">High Workload</p>
+            <h4 className="text-2xl font-black mt-2 text-amber-500">{highWorkloadCount}</h4>
+            <p className="text-[9px] text-muted-foreground mt-1">High/Critical load projects</p>
+          </div>
+          <div className="bg-card rounded-xl border border-border/50 p-4 shadow-xs">
+            <p className="text-[10px] uppercase font-bold text-muted-foreground">Critical Projects</p>
+            <h4 className="text-2xl font-black mt-2 text-red-500">{criticalProjectsCount}</h4>
+            <p className="text-[9px] text-muted-foreground mt-1">Highest priority projects</p>
+          </div>
+          <div className="bg-card rounded-xl border border-border/50 p-4 shadow-xs">
+            <p className="text-[10px] uppercase font-bold text-muted-foreground">Ready Release</p>
+            <h4 className="text-2xl font-black mt-2 text-emerald-500">{readyReleaseCount}</h4>
+            <p className="text-[9px] text-muted-foreground mt-1">Testing completed</p>
+          </div>
+          <div className="bg-card rounded-xl border border-border/50 p-4 shadow-xs">
+            <p className="text-[10px] uppercase font-bold text-muted-foreground">Waiting Fix</p>
+            <h4 className="text-2xl font-black mt-2 text-indigo-500">{waitingFixCount}</h4>
+            <p className="text-[9px] text-muted-foreground mt-1">Blocked on developers</p>
+          </div>
+        </div>
+
+        {/* Focus, Upcoming Releases and Recent Worklogs */}
+        <div className="grid gap-6 md:grid-cols-3">
+          {/* Col 1 & 2: Focus & Upcoming Releases */}
+          <div className="md:col-span-2 space-y-6">
+            {/* Today's Focus */}
+            <div className="bg-card rounded-2xl border border-border/50 p-5 shadow-xs">
+              <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Today's Focus (Last Updated Project)
+              </h3>
+              {todaysFocusProject ? (
+                <Link href={`/projects/${todaysFocusProject.id}`} className="block group">
+                  <div className="p-4 rounded-xl border border-border bg-slate-50/30 dark:bg-zinc-900/10 group-hover:border-primary transition-all">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: todaysFocusProject.colorLabel || '#3b82f6' }} />
+                        <h4 className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">{todaysFocusProject.name}</h4>
+                      </div>
+                      <span className="text-[9px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-sm">{todaysFocusProject.qaStatus}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground line-clamp-2">{todaysFocusProject.description || 'No description provided.'}</p>
+                    <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border/40 text-[10px] font-bold text-muted-foreground">
+                      <span>Client: <span className="text-foreground">{todaysFocusProject.client}</span></span>
+                      <span>Progress: <span className="text-foreground">{todaysFocusProject.progress}%</span></span>
+                      <span>Target: <span className="text-foreground">{todaysFocusProject.releaseTarget}</span></span>
+                    </div>
+                  </div>
+                </Link>
+              ) : (
+                <p className="text-xs text-muted-foreground text-center py-6">No projects created yet. Go to Projects page to start monitoring.</p>
+              )}
+            </div>
+
+            {/* Upcoming Release */}
+            <div className="bg-card rounded-2xl border border-border/50 p-5 shadow-xs">
+              <h3 className="text-sm font-bold text-foreground mb-4">Upcoming Releases</h3>
+              <div className="space-y-3">
+                {upcomingReleases.length > 0 ? (
+                  upcomingReleases.map(proj => (
+                    <Link href={`/projects/${proj.id}`} key={proj.id} className="block group">
+                      <div className="flex items-center justify-between p-3 rounded-xl border border-border/50 hover:bg-slate-50/50 dark:hover:bg-zinc-900/10 transition-all">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: proj.colorLabel || '#3b82f6' }} />
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-foreground group-hover:text-primary truncate">{proj.name}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">Target: <span className="font-bold text-foreground">{proj.releaseTarget}</span></p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[9px] font-bold bg-secondary text-secondary-foreground border border-border/50 px-2 py-0.5 rounded-md">{proj.qaStatus}</span>
+                          <span className="text-[9px] font-bold text-foreground">{proj.progress}%</span>
+                        </div>
+                      </div>
+                    </Link>
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground text-center py-6">No upcoming releases scheduled.</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Col 3: Recent Worklogs */}
+          <div className="bg-card rounded-2xl border border-border/50 p-5 shadow-xs">
+            <h3 className="text-sm font-bold text-foreground mb-4">Recent Worklogs</h3>
+            <div className="space-y-4">
+              {recentWorklogs.length > 0 ? (
+                recentWorklogs.map(log => {
+                  const project = monitorProjects.find(p => p.id === log.projectId);
+                  const moodInfo = MOODS.find(m => m.type === log.mood);
+                  return (
+                    <div key={log.id} className="relative pl-4 border-l border-border/60 pb-3 last:pb-0 last:border-l-transparent">
+                      {/* Dot icon */}
+                      <span className="absolute -left-1.5 top-0.5 w-3.5 h-3.5 rounded-full bg-slate-100 dark:bg-zinc-800 border border-border flex items-center justify-center text-xs pointer-events-none select-none">
+                        {moodInfo?.emoji || '•'}
+                      </span>
+                      <div className="flex items-center justify-between text-[10px] text-muted-foreground font-bold">
+                        <span>{new Date(log.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                        <span className="text-primary font-black uppercase tracking-wider">{log.mode}</span>
+                      </div>
+                      <Link href={`/projects/${log.projectId}`} className="block group mt-1 min-w-0">
+                        <p className="text-xs font-bold text-foreground group-hover:text-primary truncate">{project?.name || 'Unknown Project'}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
+                          Task: <span className="font-bold text-foreground/85">{log.currentTask}</span>
+                          {log.blocker && <span className="block text-red-500 font-medium">Blocker: {log.blocker}</span>}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1.5 text-[9px] font-bold text-muted-foreground">
+                          <span className="bg-slate-100 dark:bg-zinc-800 text-foreground px-1.5 py-0.5 rounded-sm">{log.qaStatus}</span>
+                          <span>Progress: {log.progress}%</span>
+                        </div>
+                      </Link>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-xs text-muted-foreground text-center py-12">No worklogs logged yet.</p>
+              )}
+            </div>
           </div>
         </div>
       </div>

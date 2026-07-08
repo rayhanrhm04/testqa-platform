@@ -21,6 +21,7 @@ export const Sidebar: React.FC = () => {
 
   const navItems = [
     { name: 'Dashboard', path: '/', icon: <LayoutDashboard className="h-4.5 w-4.5" /> },
+    { name: 'Projects (QA)', path: '/projects', icon: <FolderHeart className="h-4.5 w-4.5" /> },
     { name: 'Feedback', path: '/feedback', icon: <MessageSquare className="h-4.5 w-4.5" /> },
     { name: 'User Feedback', path: '/user-feedback', icon: <MessageCircle className="h-4.5 w-4.5" /> },
     { name: 'Issues', path: '/issues', icon: <Bug className="h-4.5 w-4.5" /> },
