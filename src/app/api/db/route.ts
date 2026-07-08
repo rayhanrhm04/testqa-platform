@@ -301,7 +301,17 @@ export async function POST(req: NextRequest) {
       if (orderBy && orderBy.column) {
         orderClause = `ORDER BY "${orderBy.column}" ${orderBy.ascending ? 'ASC' : 'DESC'}`;
       }
-      queryText = `SELECT * FROM "${table}" ${clause} ${orderClause}`;
+      
+      let selectFields = '*';
+      if ((table === 'issues' || table === 'feedbacks') && (!filters || !filters.some((f: any) => f.column === 'id'))) {
+        if (table === 'issues') {
+          selectFields = 'id, code, feedback_id, project_id, type, title, description, expected_result, actual_result, steps_to_reproduce, severity, status, assigned_to, release_id, created_at, updated_at, attachment_name, created_by';
+        } else {
+          selectFields = 'id, code, title, description, project_id, reporter_id, priority, status, created_at, updated_at, attachment_name';
+        }
+      }
+      
+      queryText = `SELECT ${selectFields} FROM "${table}" ${clause} ${orderClause}`;
 
     } else if (action === 'insert') {
       if (Array.isArray(data)) {
