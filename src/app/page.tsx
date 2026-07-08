@@ -5,7 +5,7 @@ import { useDataStore } from '@/store/useDataStore';
 import { 
   MessageSquare, Bug, Rocket, AlertTriangle, 
   CheckCircle, ArrowUpRight, TrendingUp, BarChart4, ClipboardList,
-  FolderHeart
+  FolderHeart, Calendar
 } from 'lucide-react';
 import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, 
@@ -15,6 +15,9 @@ import Link from 'next/link';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useProjectMonitorStore } from '@/store/useProjectMonitorStore';
 import { MOODS } from '@/lib/project-monitor-types';
+import { useCalendarStore } from '@/store/useCalendarStore';
+import { getCalendarWorkloadByDate } from '@/lib/calendar-storage';
+import { EVENT_TYPE_COLORS } from '@/lib/calendar-types';
 
 export default function DashboardPage() {
   const { 
@@ -64,6 +67,51 @@ export default function DashboardPage() {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 5);
   }, [monitorWorklogs]);
+
+  const { allEvents, fetchData: fetchCalendarData } = useCalendarStore();
+
+  React.useEffect(() => {
+    fetchCalendarData();
+  }, [fetchCalendarData]);
+
+  // Calendar Widget calculations
+  const todayStr = React.useMemo(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  const next7Days = React.useMemo(() => {
+    const list = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() + i);
+      list.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+    }
+    return list;
+  }, []);
+
+  const todaysSchedule = React.useMemo(() => {
+    return allEvents.filter(e => e.date === todayStr);
+  }, [allEvents, todayStr]);
+
+  const upcomingEventsThisWeek = React.useMemo(() => {
+    return allEvents.filter(e => next7Days.includes(e.date));
+  }, [allEvents, next7Days]);
+
+  const releasesThisWeek = React.useMemo(() => {
+    return upcomingEventsThisWeek.filter(e => e.type === 'Release');
+  }, [upcomingEventsThisWeek]);
+
+  const meetingsThisWeek = React.useMemo(() => {
+    return upcomingEventsThisWeek.filter(e => e.type === 'Meeting');
+  }, [upcomingEventsThisWeek]);
+
+  const highWorkloadDaysThisWeek = React.useMemo(() => {
+    return next7Days.map(date => {
+      const workload = getCalendarWorkloadByDate(date, allEvents);
+      return { date, workload };
+    }).filter(d => d.workload === 'Busy' || d.workload === 'Very Busy' || d.workload === 'Critical');
+  }, [allEvents, next7Days]);
 
   // Filter projects by sharing rules
   const accessibleProjects = React.useMemo(() => {
@@ -453,6 +501,123 @@ export default function DashboardPage() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      </div>
+
+      {/* QA Calendar Hub Section */}
+      <div className="border-t border-border/60 pt-6 mt-8">
+        <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between mb-6">
+          <div>
+            <h2 className="text-xl lg:text-2xl font-extrabold tracking-tight text-foreground flex items-center gap-2">
+              <Calendar className="h-5.5 w-5.5 text-primary" /> QA Calendar Hub
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Schedules, meetings, test phases, and workload levels aggregated across all sources.</p>
+          </div>
+          <Link href="/calendar">
+            <button className="inline-flex h-9 items-center justify-center rounded-xl bg-primary px-4 text-xs font-bold text-primary-foreground hover:bg-primary-hover cursor-pointer transition-colors shadow-sm shadow-primary/10">
+              Open Calendar Hub
+            </button>
+          </Link>
+        </div>
+
+        {/* Widgets Grid */}
+        <div className="grid gap-6 md:grid-cols-3">
+          {/* Today's Schedule Card */}
+          <div className="bg-card rounded-2xl border border-border/50 p-5 shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" /> Today's Schedule
+                </h3>
+                <span className="text-[10px] text-muted-foreground font-semibold">
+                  {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </span>
+              </div>
+              <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+                {todaysSchedule.length > 0 ? (
+                  todaysSchedule.map(e => (
+                    <div key={e.id} className="p-2.5 rounded-lg border border-border/50 bg-slate-50/50 dark:bg-zinc-900/10">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-foreground truncate">{e.title}</span>
+                        <span className="text-[8px] font-black uppercase bg-secondary text-secondary-foreground border border-border/60 px-1.5 py-0.5 rounded-md whitespace-nowrap shrink-0">{e.type}</span>
+                      </div>
+                      {e.startTime && (
+                        <p className="text-[9px] text-muted-foreground mt-1 font-bold">Time: {e.startTime} - {e.endTime || 'End'}</p>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground text-center py-10">No events scheduled for today.</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Upcoming Schedule This Week Card */}
+          <div className="bg-card rounded-2xl border border-border/50 p-5 shadow-xs flex flex-col justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-foreground mb-4">Upcoming This Week</h3>
+              <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+                {upcomingEventsThisWeek.length > 0 ? (
+                  upcomingEventsThisWeek.slice(0, 5).map(e => (
+                    <div key={e.id} className="flex items-center justify-between gap-3 border-b border-border/40 pb-2 last:border-0 last:pb-0">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-foreground truncate">{e.title}</p>
+                        <p className="text-[9px] text-muted-foreground mt-0.5 font-bold">
+                          {new Date(e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          {e.startTime ? ` • ${e.startTime}` : ''}
+                        </p>
+                      </div>
+                      <span className="text-[8px] font-black uppercase bg-secondary text-secondary-foreground border border-border/60 px-1.5 py-0.5 rounded-md shrink-0">{e.type}</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground text-center py-10">No events scheduled this week.</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Workload Highlights Card */}
+          <div className="bg-card rounded-2xl border border-border/50 p-5 shadow-xs">
+            <h3 className="text-sm font-bold text-foreground mb-4">Weekly Highlights</h3>
+            <div className="space-y-4 text-xs">
+              <div className="flex items-center justify-between py-1.5 border-b border-border/40">
+                <span className="text-muted-foreground font-semibold">Meetings This Week</span>
+                <span className="font-bold text-foreground bg-indigo-500/10 text-indigo-600 px-2 py-0.5 rounded-lg">
+                  {meetingsThisWeek.length} meetings
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-1.5 border-b border-border/40">
+                <span className="text-muted-foreground font-semibold">Releases This Week</span>
+                <span className="font-bold text-foreground bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-lg">
+                  {releasesThisWeek.length} releases
+                </span>
+              </div>
+              <div>
+                <span className="text-muted-foreground font-semibold block mb-2">High Workload Days</span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {highWorkloadDaysThisWeek.length > 0 ? (
+                    highWorkloadDaysThisWeek.map(day => {
+                      const dayName = new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' });
+                      const dayNum = new Date(day.date).getDate();
+                      let colorClass = 'bg-yellow-500/10 text-yellow-600 border-yellow-200';
+                      if (day.workload === 'Very Busy') colorClass = 'bg-orange-500/10 text-orange-600 border-orange-200';
+                      if (day.workload === 'Critical') colorClass = 'bg-red-500/10 text-red-600 border-red-200';
+                      
+                      return (
+                        <div key={day.date} className={`px-2 py-1 rounded-lg border text-[10px] font-bold ${colorClass}`} title={`${day.date}: ${day.workload}`}>
+                          {dayName} {dayNum}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground italic">No high-workload days this week. Smooth sailing! ⛵</span>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

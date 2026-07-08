@@ -9,7 +9,7 @@ import {
   LayoutDashboard, MessageSquare, Bug, Rocket, FolderHeart, 
   FileSpreadsheet, PlayCircle, FileText, BarChart3, Settings, 
   ChevronLeft, ChevronRight, UserCheck, LogOut, MessageCircle,
-  Compass, ClipboardList, Video, Layers
+  Compass, ClipboardList, Video, Layers, Calendar
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Avatar } from '@/components/ui/avatar';
@@ -22,6 +22,7 @@ export const Sidebar: React.FC = () => {
   const navItems = [
     { name: 'Dashboard', path: '/', icon: <LayoutDashboard className="h-4.5 w-4.5" /> },
     { name: 'Projects (QA)', path: '/projects', icon: <FolderHeart className="h-4.5 w-4.5" /> },
+    { name: 'Calendar Hub', path: '/calendar', icon: <Calendar className="h-4.5 w-4.5" /> },
     { name: 'Feedback', path: '/feedback', icon: <MessageSquare className="h-4.5 w-4.5" /> },
     { name: 'User Feedback', path: '/user-feedback', icon: <MessageCircle className="h-4.5 w-4.5" /> },
     { name: 'Issues', path: '/issues', icon: <Bug className="h-4.5 w-4.5" /> },
