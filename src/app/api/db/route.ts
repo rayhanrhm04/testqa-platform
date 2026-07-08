@@ -260,9 +260,19 @@ try {
               "recurrenceInterval" INTEGER,
               "recurrenceType" TEXT,
               "projectId" UUID,
+              "projectName" TEXT,
+              "locationOrLink" TEXT,
+              "reminderNote" TEXT,
+              "colorLabel" TEXT,
+              "source" TEXT DEFAULT 'Manual',
               "createdAt" TIMESTAMPTZ DEFAULT NOW(),
               "updatedAt" TIMESTAMPTZ DEFAULT NOW()
             );
+            ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS "projectName" TEXT;
+            ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS "locationOrLink" TEXT;
+            ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS "reminderNote" TEXT;
+            ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS "colorLabel" TEXT;
+            ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS "source" TEXT DEFAULT 'Manual';
             CREATE TABLE IF NOT EXISTS public.calendar_workloads (
               id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
               date TEXT NOT NULL UNIQUE,
