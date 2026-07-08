@@ -54,13 +54,92 @@ export const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [pathname, setSidebarOpen]);
 
-  // Handle redirects - guests are allowed to browse all pages as Viewers.
+  // Handle redirects - guest users are restricted to /calendar and /release-notes only.
   React.useEffect(() => {
     if (mounted && isInitialized) {
-      // No automatic redirect to /login for guests anymore.
-      // Guests can browse pages in read-only mode.
+      if (!currentUser) {
+        const isAllowedPage = pathname === '/calendar' || 
+                              pathname === '/release-notes' || 
+                              pathname === '/login' || 
+                              pathname === '/register';
+        if (!isAllowedPage) {
+          router.push('/login');
+        }
+      }
     }
   }, [currentUser, isInitialized, pathname, router, mounted]);
+
+  // 2. General Role-based Page Restriction check
+  const isRestricted = React.useMemo(() => {
+    if (!currentUser) return false;
+    if (activeRole === 'Admin') return false;
+
+    if (activeRole === 'QA Engineer') {
+      return pathname === '/settings' || pathname === '/analytics';
+    }
+
+    if (activeRole === 'Developer') {
+      const allowed = [
+        '/',
+        '/feedback',
+        '/user-feedback',
+        '/issues',
+        '/releases',
+        '/release-notes',
+        '/api-hub',
+        '/login',
+        '/register'
+      ];
+      const isDirectlyAllowed = allowed.includes(pathname);
+      const isPrefixAllowed = pathname.startsWith('/feedback/') ||
+                              pathname.startsWith('/api-hub/') ||
+                              pathname.startsWith('/releases/') ||
+                              pathname.startsWith('/release-notes/');
+      return !(isDirectlyAllowed || isPrefixAllowed);
+    }
+
+    if (activeRole === 'PSE') {
+      const allowed = [
+        '/release-notes',
+        '/calendar',
+        '/projects',
+        '/project-status',
+        '/login',
+        '/register'
+      ];
+      const isDirectlyAllowed = allowed.includes(pathname);
+      const isPrefixAllowed = pathname.startsWith('/projects/') ||
+                              pathname.startsWith('/release-notes/');
+      return !(isDirectlyAllowed || isPrefixAllowed);
+    }
+
+    if (activeRole === 'Reporter') {
+      const allowed = [
+        '/reports',
+        '/analytics',
+        '/feedback',
+        '/user-feedback',
+        '/release-notes',
+        '/implementation-reports',
+        '/login',
+        '/register'
+      ];
+      const isDirectlyAllowed = allowed.includes(pathname);
+      const isPrefixAllowed = pathname.startsWith('/feedback/') ||
+                              pathname.startsWith('/implementation-reports/') ||
+                              pathname.startsWith('/release-notes/');
+      return !(isDirectlyAllowed || isPrefixAllowed);
+    }
+
+    return false;
+  }, [currentUser, activeRole, pathname]);
+
+  const getRoleRedirectPath = () => {
+    if (activeRole === 'PSE') return '/project-status';
+    if (activeRole === 'Reporter') return '/feedback';
+    if (activeRole === 'Developer') return '/';
+    return '/';
+  };
 
   if (!mounted || !isInitialized) {
     return (
@@ -84,19 +163,6 @@ export const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ childre
       </div>
     );
   }
-
-  // 2. Reporter Restriction check
-  // Reporter can only access /reports, /analytics, /feedback, /user-feedback, /release-notes, and /implementation-reports (only applies to logged-in users)
-  const isReporterRestricted = currentUser && 
-                               activeRole === 'Reporter' && 
-                               pathname !== '/reports' && 
-                               pathname !== '/analytics' &&
-                               pathname !== '/feedback' &&
-                               pathname !== '/user-feedback' &&
-                               pathname !== '/release-notes' &&
-                               pathname !== '/implementation-reports' &&
-                               !pathname.startsWith('/implementation-reports/') &&
-                               !pathname.startsWith('/feedback/');
 
   return (
     <div className={`min-h-screen bg-background text-foreground transition-all duration-300 relative`}>
@@ -122,7 +188,7 @@ export const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ childre
                 <span className="text-xs font-semibold text-muted-foreground animate-pulse">Tunggu sebentar yaa...</span>
               </div>
             </div>
-          ) : isReporterRestricted ? (
+          ) : isRestricted ? (
             /* ACCESS RESTRICTED ERROR SCREEN */
             <div className="flex h-[70vh] flex-col items-center justify-center text-center max-w-md mx-auto space-y-4">
               <div className="rounded-full bg-red-500/10 p-4 text-red-500 border border-red-500/20">
@@ -131,23 +197,13 @@ export const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ childre
               <div className="space-y-2">
                 <h2 className="text-lg font-bold text-foreground">Akses Dibatasi (Access Restricted)</h2>
                 <p className="text-sm text-muted-foreground">
-                  Akun Anda saat ini memiliki peran <strong className="text-foreground">Reporter</strong>. Peran ini dibatasi hanya untuk mengakses modul **Feedback**, **Reports**, dan **Analytics** saja.
+                  Akun Anda saat ini memiliki peran <strong className="text-foreground">{activeRole}</strong>. Peran ini dibatasi untuk mengakses halaman ini.
                 </p>
               </div>
               <div className="flex gap-2 pt-2">
-                <Link href="/feedback">
+                <Link href={getRoleRedirectPath()}>
                   <Button className="cursor-pointer font-bold text-xs bg-primary hover:bg-primary/90 text-primary-foreground">
-                    <MessageSquare className="h-4 w-4 mr-1.5" /> Buka Feedback
-                  </Button>
-                </Link>
-                <Link href="/reports">
-                  <Button variant="outline" className="cursor-pointer font-bold text-xs">
-                    <FileText className="h-4 w-4 mr-1.5" /> Buka Reports
-                  </Button>
-                </Link>
-                <Link href="/analytics">
-                  <Button variant="outline" className="cursor-pointer font-bold text-xs">
-                    <BarChart3 className="h-4 w-4 mr-1.5" /> Buka Analytics
+                    Kembali ke Modul Anda
                   </Button>
                 </Link>
               </div>

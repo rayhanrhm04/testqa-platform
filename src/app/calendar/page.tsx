@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCalendarStore } from '@/store/useCalendarStore';
 import { useProjectMonitorStore } from '@/store/useProjectMonitorStore';
+import { useDataStore } from '@/store/useDataStore';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useUIStore } from '@/store/useUIStore';
 import { 
   CalendarEvent, CalendarEventType, CalendarWorkload, 
   CalendarEventStatus, CALENDAR_EVENT_TYPES, EVENT_TYPE_COLORS 
@@ -24,6 +27,22 @@ export default function CalendarHubPage() {
   
   const { allEvents, isLoading, fetchData, addEvent, updateEvent, deleteEvent, setManualWorkload } = useCalendarStore();
   const { projects, fetchData: fetchProjects } = useProjectMonitorStore();
+  const manualWorkloads = useDataStore((state) => state.calendarWorkloads);
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const { addToast } = useUIStore();
+
+  const handleShareCalendar = () => {
+    if (typeof window !== 'undefined') {
+      const shareUrl = `${window.location.origin}/calendar`;
+      navigator.clipboard.writeText(shareUrl)
+        .then(() => {
+          addToast('Link share guest Calendar berhasil disalin!', 'success');
+        })
+        .catch(() => {
+          addToast('Gagal menyalin link share.', 'error');
+        });
+    }
+  };
 
   const [currentDate, setCurrentDate] = React.useState(new Date());
   const [viewMode, setViewMode] = React.useState<'month' | 'week' | 'day' | 'list'>('month');
@@ -192,7 +211,7 @@ export default function CalendarHubPage() {
   };
 
   // Form submit
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
 
@@ -231,9 +250,9 @@ export default function CalendarHubPage() {
 
     try {
       if (editingEvent) {
-        updateEvent(editingEvent.id, payload);
+        await updateEvent(editingEvent.id, payload);
       } else {
-        addEvent(payload);
+        await addEvent(payload);
       }
       setIsEventModalOpen(false);
     } catch (err: any) {
@@ -315,7 +334,7 @@ export default function CalendarHubPage() {
     for (let day = 1; day <= totalDays; day++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const dayEvents = allEvents.filter(e => e.date === dateStr);
-      const workload = getCalendarWorkloadByDate(dateStr, allEvents);
+      const workload = getCalendarWorkloadByDate(dateStr, allEvents, manualWorkloads);
       
       cells.push(
         <div 
@@ -404,7 +423,7 @@ export default function CalendarHubPage() {
         {days.map((date, idx) => {
           const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
           const dayEvents = allEvents.filter(e => e.date === dateStr);
-          const workload = getCalendarWorkloadByDate(dateStr, allEvents);
+          const workload = getCalendarWorkloadByDate(dateStr, allEvents, manualWorkloads);
           
           return (
             <div 
@@ -474,7 +493,7 @@ export default function CalendarHubPage() {
   const renderDayView = () => {
     const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
     const dayEvents = allEvents.filter(e => e.date === dateStr);
-    const workload = getCalendarWorkloadByDate(dateStr, allEvents);
+    const workload = getCalendarWorkloadByDate(dateStr, allEvents, manualWorkloads);
 
     return (
       <div className="max-w-xl mx-auto bg-card rounded-2xl border border-border/50 p-6 shadow-xs space-y-6 select-none">
@@ -499,36 +518,39 @@ export default function CalendarHubPage() {
         </div>
 
         {/* Workload Override Selector */}
-        <div className="bg-slate-50/50 dark:bg-zinc-900/10 p-3.5 rounded-xl border border-border/40 space-y-2">
-          <p className="text-[10px] uppercase font-bold text-muted-foreground">Override Date Workload Indicator</p>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {(['Auto', 'Normal', 'Busy', 'Very Busy', 'Critical'] as const).map(level => {
-              const currentOverride = getManualWorkloads()[dateStr] || 'Auto';
-              const isActive = currentOverride === level;
-              
-              let activeColor = 'bg-primary text-primary-foreground';
-              if (level === 'Normal') activeColor = 'bg-emerald-500 text-white';
-              if (level === 'Busy') activeColor = 'bg-amber-500 text-white';
-              if (level === 'Very Busy') activeColor = 'bg-orange-500 text-white';
-              if (level === 'Critical') activeColor = 'bg-red-500 text-white';
+        {currentUser && (
+          <div className="bg-slate-50/50 dark:bg-zinc-900/10 p-3.5 rounded-xl border border-border/40 space-y-2">
+            <p className="text-[10px] uppercase font-bold text-muted-foreground">Override Date Workload Indicator</p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {(['Auto', 'Normal', 'Busy', 'Very Busy', 'Critical'] as const).map(level => {
+                const overrideObj = manualWorkloads.find(w => w.date === dateStr);
+                const currentOverride = overrideObj ? overrideObj.workload : 'Auto';
+                const isActive = currentOverride === level;
+                
+                let activeColor = 'bg-primary text-primary-foreground';
+                if (level === 'Normal') activeColor = 'bg-emerald-500 text-white';
+                if (level === 'Busy') activeColor = 'bg-amber-500 text-white';
+                if (level === 'Very Busy') activeColor = 'bg-orange-500 text-white';
+                if (level === 'Critical') activeColor = 'bg-red-500 text-white';
 
-              return (
-                <button
-                  key={level}
-                  type="button"
-                  onClick={() => setManualWorkload(dateStr, level)}
-                  className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md border transition-all cursor-pointer ${
-                    isActive 
-                      ? `${activeColor} border-transparent shadow-xs scale-105` 
-                      : 'bg-card text-muted-foreground border-border hover:bg-slate-50 hover:text-foreground'
-                  }`}
-                >
-                  {level === 'Auto' ? 'Calculated (Auto)' : level}
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    key={level}
+                    type="button"
+                    onClick={() => setManualWorkload(dateStr, level)}
+                    className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md border transition-all cursor-pointer ${
+                      isActive 
+                        ? `${activeColor} border-transparent shadow-xs scale-105` 
+                        : 'bg-card text-muted-foreground border-border hover:bg-slate-50 hover:text-foreground'
+                    }`}
+                  >
+                    {level === 'Auto' ? 'Calculated (Auto)' : level}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Schedule List */}
         <div className="space-y-4">
@@ -572,12 +594,14 @@ export default function CalendarHubPage() {
         </div>
 
         {/* Quick Add bottom */}
-        <button
-          onClick={() => handleOpenAddEvent(dateStr)}
-          className="w-full py-2 bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-black uppercase tracking-wider rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-        >
-          <Plus className="w-4 h-4" /> Add Event for Today
-        </button>
+        {currentUser && (
+          <button
+            onClick={() => handleOpenAddEvent(dateStr)}
+            className="w-full py-2 bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-black uppercase tracking-wider rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <Plus className="w-4 h-4" /> Add Event for Today
+          </button>
+        )}
       </div>
     );
   };
@@ -755,18 +779,27 @@ export default function CalendarHubPage() {
         </div>
         <div className="flex items-center gap-2">
           <button 
+            onClick={handleShareCalendar}
+            className="inline-flex h-9 items-center justify-center rounded-xl border border-border bg-card px-4 text-xs font-bold hover:bg-secondary text-foreground cursor-pointer shadow-xs transition-colors"
+          >
+            <ExternalLink className="w-4 h-4 mr-1.5" /> Share Calendar
+          </button>
+
+          <button 
             onClick={() => setIsExportModalOpen(true)}
             className="inline-flex h-9 items-center justify-center rounded-xl border border-border bg-card px-4 text-xs font-bold hover:bg-secondary text-foreground cursor-pointer shadow-xs transition-colors"
           >
             <FileText className="w-4 h-4 mr-1.5" /> Export PDF
           </button>
           
-          <button
-            onClick={() => handleOpenAddEvent()}
-            className="inline-flex h-9 items-center justify-center rounded-xl bg-primary px-4 text-xs font-bold text-primary-foreground hover:bg-primary-hover cursor-pointer shadow-sm shadow-primary/10 transition-colors"
-          >
-            <Plus className="h-4 w-4 mr-1.5" /> Add Event
-          </button>
+          {currentUser && (
+            <button
+              onClick={() => handleOpenAddEvent()}
+              className="inline-flex h-9 items-center justify-center rounded-xl bg-primary px-4 text-xs font-bold text-primary-foreground hover:bg-primary-hover cursor-pointer shadow-sm shadow-primary/10 transition-colors"
+            >
+              <Plus className="h-4 w-4 mr-1.5" /> Add Event
+            </button>
+          )}
         </div>
       </div>
 
@@ -1212,7 +1245,7 @@ export default function CalendarHubPage() {
             {/* Event Actions */}
             <div className="flex items-center justify-between gap-2 pt-2">
               <div>
-                {selectedEvent.source === 'Manual' && selectedEvent.status !== 'Done' && (
+                {currentUser && selectedEvent.source === 'Manual' && selectedEvent.status !== 'Done' && (
                   <button
                     onClick={() => handleMarkAsDone(selectedEvent)}
                     className="inline-flex h-8 items-center justify-center rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 text-xs font-bold cursor-pointer"
@@ -1222,7 +1255,7 @@ export default function CalendarHubPage() {
                 )}
               </div>
 
-              {selectedEvent.source === 'Manual' && (
+              {currentUser && selectedEvent.source === 'Manual' && (
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleOpenEditEvent(selectedEvent)}

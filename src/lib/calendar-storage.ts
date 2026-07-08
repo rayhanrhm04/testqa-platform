@@ -130,11 +130,15 @@ export function saveManualWorkload(date: string, workload: string): void {
 }
 
 // 4. Grouped querying helpers
-export function getCalendarWorkloadByDate(date: string, allEvents: CalendarEvent[]): 'Empty' | 'Normal' | 'Busy' | 'Very Busy' | 'Critical' {
+export function getCalendarWorkloadByDate(
+  date: string, 
+  allEvents: CalendarEvent[],
+  manualWorkloads: any[] = []
+): 'Empty' | 'Normal' | 'Busy' | 'Very Busy' | 'Critical' {
   // Check manual overrides first
-  const overrides = getManualWorkloads();
-  if (overrides[date] && overrides[date] !== 'Auto') {
-    return overrides[date] as any;
+  const override = manualWorkloads.find(w => w.date === date);
+  if (override && override.workload !== 'Auto') {
+    return override.workload as any;
   }
 
   const dayEvents = allEvents.filter(e => e.date === date);

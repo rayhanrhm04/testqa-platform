@@ -23,6 +23,9 @@ interface DataState {
   projects: Project[];
   feedbacks: Feedback[];
   issues: Issue[];
+  calendarEvents: any[];
+  calendarWorkloads: any[];
+  standaloneProjects: any[];
   releases: Release[];
   releaseProjects: ReleaseProject[];
   testSuites: TestSuite[];
@@ -269,6 +272,9 @@ export const useDataStore = create<DataState>((set, get) => {
     projects: [],
     feedbacks: [],
     issues: [],
+    calendarEvents: [],
+    calendarWorkloads: [],
+    standaloneProjects: [],
     releases: [],
     releaseProjects: [],
     testSuites: [],
@@ -322,6 +328,9 @@ export const useDataStore = create<DataState>((set, get) => {
         projects: getLocal('projects', seedProjects),
         feedbacks: getLocal('feedbacks', seedFeedbacks),
         issues: getLocal('issues', seedIssues),
+        calendarEvents: getLocal('calendarEvents', []),
+        calendarWorkloads: getLocal('calendarWorkloads', []),
+        standaloneProjects: getLocal('standaloneProjects', []),
         releases: getLocal('releases', seedReleases),
         releaseProjects: getLocal('releaseProjects', seedReleaseProjects),
         testSuites: getLocal('testSuites', seedTestSuites),
@@ -374,6 +383,9 @@ export const useDataStore = create<DataState>((set, get) => {
 
             // 2. Sync Non-Critical Tables in the background (failures are ignored and won't affect status)
             Promise.allSettled([
+              syncEntity('calendarEvents', Promise.resolve(supabase!.from('calendar_events').select('*')), (data: any) => set({ calendarEvents: data })),
+              syncEntity('calendarWorkloads', Promise.resolve(supabase!.from('calendar_workloads').select('*')), (data: any) => set({ calendarWorkloads: data })),
+              syncEntity('standaloneProjects', Promise.resolve(supabase!.from('standalone_projects').select('*').order('createdAt', { ascending: true })), (data: any) => set({ standaloneProjects: data })),
               syncEntity('testSuites', Promise.resolve(supabase!.from('test_suites').select('*')), (data: any) => set({ testSuites: data })),
               syncEntity('testCases', Promise.resolve(supabase!.from('test_cases').select('*').order('code', { ascending: true })), (data: any) => set({ testCases: data })),
               syncEntity('testRuns', Promise.resolve(supabase!.from('test_runs').select('*').order('created_at', { ascending: false })), (data: any) => set({ testRuns: data })),

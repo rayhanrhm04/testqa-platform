@@ -377,6 +377,7 @@ CREATE TABLE public.users (
                         <option value="QA Engineer">QA Engineer</option>
                         <option value="Developer">Developer</option>
                         <option value="Reporter">Reporter</option>
+                        <option value="PSE">PSE</option>
                       </select>
                     </td>
                   </tr>

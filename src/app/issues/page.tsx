@@ -1019,7 +1019,12 @@ export default function IssuesPage() {
                     </button>
                   )}
                 </span>
-                {activeDetailIssue.attachment_url ? (
+                {activeDetailIssue.attachment_name && !activeDetailIssue.attachment_url ? (
+                  <div className="flex flex-col items-center justify-center p-6 border border-dashed border-border rounded-lg bg-zinc-50/50 dark:bg-zinc-900/10 min-h-[100px] text-muted-foreground gap-2">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                    <span className="text-[10px] font-medium tracking-wide">Loading attachment data...</span>
+                  </div>
+                ) : activeDetailIssue.attachment_url ? (
                   <div className="p-3 rounded-lg border border-border bg-zinc-50 dark:bg-zinc-900/20 text-xs">
                     {activeDetailIssue.attachment_url.startsWith('data:image/') ? (
                       <div className="space-y-2">

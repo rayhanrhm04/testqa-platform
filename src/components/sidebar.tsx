@@ -10,7 +10,7 @@ import {
   LayoutDashboard, MessageSquare, Bug, Rocket, FolderHeart, 
   FileSpreadsheet, PlayCircle, FileText, BarChart3, Settings, 
   ChevronLeft, ChevronRight, UserCheck, LogOut, MessageCircle,
-  Compass, ClipboardList, Video, Layers, Calendar
+  Compass, ClipboardList, Video, Layers, Calendar, Briefcase
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Avatar } from '@/components/ui/avatar';
@@ -24,6 +24,7 @@ export const Sidebar: React.FC = () => {
   const navItems = [
     { name: 'Dashboard', path: '/', icon: <LayoutDashboard className="h-4.5 w-4.5" /> },
     { name: 'Projects (QA)', path: '/projects', icon: <FolderHeart className="h-4.5 w-4.5" /> },
+    { name: 'Project Status', path: '/project-status', icon: <Briefcase className="h-4.5 w-4.5" /> },
     { name: 'Calendar Hub', path: '/calendar', icon: <Calendar className="h-4.5 w-4.5" /> },
     { name: 'Feedback', path: '/feedback', icon: <MessageSquare className="h-4.5 w-4.5" /> },
     { name: 'User Feedback', path: '/user-feedback', icon: <MessageCircle className="h-4.5 w-4.5" /> },
@@ -41,7 +42,31 @@ export const Sidebar: React.FC = () => {
     { name: 'Implementation Reports', path: '/implementation-reports', icon: <ClipboardList className="h-4.5 w-4.5" /> },
     { name: 'Settings', path: '/settings', icon: <Settings className="h-4.5 w-4.5" /> },
   ].filter((item) => {
-    if (currentUser && activeRole === 'Reporter') {
+    if (!currentUser) {
+      return item.name === 'Calendar Hub' || item.name === 'Release Notes';
+    }
+    if (activeRole === 'Admin') {
+      return true;
+    }
+    if (activeRole === 'QA Engineer') {
+      return item.name !== 'Settings' && item.name !== 'Analytics';
+    }
+    if (activeRole === 'Developer') {
+      return item.name === 'Dashboard' ||
+             item.name === 'Feedback' ||
+             item.name === 'User Feedback' ||
+             item.name === 'Issues' ||
+             item.name === 'Releases' ||
+             item.name === 'Release Notes' ||
+             item.name === 'API Testing Hub';
+    }
+    if (activeRole === 'PSE') {
+      return item.name === 'Release Notes' ||
+             item.name === 'Calendar Hub' ||
+             item.name === 'Projects (QA)' ||
+             item.name === 'Project Status';
+    }
+    if (activeRole === 'Reporter') {
       return item.name === 'Reports' || 
              item.name === 'Analytics' || 
              item.name === 'Feedback' || 

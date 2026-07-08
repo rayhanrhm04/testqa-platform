@@ -184,6 +184,7 @@ export default function RegisterPage() {
                 <option value="Developer">Developer (Assigned Bugs access)</option>
                 <option value="QA Engineer">QA Engineer (Full Testing suite access)</option>
                 <option value="Admin">Admin (Full administrator control)</option>
+                <option value="PSE">PSE (Release Notes, Calendar, Projects access)</option>
               </select>
             </div>
 

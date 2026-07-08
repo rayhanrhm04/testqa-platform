@@ -29,7 +29,8 @@ export default function DashboardPage() {
     releases, 
     projects,
     testSuites,
-    projectShares
+    projectShares,
+    calendarWorkloads
   } = useDataStore();
   const { activeRole, currentUser } = useAuthStore();
 
@@ -108,10 +109,10 @@ export default function DashboardPage() {
 
   const highWorkloadDaysThisWeek = React.useMemo(() => {
     return next7Days.map(date => {
-      const workload = getCalendarWorkloadByDate(date, allEvents);
+      const workload = getCalendarWorkloadByDate(date, allEvents, calendarWorkloads);
       return { date, workload };
     }).filter(d => d.workload === 'Busy' || d.workload === 'Very Busy' || d.workload === 'Critical');
-  }, [allEvents, next7Days]);
+  }, [allEvents, next7Days, calendarWorkloads]);
 
   // Filter projects by sharing rules
   const accessibleProjects = React.useMemo(() => {

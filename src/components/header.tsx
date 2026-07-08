@@ -95,36 +95,9 @@ export const Header: React.FC = () => {
         </div>
       </div>
 
-      {/* Right: Actions (DB Status, Limit Count, Notifications, Profile, Theme) */}
+      {/* Right: Actions (Theme, Notifications) */}
       <div className="flex items-center gap-3 md:gap-4 shrink-0">
         
-        {/* DB Connection Badge */}
-        <div 
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-            supabaseConnected
-              ? 'bg-emerald-500/5 text-emerald-500 border-emerald-500/10'
-              : 'bg-amber-500/5 text-amber-500 border-amber-500/10'
-          }`}
-          title={supabaseConnected ? 'Supabase Syncing Enabled' : 'No Supabase Configuration Found. Saved to LocalStorage.'}
-        >
-          {supabaseConnected ? (
-            <>
-              <Cloud className="h-3.5 w-3.5" />
-              <span className="hidden lg:inline">Supabase Active</span>
-            </>
-          ) : (
-            <>
-              <CloudOff className="h-3.5 w-3.5" />
-              <span className="hidden lg:inline">Local fallback</span>
-            </>
-          )}
-        </div>
-
-        {/* Mock Limit/Credit Indicator (exactly like image) */}
-        <div className="h-8 w-8 rounded-full border border-border flex items-center justify-center font-bold text-xs text-foreground select-none shrink-0" title="Portal usage credit">
-          1
-        </div>
-
         {/* Notification Bell (exactly like image) */}
         <div className="relative shrink-0" ref={notificationsRef}>
           <div 
@@ -236,12 +209,6 @@ export const Header: React.FC = () => {
         >
           {theme === 'light' ? <Moon className="h-4.5 w-4.5 text-muted-foreground" /> : <Sun className="h-4.5 w-4.5 text-amber-400" />}
         </Button>
-
-        {/* User Profile Avatar (simplified: name text removed, wrapped in link to /profile) */}
-        <Link href="/profile" className="flex items-center gap-1 cursor-pointer hover:opacity-90 select-none shrink-0" title={currentUser ? currentUser.name : 'Guest User'}>
-          <Avatar user={currentUser} className="h-8.5 w-8.5 text-white font-black text-sm bg-[#00E575]" />
-          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-        </Link>
       </div>
     </header>
   );

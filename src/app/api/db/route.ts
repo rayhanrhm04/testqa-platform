@@ -241,10 +241,49 @@ try {
         );
       `)
         .then(() => {
-          console.log('Database migration: implementation report, notifications, recorder, and api hub tables check passed');
-          pool.query('ALTER TABLE public.issues ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES public.users(id) ON DELETE SET NULL;')
-            .then(() => console.log('Database migration: public.issues.created_by check passed'))
-            .catch((err) => console.warn('Database migration warning for issues.created_by:', err));
+          // Migration: Create calendar_events and calendar_workloads tables
+          pool.query(`
+            CREATE TABLE IF NOT EXISTS public.calendar_events (
+              id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+              title TEXT NOT NULL,
+              type TEXT NOT NULL,
+              date TEXT NOT NULL,
+              "startTime" TEXT,
+              "endTime" TEXT,
+              "timeZone" TEXT,
+              "isAllDay" BOOLEAN DEFAULT FALSE,
+              description TEXT,
+              status TEXT NOT NULL DEFAULT 'Upcoming',
+              workload TEXT DEFAULT 'Medium',
+              recurrence TEXT,
+              "recurrenceEnd" TEXT,
+              "recurrenceInterval" INTEGER,
+              "recurrenceType" TEXT,
+              "projectId" UUID,
+              "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+              "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS public.calendar_workloads (
+              id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+              date TEXT NOT NULL UNIQUE,
+              workload TEXT NOT NULL,
+              "createdAt" TIMESTAMPTZ DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS public.standalone_projects (
+              id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+              name TEXT NOT NULL,
+              status TEXT NOT NULL DEFAULT 'Planning',
+              notes TEXT,
+              "createdAt" TIMESTAMPTZ DEFAULT NOW()
+            );
+          `)
+            .then(() => {
+              console.log('Database migration: calendar tables check passed');
+              pool.query('ALTER TABLE public.issues ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES public.users(id) ON DELETE SET NULL;')
+                .then(() => console.log('Database migration: public.issues.created_by check passed'))
+                .catch((err) => console.warn('Database migration warning for issues.created_by:', err));
+            })
+            .catch((err) => console.warn('Database migration warning for calendar tables:', err));
         })
         .catch((err) => console.warn('Database migration warning for implementation report, notifications, recorder, and api hub tables:', err));
     })
