@@ -357,7 +357,7 @@ export const useDataStore = create<DataState>((set, get) => {
           syncStore.setSyncStatus('syncing');
 
           try {
-            await Promise.allSettled([
+            const results = await Promise.allSettled([
               syncEntity('projects', Promise.resolve(supabase!.from('projects').select('*').order('created_at', { ascending: false })), (data: any) => set({ projects: data })),
               syncEntity('feedbacks', Promise.resolve(supabase!.from('feedbacks').select('*').order('created_at', { ascending: false })), (data: any) => set({ feedbacks: data })),
               syncEntity('issues', Promise.resolve(supabase!.from('issues').select('*').order('created_at', { ascending: false })), (data: any) => set({ issues: data })),
@@ -388,8 +388,13 @@ export const useDataStore = create<DataState>((set, get) => {
               syncEntity('apiTestResults', Promise.resolve(supabase!.from('api_test_results').select('*')), (data: any) => set({ apiTestResults: data })),
             ]);
 
-            syncStore.setSyncStatus('synced');
-            syncStore.setLastSyncedAt(new Date().toISOString());
+            const hasRejected = results.some(r => r.status === 'rejected');
+            if (hasRejected) {
+              syncStore.setSyncStatus('sync_failed');
+            } else {
+              syncStore.setSyncStatus('synced');
+              syncStore.setLastSyncedAt(new Date().toISOString());
+            }
           } catch (err) {
             syncStore.setSyncStatus('sync_failed');
           }
