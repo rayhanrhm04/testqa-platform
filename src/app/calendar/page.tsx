@@ -29,6 +29,7 @@ export default function CalendarHubPage() {
   const { projects, fetchData: fetchProjects } = useProjectMonitorStore();
   const manualWorkloads = useDataStore((state) => state.calendarWorkloads);
   const currentUser = useAuthStore((state) => state.currentUser);
+  const activeRole = useAuthStore((state) => state.activeRole);
   const { addToast } = useUIStore();
 
   const handleShareCalendar = () => {
@@ -159,6 +160,7 @@ export default function CalendarHubPage() {
 
   // Open Form modal for adding
   const handleOpenAddEvent = (initialDateStr?: string) => {
+    if (!currentUser || (activeRole !== 'Admin' && activeRole !== 'QA Engineer')) return;
     setEditingEvent(null);
     setEventTitle('');
     setEventType('Meeting');
@@ -183,6 +185,7 @@ export default function CalendarHubPage() {
 
   // Open Form modal for editing
   const handleOpenEditEvent = (event: CalendarEvent) => {
+    if (!currentUser || (activeRole !== 'Admin' && activeRole !== 'QA Engineer')) return;
     if (event.source !== 'Manual') {
       alert('Automatic events (Project release targets and Worklogs) cannot be modified.');
       return;
@@ -262,6 +265,7 @@ export default function CalendarHubPage() {
 
   // Mark as Done
   const handleMarkAsDone = (event: CalendarEvent) => {
+    if (!currentUser || (activeRole !== 'Admin' && activeRole !== 'QA Engineer')) return;
     if (event.source === 'Manual') {
       updateEvent(event.id, { status: 'Done' });
       setIsDetailOpen(false);
@@ -272,6 +276,7 @@ export default function CalendarHubPage() {
 
   // Delete manual event
   const handleDeleteEvent = (eventId: string) => {
+    if (!currentUser || (activeRole !== 'Admin' && activeRole !== 'QA Engineer')) return;
     if (confirm('Are you sure you want to delete this event?')) {
       deleteEvent(eventId);
       setIsDetailOpen(false);
@@ -384,15 +389,17 @@ export default function CalendarHubPage() {
           </div>
 
           {/* Quick Add floating button inside cells */}
-          <button
-            onClick={(event) => {
-              event.stopPropagation();
-              handleOpenAddEvent(dateStr);
-            }}
-            className="w-full text-center py-0.5 mt-1 border border-dashed border-border/30 hover:border-primary/50 text-[9px] text-muted-foreground hover:text-primary transition-all rounded-sm opacity-0 group-hover:opacity-100 cursor-pointer"
-          >
-            + Add Event
-          </button>
+          {currentUser && (activeRole === 'Admin' || activeRole === 'QA Engineer') && (
+            <button
+              onClick={(event) => {
+                event.stopPropagation();
+                handleOpenAddEvent(dateStr);
+              }}
+              className="w-full text-center py-0.5 mt-1 border border-dashed border-border/30 hover:border-primary/50 text-[9px] text-muted-foreground hover:text-primary transition-all rounded-sm opacity-0 group-hover:opacity-100 cursor-pointer"
+            >
+              + Add Event
+            </button>
+          )}
         </div>
       );
     }
@@ -476,12 +483,14 @@ export default function CalendarHubPage() {
               </div>
 
               {/* Quick Add */}
-              <button 
-                onClick={() => handleOpenAddEvent(dateStr)}
-                className="w-full py-1 bg-secondary hover:bg-slate-100 border border-border/50 text-[9px] font-bold text-muted-foreground hover:text-foreground transition-all rounded-lg cursor-pointer mt-3"
-              >
-                + Add Update
-              </button>
+              {currentUser && (activeRole === 'Admin' || activeRole === 'QA Engineer') && (
+                <button 
+                  onClick={() => handleOpenAddEvent(dateStr)}
+                  className="w-full py-1 bg-secondary hover:bg-slate-100 border border-border/50 text-[9px] font-bold text-muted-foreground hover:text-foreground transition-all rounded-lg cursor-pointer mt-3"
+                >
+                  + Add Update
+                </button>
+              )}
             </div>
           );
         })}
@@ -518,7 +527,7 @@ export default function CalendarHubPage() {
         </div>
 
         {/* Workload Override Selector */}
-        {currentUser && (
+        {currentUser && (activeRole === 'Admin' || activeRole === 'QA Engineer') && (
           <div className="bg-slate-50/50 dark:bg-zinc-900/10 p-3.5 rounded-xl border border-border/40 space-y-2">
             <p className="text-[10px] uppercase font-bold text-muted-foreground">Override Date Workload Indicator</p>
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -594,7 +603,7 @@ export default function CalendarHubPage() {
         </div>
 
         {/* Quick Add bottom */}
-        {currentUser && (
+        {currentUser && (activeRole === 'Admin' || activeRole === 'QA Engineer') && (
           <button
             onClick={() => handleOpenAddEvent(dateStr)}
             className="w-full py-2 bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-black uppercase tracking-wider rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
@@ -792,7 +801,7 @@ export default function CalendarHubPage() {
             <FileText className="w-4 h-4 mr-1.5" /> Export PDF
           </button>
           
-          {currentUser && (
+          {currentUser && (activeRole === 'Admin' || activeRole === 'QA Engineer') && (
             <button
               onClick={() => handleOpenAddEvent()}
               className="inline-flex h-9 items-center justify-center rounded-xl bg-primary px-4 text-xs font-bold text-primary-foreground hover:bg-primary-hover cursor-pointer shadow-sm shadow-primary/10 transition-colors"
@@ -1245,7 +1254,7 @@ export default function CalendarHubPage() {
             {/* Event Actions */}
             <div className="flex items-center justify-between gap-2 pt-2">
               <div>
-                {currentUser && selectedEvent.source === 'Manual' && selectedEvent.status !== 'Done' && (
+                {currentUser && (activeRole === 'Admin' || activeRole === 'QA Engineer') && selectedEvent.source === 'Manual' && selectedEvent.status !== 'Done' && (
                   <button
                     onClick={() => handleMarkAsDone(selectedEvent)}
                     className="inline-flex h-8 items-center justify-center rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 text-xs font-bold cursor-pointer"
@@ -1255,7 +1264,7 @@ export default function CalendarHubPage() {
                 )}
               </div>
 
-              {currentUser && selectedEvent.source === 'Manual' && (
+              {currentUser && (activeRole === 'Admin' || activeRole === 'QA Engineer') && selectedEvent.source === 'Manual' && (
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleOpenEditEvent(selectedEvent)}
