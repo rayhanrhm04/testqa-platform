@@ -711,7 +711,7 @@ export default function CalendarHubPage() {
     doc.setFontSize(10);
     doc.setTextColor(113, 113, 122);
     doc.text(`Generated Date: ${new Date().toLocaleDateString()}`, 20, 250);
-    doc.text(`Author: Solo QA Engineer`, 20, 260);
+    doc.text(`Author: MAPID QA (Rayhan)`, 20, 260);
 
     // Data Page
     doc.addPage();
