@@ -86,10 +86,11 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
   },
 
   updateEvent: async (id, updates) => {
+    const masterId = id.split('-occ-')[0];
     const events = useDataStore.getState().calendarEvents;
-    const index = events.findIndex(e => e.id === id);
+    const index = events.findIndex(e => e.id === masterId);
     if (index === -1) {
-      throw new Error(`Calendar event with ID ${id} not found.`);
+      throw new Error(`Calendar event with ID ${masterId} not found.`);
     }
 
     const updatedEvent: CalendarEvent = {
@@ -102,17 +103,17 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
       const { data, error } = await supabase!
         .from('calendar_events')
         .update(updates)
-        .eq('id', id)
+        .eq('id', masterId)
         .select();
       if (error) throw new Error(error.message || 'Failed to update calendar event');
       
-      const nextEvents = events.map(e => e.id === id ? (data[0] || updatedEvent) : e);
+      const nextEvents = events.map(e => e.id === masterId ? (data[0] || updatedEvent) : e);
       useDataStore.setState({ calendarEvents: nextEvents });
       safeWriteCache('calendarEvents', nextEvents);
       get().fetchData();
       return data[0] || updatedEvent;
     } else {
-      const nextEvents = events.map(e => e.id === id ? updatedEvent : e);
+      const nextEvents = events.map(e => e.id === masterId ? updatedEvent : e);
       useDataStore.setState({ calendarEvents: nextEvents });
       safeWriteCache('calendarEvents', nextEvents);
       get().fetchData();
@@ -121,11 +122,12 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
   },
 
   deleteEvent: async (id) => {
+    const masterId = id.split('-occ-')[0];
     const events = useDataStore.getState().calendarEvents;
-    const nextEvents = events.filter(e => e.id !== id);
+    const nextEvents = events.filter(e => e.id !== masterId);
 
     if (isSupabaseConfigured()) {
-      const { error } = await supabase!.from('calendar_events').delete().eq('id', id);
+      const { error } = await supabase!.from('calendar_events').delete().eq('id', masterId);
       if (error) throw new Error(error.message || 'Failed to delete calendar event');
     }
     
