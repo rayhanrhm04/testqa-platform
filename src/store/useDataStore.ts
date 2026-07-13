@@ -52,12 +52,18 @@ interface DataState {
   apiTestRuns: ApiTestRun[];
   apiTestResults: ApiTestResult[];
   isLoading: boolean;
+  rolePermissions: { role_name: string; allowed_modules: string }[];
 
   // Actions
   fetchData: () => Promise<void>;
   
   // Users
   updateUserRole: (id: string, role: UserRole) => Promise<void>;
+  updateRolePermissions: (roleName: string, allowedModules: string) => Promise<void>;
+  createCustomRole: (roleName: string, allowedModules: string) => Promise<void>;
+  deleteCustomRole: (roleName: string) => Promise<void>;
+  addUser: (name: string, email: string, role: string) => Promise<void>;
+  deleteUser: (id: string) => Promise<void>;
   
   // Projects
   addProject: (name: string, description: string) => Promise<Project | null>;
@@ -301,11 +307,20 @@ export const useDataStore = create<DataState>((set, get) => {
     apiTestRuns: [],
     apiTestResults: [],
     isLoading: true,
+    rolePermissions: [],
 
     fetchData: async () => {
       const getLocal = <T>(key: string, fallback: T): T => {
         return safeReadCache<T>(key, fallback).data;
       };
+
+      const defaultRolePermissions = [
+        { role_name: 'Admin', allowed_modules: 'dashboard,projects,project-status,calendar,feedback,issues,releases,release-notes,test-suites,test-cases,test-runs,exploratory,smart-recorder,api-hub,reports,analytics,settings' },
+        { role_name: 'QA Engineer', allowed_modules: 'dashboard,projects,project-status,calendar,feedback,issues,releases,release-notes,test-suites,test-cases,test-runs,exploratory,smart-recorder,api-hub,reports' },
+        { role_name: 'Developer', allowed_modules: 'dashboard,feedback,issues,api-hub,releases,release-notes' },
+        { role_name: 'Reporter', allowed_modules: 'feedback,release-notes,reports,analytics' },
+        { role_name: 'PSE', allowed_modules: 'release-notes,calendar,projects,project-status' }
+      ];
 
       const seedMockUsers = [
         { id: 'user-admin-1', name: 'Sarah Connor (Admin)', email: 'sarah.connor@portal.qa', role: 'Admin', created_at: new Date('2026-01-01').toISOString() },
@@ -356,6 +371,7 @@ export const useDataStore = create<DataState>((set, get) => {
         apiEnvironments: getLocal('apiEnvironments', []),
         apiTestRuns: getLocal('apiTestRuns', []),
         apiTestResults: getLocal('apiTestResults', []),
+        rolePermissions: getLocal('rolePermissions', defaultRolePermissions),
         isLoading: false,
       });
 
@@ -375,6 +391,7 @@ export const useDataStore = create<DataState>((set, get) => {
               syncEntity('users', Promise.resolve(supabase!.from('users').select('*').order('created_at', { ascending: false })), (data: any) => set({ users: data })),
               syncEntity('releaseProjects', Promise.resolve(supabase!.from('release_projects').select('*').order('created_at', { ascending: true })), (data: any) => set({ releaseProjects: data })),
               syncEntity('projectShares', Promise.resolve(supabase!.from('project_shares').select('*')), (data: any) => set({ projectShares: data })),
+              syncEntity('rolePermissions', Promise.resolve(supabase!.from('role_permissions').select('*')), (data: any) => set({ rolePermissions: data })),
             ]);
 
             // Mark as synced immediately once critical tables are successfully loaded
@@ -430,6 +447,128 @@ export const useDataStore = create<DataState>((set, get) => {
           const registered = JSON.parse(localStorage.getItem('qa_registered_users') || '[]');
           const updatedReg = registered.map((u: any) => u.id === id ? { ...u, role } : u);
           localStorage.setItem('qa_registered_users', JSON.stringify(updatedReg));
+          return { users: next };
+        });
+      }
+    },
+
+    updateRolePermissions: async (roleName, allowedModules) => {
+      if (isSupabaseConfigured()) {
+        const { error } = await supabase!
+          .from('role_permissions')
+          .update({ allowed_modules: allowedModules, updatedAt: new Date().toISOString() })
+          .eq('role_name', roleName);
+        if (error) throw error;
+        
+        set((state) => {
+          const next = state.rolePermissions.map((rp) => rp.role_name === roleName ? { ...rp, allowed_modules: allowedModules } : rp);
+          safeWriteCache('rolePermissions', next);
+          return { rolePermissions: next };
+        });
+      } else {
+        set((state) => {
+          const next = state.rolePermissions.map((rp) => rp.role_name === roleName ? { ...rp, allowed_modules: allowedModules } : rp);
+          safeWriteCache('rolePermissions', next);
+          return { rolePermissions: next };
+        });
+      }
+    },
+
+    createCustomRole: async (roleName, allowedModules) => {
+      const newRole = { role_name: roleName, allowed_modules: allowedModules };
+      if (isSupabaseConfigured()) {
+        const { error } = await supabase!.from('role_permissions').insert(newRole);
+        if (error) throw error;
+        
+        set((state) => {
+          const next = [...state.rolePermissions, newRole];
+          safeWriteCache('rolePermissions', next);
+          return { rolePermissions: next };
+        });
+      } else {
+        set((state) => {
+          const next = [...state.rolePermissions, newRole];
+          safeWriteCache('rolePermissions', next);
+          return { rolePermissions: next };
+        });
+      }
+    },
+
+    deleteCustomRole: async (roleName) => {
+      if (isSupabaseConfigured()) {
+        const { error } = await supabase!.from('role_permissions').delete().eq('role_name', roleName);
+        if (error) throw error;
+        
+        set((state) => {
+          const next = state.rolePermissions.filter((rp) => rp.role_name !== roleName);
+          safeWriteCache('rolePermissions', next);
+          return { rolePermissions: next };
+        });
+      } else {
+        set((state) => {
+          const next = state.rolePermissions.filter((rp) => rp.role_name !== roleName);
+          safeWriteCache('rolePermissions', next);
+          return { rolePermissions: next };
+        });
+      }
+    },
+
+    addUser: async (name, email, role) => {
+      const newId = 'user-' + Date.now();
+      const newUser = {
+        id: newId,
+        name,
+        email,
+        role,
+        created_at: new Date().toISOString()
+      };
+
+      if (isSupabaseConfigured()) {
+        // Generate random UUID for Postgres compatibility
+        const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+          const r = Math.random() * 16 | 0;
+          return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+        });
+        const pgUser = { ...newUser, id: uuid };
+        const { error } = await supabase!.from('users').insert(pgUser);
+        if (error) throw error;
+        
+        set((state) => {
+          const next = [...state.users, pgUser];
+          safeWriteCache('users', next);
+          return { users: next };
+        });
+      } else {
+        set((state) => {
+          const next = [...state.users, newUser];
+          const registered = JSON.parse(localStorage.getItem('qa_registered_users') || '[]');
+          registered.push({ ...newUser, password: 'password123' });
+          localStorage.setItem('qa_registered_users', JSON.stringify(registered));
+          
+          safeWriteCache('users', next);
+          return { users: next };
+        });
+      }
+    },
+
+    deleteUser: async (id) => {
+      if (isSupabaseConfigured()) {
+        const { error } = await supabase!.from('users').delete().eq('id', id);
+        if (error) throw error;
+        
+        set((state) => {
+          const next = state.users.filter((u) => u.id !== id);
+          safeWriteCache('users', next);
+          return { users: next };
+        });
+      } else {
+        set((state) => {
+          const next = state.users.filter((u) => u.id !== id);
+          const registered = JSON.parse(localStorage.getItem('qa_registered_users') || '[]');
+          const updatedReg = registered.filter((u: any) => u.id !== id);
+          localStorage.setItem('qa_registered_users', JSON.stringify(updatedReg));
+          
+          safeWriteCache('users', next);
           return { users: next };
         });
       }

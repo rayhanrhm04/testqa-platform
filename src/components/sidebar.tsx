@@ -4,6 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useDataStore } from '@/store/useDataStore';
 import { useUIStore } from '@/store/useUIStore';
 import { useSyncStore } from '@/store/useSyncStore';
 import { 
@@ -18,8 +19,31 @@ import { Avatar } from '@/components/ui/avatar';
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
   const { activeRole, currentUser, logout } = useAuthStore();
+  const { rolePermissions } = useDataStore();
   const { sidebarOpen, toggleSidebar, addToast } = useUIStore();
   const { syncStatus, lastSyncedAt } = useSyncStore();
+
+  const itemModuleMap: Record<string, string> = {
+    'Dashboard': 'dashboard',
+    'Projects (QA)': 'projects',
+    'Project Status': 'project-status',
+    'Calendar Hub': 'calendar',
+    'Feedback': 'feedback',
+    'User Feedback': 'feedback',
+    'Issues': 'issues',
+    'Releases': 'releases',
+    'Release Notes': 'release-notes',
+    'Test Suites': 'test-suites',
+    'Test Cases': 'test-cases',
+    'Test Runs': 'test-runs',
+    'Exploratory Testing': 'exploratory',
+    'Smart Recorder': 'smart-recorder',
+    'API Testing Hub': 'api-hub',
+    'Reports': 'reports',
+    'Implementation Reports': 'reports',
+    'Analytics': 'analytics',
+    'Settings': 'settings',
+  };
 
   const navItems = [
     { name: 'Dashboard', path: '/', icon: <LayoutDashboard className="h-4.5 w-4.5" /> },
@@ -45,36 +69,22 @@ export const Sidebar: React.FC = () => {
     if (!currentUser) {
       return item.name === 'Calendar Hub' || item.name === 'Release Notes';
     }
-    if (activeRole === 'Admin') {
-      return true;
+    const currentPermissions = rolePermissions.find(rp => rp.role_name === activeRole);
+    if (!currentPermissions) {
+      if (activeRole === 'Admin') return true;
+      if (activeRole === 'QA Engineer') return item.name !== 'Settings' && item.name !== 'Analytics';
+      if (activeRole === 'Developer') {
+        return item.name === 'Dashboard' || item.name === 'Feedback' || item.name === 'User Feedback' ||
+               item.name === 'Issues' || item.name === 'Releases' || item.name === 'Release Notes' || item.name === 'API Testing Hub';
+      }
+      if (activeRole === 'PSE') {
+        return item.name === 'Release Notes' || item.name === 'Calendar Hub' || item.name === 'Projects (QA)' || item.name === 'Project Status';
+      }
+      return item.name === 'Reports' || item.name === 'Analytics' || item.name === 'Feedback' || item.name === 'User Feedback' || item.name === 'Release Notes';
     }
-    if (activeRole === 'QA Engineer') {
-      return item.name !== 'Settings' && item.name !== 'Analytics';
-    }
-    if (activeRole === 'Developer') {
-      return item.name === 'Dashboard' ||
-             item.name === 'Feedback' ||
-             item.name === 'User Feedback' ||
-             item.name === 'Issues' ||
-             item.name === 'Releases' ||
-             item.name === 'Release Notes' ||
-             item.name === 'API Testing Hub';
-    }
-    if (activeRole === 'PSE') {
-      return item.name === 'Release Notes' ||
-             item.name === 'Calendar Hub' ||
-             item.name === 'Projects (QA)' ||
-             item.name === 'Project Status';
-    }
-    if (activeRole === 'Reporter') {
-      return item.name === 'Reports' || 
-             item.name === 'Analytics' || 
-             item.name === 'Feedback' || 
-             item.name === 'User Feedback' || 
-             item.name === 'Release Notes' ||
-             item.name === 'Implementation Reports';
-    }
-    return true;
+    const allowed = currentPermissions.allowed_modules.split(',');
+    const moduleKey = itemModuleMap[item.name];
+    return allowed.includes(moduleKey);
   });
 
   return (

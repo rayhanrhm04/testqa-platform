@@ -18,6 +18,7 @@ export const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ childre
   
   const fetchData = useDataStore((state) => state.fetchData);
   const isLoading = useDataStore((state) => state.isLoading);
+  const rolePermissions = useDataStore((state) => state.rolePermissions);
   const { theme, setTheme, sidebarOpen, toggleSidebar, setSidebarOpen } = useUIStore();
   const { currentUser, activeRole, isInitialized, initializeAuth } = useAuthStore();
   
@@ -74,65 +75,101 @@ export const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!currentUser) return false;
     if (activeRole === 'Admin') return false;
 
-    if (activeRole === 'QA Engineer') {
-      return pathname === '/settings' || pathname === '/analytics';
+    // Define routes that bypass general restriction
+    if (pathname === '/login' || pathname === '/register' || pathname === '/profile') return false;
+
+    const currentPermissions = rolePermissions.find(rp => rp.role_name === activeRole);
+    if (!currentPermissions) {
+      if (activeRole === 'QA Engineer') {
+        return pathname === '/settings' || pathname === '/analytics';
+      }
+      if (activeRole === 'Developer') {
+        const allowed = [
+          '/',
+          '/feedback',
+          '/user-feedback',
+          '/issues',
+          '/releases',
+          '/release-notes',
+          '/api-hub',
+          '/login',
+          '/register'
+        ];
+        const isDirectlyAllowed = allowed.includes(pathname);
+        const isPrefixAllowed = pathname.startsWith('/feedback/') ||
+                                pathname.startsWith('/api-hub/') ||
+                                pathname.startsWith('/releases/') ||
+                                pathname.startsWith('/release-notes/');
+        return !(isDirectlyAllowed || isPrefixAllowed);
+      }
+      if (activeRole === 'PSE') {
+        const allowed = [
+          '/release-notes',
+          '/calendar',
+          '/projects',
+          '/project-status',
+          '/login',
+          '/register'
+        ];
+        const isDirectlyAllowed = allowed.includes(pathname);
+        const isPrefixAllowed = pathname.startsWith('/projects/') ||
+                                pathname.startsWith('/release-notes/');
+        return !(isDirectlyAllowed || isPrefixAllowed);
+      }
+      if (activeRole === 'Reporter') {
+        const allowed = [
+          '/reports',
+          '/analytics',
+          '/feedback',
+          '/user-feedback',
+          '/release-notes',
+          '/implementation-reports',
+          '/login',
+          '/register'
+        ];
+        const isDirectlyAllowed = allowed.includes(pathname);
+        const isPrefixAllowed = pathname.startsWith('/feedback/') ||
+                                pathname.startsWith('/implementation-reports/') ||
+                                pathname.startsWith('/release-notes/');
+        return !(isDirectlyAllowed || isPrefixAllowed);
+      }
+      return false;
     }
 
-    if (activeRole === 'Developer') {
-      const allowed = [
-        '/',
-        '/feedback',
-        '/user-feedback',
-        '/issues',
-        '/releases',
-        '/release-notes',
-        '/api-hub',
-        '/login',
-        '/register'
-      ];
-      const isDirectlyAllowed = allowed.includes(pathname);
-      const isPrefixAllowed = pathname.startsWith('/feedback/') ||
-                              pathname.startsWith('/api-hub/') ||
-                              pathname.startsWith('/releases/') ||
-                              pathname.startsWith('/release-notes/');
-      return !(isDirectlyAllowed || isPrefixAllowed);
+    const allowed = currentPermissions.allowed_modules.split(',');
+
+    const pathPrefixToModule: { prefix: string; module: string }[] = [
+      { prefix: '/projects', module: 'projects' },
+      { prefix: '/project-status', module: 'project-status' },
+      { prefix: '/calendar', module: 'calendar' },
+      { prefix: '/feedback', module: 'feedback' },
+      { prefix: '/user-feedback', module: 'feedback' },
+      { prefix: '/issues', module: 'issues' },
+      { prefix: '/releases', module: 'releases' },
+      { prefix: '/release-notes', module: 'release-notes' },
+      { prefix: '/test-suites', module: 'test-suites' },
+      { prefix: '/test-cases', module: 'test-cases' },
+      { prefix: '/test-runs', module: 'test-runs' },
+      { prefix: '/exploratory', module: 'exploratory' },
+      { prefix: '/smart-recorder', module: 'smart-recorder' },
+      { prefix: '/api-hub', module: 'api-hub' },
+      { prefix: '/reports', module: 'reports' },
+      { prefix: '/implementation-reports', module: 'reports' },
+      { prefix: '/analytics', module: 'analytics' },
+      { prefix: '/settings', module: 'settings' },
+    ];
+
+    if (pathname === '/') {
+      return !allowed.includes('dashboard');
     }
 
-    if (activeRole === 'PSE') {
-      const allowed = [
-        '/release-notes',
-        '/calendar',
-        '/projects',
-        '/project-status',
-        '/login',
-        '/register'
-      ];
-      const isDirectlyAllowed = allowed.includes(pathname);
-      const isPrefixAllowed = pathname.startsWith('/projects/') ||
-                              pathname.startsWith('/release-notes/');
-      return !(isDirectlyAllowed || isPrefixAllowed);
-    }
-
-    if (activeRole === 'Reporter') {
-      const allowed = [
-        '/reports',
-        '/analytics',
-        '/feedback',
-        '/user-feedback',
-        '/release-notes',
-        '/implementation-reports',
-        '/login',
-        '/register'
-      ];
-      const isDirectlyAllowed = allowed.includes(pathname);
-      const isPrefixAllowed = pathname.startsWith('/feedback/') ||
-                              pathname.startsWith('/implementation-reports/') ||
-                              pathname.startsWith('/release-notes/');
-      return !(isDirectlyAllowed || isPrefixAllowed);
+    const matched = pathPrefixToModule.find(m => pathname.startsWith(m.prefix));
+    if (matched) {
+      return !allowed.includes(matched.module);
     }
 
     return false;
-  }, [currentUser, activeRole, pathname]);
+  }, [currentUser, activeRole, pathname, rolePermissions]);
 
   const getRoleRedirectPath = () => {
     if (activeRole === 'PSE') return '/project-status';

@@ -286,9 +286,25 @@ try {
               notes TEXT,
               "createdAt" TIMESTAMPTZ DEFAULT NOW()
             );
+            ALTER TABLE public.users ALTER COLUMN role DROP DEFAULT;
+            ALTER TABLE public.users ALTER COLUMN role TYPE TEXT USING role::text;
+            ALTER TABLE public.users ALTER COLUMN role SET DEFAULT 'Reporter';
+            CREATE TABLE IF NOT EXISTS public.role_permissions (
+              role_name TEXT PRIMARY KEY,
+              allowed_modules TEXT NOT NULL,
+              "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+              "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+            );
+            INSERT INTO public.role_permissions (role_name, allowed_modules) VALUES
+            ('Admin', 'dashboard,projects,project-status,calendar,feedback,issues,releases,release-notes,test-suites,test-cases,test-runs,exploratory,smart-recorder,api-hub,reports,analytics,settings'),
+            ('QA Engineer', 'dashboard,projects,project-status,calendar,feedback,issues,releases,release-notes,test-suites,test-cases,test-runs,exploratory,smart-recorder,api-hub,reports'),
+            ('Developer', 'dashboard,feedback,issues,api-hub,releases,release-notes'),
+            ('Reporter', 'feedback,release-notes,reports,analytics'),
+            ('PSE', 'release-notes,calendar,projects,project-status')
+            ON CONFLICT (role_name) DO NOTHING;
           `)
             .then(() => {
-              console.log('Database migration: calendar tables check passed');
+              console.log('Database migration: calendar and role permission tables check passed');
               pool.query('ALTER TABLE public.issues ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES public.users(id) ON DELETE SET NULL;')
                 .then(() => console.log('Database migration: public.issues.created_by check passed'))
                 .catch((err) => console.warn('Database migration warning for issues.created_by:', err));

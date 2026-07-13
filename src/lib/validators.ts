@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
-// Roles
 export const USER_ROLES = ['Admin', 'QA Engineer', 'Developer', 'Reporter', 'PSE'] as const;
-export type UserRole = typeof USER_ROLES[number];
+export type UserRole = string;
 
 // Feedback Status & Priority
 export const FEEDBACK_PRIORITIES = ['Low', 'Medium', 'High', 'Critical'] as const;

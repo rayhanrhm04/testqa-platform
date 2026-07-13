@@ -21,7 +21,8 @@ export default function SettingsPage() {
   const router = useRouter();
   const { 
     projects, users, updateUserRole, addProject, updateProject, deleteProject, logActivity,
-    projectShares, shareProject, unshareProject, updateProjectShareRole, fetchData
+    projectShares, shareProject, unshareProject, updateProjectShareRole, fetchData,
+    rolePermissions, updateRolePermissions, createCustomRole, deleteCustomRole, addUser, deleteUser
   } = useDataStore();
   const { activeRole, currentUser, setRole } = useAuthStore();
   const { addToast } = useUIStore();
@@ -29,6 +30,18 @@ export default function SettingsPage() {
 
   const [activeTab, setActiveTab] = React.useState('projects');
   const [origin, setOrigin] = React.useState('');
+  const [userSubTab, setUserSubTab] = React.useState<'list' | 'roles'>('list');
+
+  // User form modal state
+  const [isUserOpen, setIsUserOpen] = React.useState(false);
+  const [userName, setUserName] = React.useState('');
+  const [userEmail, setUserEmail] = React.useState('');
+  const [userRole, setUserRole] = React.useState('Reporter');
+
+  // Role form modal state
+  const [isRoleOpen, setIsRoleOpen] = React.useState(false);
+  const [roleName, setRoleName] = React.useState('');
+  const [rolePermissionsCSV, setRolePermissionsCSV] = React.useState('dashboard,projects,calendar,feedback,issues,releases,release-notes,reports');
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -113,6 +126,96 @@ export default function SettingsPage() {
     if (confirm(`Delete project "${name}"? This will delete all feedbacks and issues mapped to it.`)) {
       await deleteProject(id);
       addToast(`Deleted project "${name}"!`, 'success');
+    }
+  };
+
+  const handleUserSubmit = async () => {
+    if (!userName.trim() || !userEmail.trim()) {
+      addToast('Name and Email are required.', 'warning');
+      return;
+    }
+    try {
+      await addUser(userName.trim(), userEmail.trim(), userRole);
+      addToast(`User "${userName}" added successfully!`, 'success');
+      setIsUserOpen(false);
+      setUserName('');
+      setUserEmail('');
+      setUserRole('Reporter');
+    } catch (e: any) {
+      addToast(e.message || 'Failed to add user.', 'error');
+    }
+  };
+
+  const handleRoleSubmit = async () => {
+    if (!roleName.trim()) {
+      addToast('Role Name is required.', 'warning');
+      return;
+    }
+    if (rolePermissions.some(rp => rp.role_name.toLowerCase() === roleName.trim().toLowerCase())) {
+      addToast(`Role "${roleName}" already exists.`, 'warning');
+      return;
+    }
+    try {
+      await createCustomRole(roleName.trim(), rolePermissionsCSV);
+      addToast(`Role "${roleName}" created!`, 'success');
+      setIsRoleOpen(false);
+      setRoleName('');
+    } catch (e: any) {
+      addToast(e.message || 'Failed to create role.', 'error');
+    }
+  };
+
+  const handleUserDelete = async (id: string, name: string) => {
+    if (id === currentUser?.id) {
+      addToast('You cannot delete your own account.', 'warning');
+      return;
+    }
+    if (confirm(`Delete user "${name}"?`)) {
+      try {
+        await deleteUser(id);
+        addToast(`Deleted user "${name}"!`, 'success');
+      } catch (e: any) {
+        addToast('Failed to delete user.', 'error');
+      }
+    }
+  };
+
+  const handleRoleDelete = async (role: string) => {
+    const isSystemRole = ['Admin', 'QA Engineer', 'Developer', 'Reporter', 'PSE'].includes(role);
+    if (isSystemRole) {
+      addToast('Cannot delete default system roles.', 'warning');
+      return;
+    }
+    if (confirm(`Delete custom role "${role}"? Any users assigned to this role will be reset to "Reporter".`)) {
+      try {
+        const affected = users.filter(u => u.role === role);
+        for (const u of affected) {
+          await updateUserRole(u.id, 'Reporter');
+        }
+        await deleteCustomRole(role);
+        addToast(`Deleted role "${role}"!`, 'success');
+      } catch (e: any) {
+        addToast('Failed to delete custom role.', 'error');
+      }
+    }
+  };
+
+  const handleTogglePermission = async (role: string, moduleKey: string, allowedStr: string) => {
+    let allowedList = allowedStr ? allowedStr.split(',').filter(Boolean) : [];
+    if (allowedList.includes(moduleKey)) {
+      if (role === 'Admin' && (moduleKey === 'settings' || moduleKey === 'dashboard')) {
+        addToast('Admin must keep Dashboard and Settings access to prevent lockout.', 'warning');
+        return;
+      }
+      allowedList = allowedList.filter(m => m !== moduleKey);
+    } else {
+      allowedList.push(moduleKey);
+    }
+    try {
+      await updateRolePermissions(role, allowedList.join(','));
+      addToast(`Updated permissions for role "${role}"!`, 'success');
+    } catch (e) {
+      addToast('Failed to update role permissions.', 'error');
     }
   };
 
@@ -315,77 +418,208 @@ CREATE TABLE public.users (
 
       {/* Tab Contents: Users */}
       {activeTab === 'users' && (
-        <div className="space-y-4">
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">User Directory</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Mock directory for demo role switching. Change user roles to verify permission states.</p>
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border/50 pb-4">
+            <div className="flex gap-4">
+              <button
+                onClick={() => setUserSubTab('list')}
+                className={`text-xs font-bold uppercase tracking-wider pb-2 border-b-2 cursor-pointer transition-colors ${
+                  userSubTab === 'list' 
+                    ? 'border-primary text-foreground' 
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Users Directory
+              </button>
+              <button
+                onClick={() => setUserSubTab('roles')}
+                className={`text-xs font-bold uppercase tracking-wider pb-2 border-b-2 cursor-pointer transition-colors ${
+                  userSubTab === 'roles' 
+                    ? 'border-primary text-foreground' 
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Roles & Permissions
+              </button>
+            </div>
+            
+            <div className="flex gap-2">
+              {userSubTab === 'list' ? (
+                <Button 
+                  onClick={() => setIsUserOpen(true)}
+                  className="h-8.5 text-xs font-semibold cursor-pointer"
+                >
+                  <Plus className="h-4 w-4 mr-1" /> Add User
+                </Button>
+              ) : (
+                <Button 
+                  onClick={() => setIsRoleOpen(true)}
+                  className="h-8.5 text-xs font-semibold cursor-pointer bg-purple-600 hover:bg-purple-700 text-white"
+                >
+                  <Plus className="h-4 w-4 mr-1" /> Create Custom Role
+                </Button>
+              )}
+            </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left text-sm text-foreground min-w-[600px]">
-              <thead>
-                <tr className="border-b border-border bg-muted/30 font-semibold text-muted-foreground text-xs">
-                  <th className="p-4">Name</th>
-                  <th className="p-4">Email</th>
-                  <th className="p-4">Active Role</th>
-                  <th className="p-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border text-xs">
-                {users.map((user) => (
-                  <tr key={user.id} className="hover:bg-muted/10 transition-colors">
-                    <td className="p-4 font-bold flex items-center gap-2">
-                      <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px]">
-                        {user.name.charAt(0)}
+          {/* Sub-Tab Contents: Users Directory */}
+          {userSubTab === 'list' && (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-border bg-card overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-left text-sm text-foreground min-w-[600px]">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30 font-semibold text-muted-foreground text-xs uppercase">
+                        <th className="p-4">Name</th>
+                        <th className="p-4">Email</th>
+                        <th className="p-4">Assigned Role</th>
+                        <th className="p-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border text-xs">
+                      {users.map((user) => (
+                        <tr key={user.id} className="hover:bg-muted/10 transition-colors">
+                          <td className="p-4 font-bold flex items-center gap-2">
+                            <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px]">
+                              {user.name.charAt(0)}
+                            </div>
+                            {user.name}
+                            {currentUser?.id === user.id && (
+                              <span className="text-[9px] bg-slate-500/10 text-slate-500 font-semibold px-1.5 py-0.5 rounded border border-slate-500/20 ml-2">You</span>
+                            )}
+                          </td>
+                          <td className="p-4 text-muted-foreground">{user.email}</td>
+                          <td className="p-4">
+                            <select 
+                              value={user.role}
+                              onChange={async (e) => {
+                                if (!currentUser) {
+                                  router.push('/login');
+                                  return;
+                                }
+                                const nextRole = e.target.value;
+                                await updateUserRole(user.id, nextRole);
+                                if (user.id === currentUser?.id) {
+                                  setRole(nextRole);
+                                }
+                                addToast(`Changed ${user.name}'s role to ${nextRole}`, 'success');
+                              }}
+                              className="bg-card text-xs font-semibold text-foreground border border-border rounded-md p-1 focus:outline-none"
+                            >
+                              {rolePermissions.map(rp => (
+                                <option key={rp.role_name} value={rp.role_name}>{rp.role_name}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="p-4 text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={`h-7 w-7 text-red-500 hover:bg-red-500/10 ${currentUser?.id === user.id ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                              onClick={() => handleUserDelete(user.id, user.name)}
+                              disabled={currentUser?.id === user.id}
+                              title={currentUser?.id === user.id ? "Cannot delete yourself" : "Delete User"}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Sub-Tab Contents: Roles & Permissions Matrix */}
+          {userSubTab === 'roles' && (
+            <div className="space-y-6">
+              <div className="grid gap-6 md:grid-cols-2">
+                {rolePermissions.map((rp) => {
+                  const isSystemRole = ['Admin', 'QA Engineer', 'Developer', 'Reporter', 'PSE'].includes(rp.role_name);
+                  const allowedList = rp.allowed_modules ? rp.allowed_modules.split(',').filter(Boolean) : [];
+                  
+                  return (
+                    <div key={rp.role_name} className="bg-card rounded-xl border border-border p-5 flex flex-col justify-between hover:border-primary/20 transition-all space-y-4">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-extrabold text-sm text-foreground flex items-center gap-2">
+                            {rp.role_name}
+                            <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold border ${
+                              isSystemRole 
+                                ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' 
+                                : 'bg-purple-500/10 text-purple-500 border-purple-500/20'
+                            }`}>
+                              {isSystemRole ? 'System' : 'Custom'}
+                            </span>
+                          </h4>
+                          
+                          {!isSystemRole && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-red-500 hover:bg-red-500/10 cursor-pointer"
+                              onClick={() => handleRoleDelete(rp.role_name)}
+                              title="Delete custom role"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          Configure access rights for this role by toggling active modules.
+                        </p>
                       </div>
-                      {user.name}
-                    </td>
-                    <td className="p-4 text-muted-foreground">{user.email}</td>
-                    <td className="p-4">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                        user.role === 'Admin' 
-                          ? 'bg-red-500/10 text-red-500 border-red-500/20'
-                          : user.role === 'QA Engineer'
-                          ? 'bg-primary/10 text-primary border-primary/20'
-                          : user.role === 'Developer'
-                          ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
-                          : 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20'
-                      }`}>
-                        {user.role}
-                      </span>
-                    </td>
-                    <td className="p-4 text-right">
-                      {/* Dropdown select to instantly switch roles */}
-                      <select 
-                        value={user.role}
-                        onChange={async (e) => {
-                          if (!currentUser) {
-                            router.push('/login');
-                            return;
-                          }
-                          const nextRole = e.target.value as any;
-                          await updateUserRole(user.id, nextRole);
-                          if (user.id === currentUser?.id) {
-                            setRole(nextRole);
-                          }
-                          addToast(`Changed ${user.name}'s role to ${nextRole}`, 'success');
-                        }}
-                        className="bg-card text-xs font-semibold text-foreground border border-border rounded-md p-1 focus:outline-none"
-                      >
-                        <option value="Admin">Admin</option>
-                        <option value="QA Engineer">QA Engineer</option>
-                        <option value="Developer">Developer</option>
-                        <option value="Reporter">Reporter</option>
-                        <option value="PSE">PSE</option>
-                      </select>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+
+                      <div className="border-t border-border/40 pt-4 grid grid-cols-2 gap-2 text-xs">
+                        {[
+                          { key: 'dashboard', label: 'Dashboard' },
+                          { key: 'projects', label: 'Projects (QA)' },
+                          { key: 'project-status', label: 'Project Status' },
+                          { key: 'calendar', label: 'Calendar Hub' },
+                          { key: 'feedback', label: 'Feedbacks' },
+                          { key: 'issues', label: 'Issues Manager' },
+                          { key: 'releases', label: 'Releases' },
+                          { key: 'release-notes', label: 'Release Notes' },
+                          { key: 'test-suites', label: 'Test Suites' },
+                          { key: 'test-cases', label: 'Test Cases' },
+                          { key: 'test-runs', label: 'Test Runs' },
+                          { key: 'exploratory', label: 'Exploratory' },
+                          { key: 'smart-recorder', label: 'Recorder' },
+                          { key: 'api-hub', label: 'API Test Hub' },
+                          { key: 'reports', label: 'Reports' },
+                          { key: 'analytics', label: 'Analytics' },
+                          { key: 'settings', label: 'Settings' }
+                        ].map((mod) => {
+                          const isChecked = allowedList.includes(mod.key);
+                          const isDisabled = rp.role_name === 'Admin' && (mod.key === 'settings' || mod.key === 'dashboard');
+                          
+                          return (
+                            <label 
+                              key={mod.key} 
+                              className={`flex items-center gap-2 p-1.5 rounded-lg border hover:bg-muted/10 transition-colors select-none ${
+                                isChecked ? 'bg-primary/5 border-primary/20 text-foreground font-semibold' : 'border-transparent text-muted-foreground'
+                              } ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                            >
+                              <input 
+                                type="checkbox"
+                                checked={isChecked}
+                                disabled={isDisabled}
+                                onChange={() => handleTogglePermission(rp.role_name, mod.key, rp.allowed_modules)}
+                                className="rounded text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer disabled:cursor-not-allowed"
+                              />
+                              <span className="text-[10px] tracking-wide truncate">{mod.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -709,6 +943,110 @@ CREATE TABLE public.users (
               </div>
             )}
           </div>
+        </div>
+      </Dialog>
+
+      {/* Add User Dialog */}
+      <Dialog
+        isOpen={isUserOpen}
+        onClose={() => { setIsUserOpen(false); setUserName(''); setUserEmail(''); }}
+        title="Add New User Account"
+        footer={
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => { setIsUserOpen(false); setUserName(''); setUserEmail(''); }}>Cancel</Button>
+            <Button onClick={handleUserSubmit}>Create User</Button>
+          </div>
+        }
+      >
+        <div className="space-y-4 text-left">
+          <FormGroup label="Full Name">
+            <Input value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="e.g. John Doe" />
+          </FormGroup>
+
+          <FormGroup label="Email Address">
+            <Input type="email" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} placeholder="e.g. john.doe@mapid.io" />
+          </FormGroup>
+
+          <FormGroup label="System Role">
+            <Select value={userRole} onChange={(e) => setUserRole(e.target.value)}>
+              {rolePermissions.map((rp) => (
+                <option key={rp.role_name} value={rp.role_name}>{rp.role_name}</option>
+              ))}
+            </Select>
+            <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">
+              Default password for new local users is <code className="bg-muted px-1 py-0.5 rounded text-foreground font-semibold">password123</code>. They can switch roles or change settings as permitted by the system.
+            </p>
+          </FormGroup>
+        </div>
+      </Dialog>
+
+      {/* Create Custom Role Dialog */}
+      <Dialog
+        isOpen={isRoleOpen}
+        onClose={() => { setIsRoleOpen(false); setRoleName(''); }}
+        title="Create Custom Access Role"
+        footer={
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => { setIsRoleOpen(false); setRoleName(''); }}>Cancel</Button>
+            <Button className="bg-purple-600 hover:bg-purple-700 text-white" onClick={handleRoleSubmit}>Create Role</Button>
+          </div>
+        }
+      >
+        <div className="space-y-4 text-left">
+          <FormGroup label="Role Name">
+            <Input value={roleName} onChange={(e) => setRoleName(e.target.value)} placeholder="e.g. Product Manager, Auditor" />
+          </FormGroup>
+
+          <FormGroup label="Starting Template (Allowed Modules)">
+            <div className="grid grid-cols-2 gap-2 border border-border p-3 rounded-lg bg-card max-h-[200px] overflow-y-auto">
+              {[
+                { key: 'dashboard', label: 'Dashboard' },
+                { key: 'projects', label: 'Projects (QA)' },
+                { key: 'project-status', label: 'Project Status' },
+                { key: 'calendar', label: 'Calendar Hub' },
+                { key: 'feedback', label: 'Feedbacks' },
+                { key: 'issues', label: 'Issues Manager' },
+                { key: 'releases', label: 'Releases' },
+                { key: 'release-notes', label: 'Release Notes' },
+                { key: 'test-suites', label: 'Test Suites' },
+                { key: 'test-cases', label: 'Test Cases' },
+                { key: 'test-runs', label: 'Test Runs' },
+                { key: 'exploratory', label: 'Exploratory' },
+                { key: 'smart-recorder', label: 'Recorder' },
+                { key: 'api-hub', label: 'API Test Hub' },
+                { key: 'reports', label: 'Reports' },
+                { key: 'analytics', label: 'Analytics' },
+                { key: 'settings', label: 'Settings' }
+              ].map((mod) => {
+                const list = rolePermissionsCSV.split(',').filter(Boolean);
+                const isChecked = list.includes(mod.key);
+                
+                return (
+                  <label key={mod.key} className="flex items-center gap-2 text-xs text-muted-foreground select-none cursor-pointer">
+                    <input 
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => {
+                        const list = rolePermissionsCSV.split(',').filter(Boolean);
+                        let next = [...list];
+                        if (isChecked) {
+                          next = next.filter(k => k !== mod.key);
+                        } else {
+                          next.push(mod.key);
+                        }
+                        setRolePermissionsCSV(next.join(','));
+                      }}
+                      className="rounded text-primary focus:ring-primary h-3.5 w-3.5"
+                    />
+                    <span className="text-[10px] truncate">{mod.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Select modules that this role is allowed to access. You can always refine these permissions later.
+            </p>
+          </FormGroup>
         </div>
       </Dialog>
     </div>
