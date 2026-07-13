@@ -701,7 +701,8 @@ export const useDataStore = create<DataState>((set, get) => {
     // FEEDBACKS CRUD
     // ----------------------------------------------------
     addFeedback: async (feedback) => {
-      const code = getNextCode('FB', get().feedbacks);
+      const projectFeedbacks = get().feedbacks.filter(f => f.project_id === feedback.project_id);
+      const code = getNextCode('FB', projectFeedbacks);
       const newFb: Feedback = {
         ...feedback,
         id: isSupabaseConfigured() ? undefined : `fb-${Date.now()}` as any,
@@ -786,7 +787,8 @@ export const useDataStore = create<DataState>((set, get) => {
     convertFeedbackToIssue: async (feedbackId, issueType, issueData) => {
       // 1. Create issue
       const codePrefix = issueType === 'Bug' ? 'BUG' : 'IMP';
-      const code = getNextCode(codePrefix, get().issues);
+      const projectIssues = get().issues.filter((i) => i.project_id === issueData.project_id);
+      const code = getNextCode(codePrefix, projectIssues);
       
       const feedback = get().feedbacks.find((f) => f.id === feedbackId);
       const attachment_url = feedback?.attachment_url || undefined;
@@ -846,7 +848,8 @@ export const useDataStore = create<DataState>((set, get) => {
     // ----------------------------------------------------
     addIssue: async (issue) => {
       const codePrefix = issue.type === 'Bug' ? 'BUG' : 'IMP';
-      const code = getNextCode(codePrefix, get().issues);
+      const projectIssues = get().issues.filter((i) => i.project_id === issue.project_id);
+      const code = getNextCode(codePrefix, projectIssues);
       const newIssue: Issue = {
         ...issue,
         id: isSupabaseConfigured() ? undefined : `i-${Date.now()}` as any,
@@ -1098,7 +1101,8 @@ export const useDataStore = create<DataState>((set, get) => {
     addTestCase: async (testCase) => {
       const suite = get().testSuites.find((s) => s.id === testCase.suite_id);
       const suiteCode = suite ? suite.name.split(' ')[0].toUpperCase() : 'TC';
-      const code = getNextCode(`TC-${suiteCode}`, get().testCases);
+      const projectCases = get().testCases.filter((tc) => tc.project_id === testCase.project_id);
+      const code = getNextCode(`TC-${suiteCode}`, projectCases);
       
       const newCase: TestCase = {
         ...testCase,
@@ -1179,7 +1183,9 @@ export const useDataStore = create<DataState>((set, get) => {
         const targetSuite = targetSuiteId || sc.suite_id;
         const suite = get().testSuites.find((s) => s.id === targetSuite);
         const suiteCode = suite ? suite.name.split(' ')[0].toUpperCase() : 'TC';
-        const code = getNextCode(`TC-${suiteCode}`, currentList);
+        const targetProjId = suite ? suite.project_id : sc.project_id;
+        const projectCases = currentList.filter((tc) => tc.project_id === targetProjId);
+        const code = getNextCode(`TC-${suiteCode}`, projectCases);
         return {
           ...sc,
           id: `tc-${Date.now()}-${idx}` as any,
@@ -2150,7 +2156,8 @@ export const useDataStore = create<DataState>((set, get) => {
         .map((st) => `${st.step_number}. Assertion: ${st.value || st.notes || 'Expected state matches assertion'}`)
         .join('\n') || 'All steps executed successfully without errors.';
 
-      const nextCode = getNextCode('TC', get().testCases);
+      const projectCases = get().testCases.filter((tc) => tc.project_id === session.project_id);
+      const nextCode = getNextCode('TC', projectCases);
 
       const newTestCase: TestCase = {
         id: isSupabaseConfigured() ? undefined : `tc-${Date.now()}` as any,
