@@ -306,7 +306,25 @@ try {
             .then(() => {
               console.log('Database migration: calendar and role permission tables check passed');
               pool.query('ALTER TABLE public.issues ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES public.users(id) ON DELETE SET NULL;')
-                .then(() => console.log('Database migration: public.issues.created_by check passed'))
+                .then(() => {
+                  console.log('Database migration: public.issues.created_by check passed');
+                  pool.query(`
+                    ALTER TABLE public.feedbacks DROP CONSTRAINT IF EXISTS feedbacks_code_key;
+                    ALTER TABLE public.issues DROP CONSTRAINT IF EXISTS issues_code_key;
+                    ALTER TABLE public.test_cases DROP CONSTRAINT IF EXISTS test_cases_code_key;
+                    
+                    ALTER TABLE public.feedbacks DROP CONSTRAINT IF EXISTS feedbacks_project_id_code_key;
+                    ALTER TABLE public.feedbacks ADD CONSTRAINT feedbacks_project_id_code_key UNIQUE (project_id, code);
+                    
+                    ALTER TABLE public.issues DROP CONSTRAINT IF EXISTS issues_project_id_code_key;
+                    ALTER TABLE public.issues ADD CONSTRAINT issues_project_id_code_key UNIQUE (project_id, code);
+                    
+                    ALTER TABLE public.test_cases DROP CONSTRAINT IF EXISTS test_cases_project_id_code_key;
+                    ALTER TABLE public.test_cases ADD CONSTRAINT test_cases_project_id_code_key UNIQUE (project_id, code);
+                  `)
+                    .then(() => console.log('Database migration: project isolated code uniqueness constraints passed'))
+                    .catch((err) => console.warn('Database migration warning for project unique constraints:', err));
+                })
                 .catch((err) => console.warn('Database migration warning for issues.created_by:', err));
             })
             .catch((err) => console.warn('Database migration warning for calendar tables:', err));
