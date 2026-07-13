@@ -26,6 +26,103 @@ export default function FeedbackDetailPage() {
 
   const [convertType, setConvertType] = React.useState<'Bug' | 'Improvement' | null>(null);
   const [commentText, setCommentText] = React.useState('');
+
+  // Mentions autocompleter states
+  const [showSuggestions, setShowSuggestions] = React.useState(false);
+  const [suggestionSearch, setSuggestionSearch] = React.useState('');
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = React.useState(0);
+
+  const filteredSuggestions = React.useMemo(() => {
+    if (!suggestionSearch) return users;
+    return users.filter(u => 
+      u.name.toLowerCase().includes(suggestionSearch.toLowerCase()) ||
+      u.email.toLowerCase().includes(suggestionSearch.toLowerCase())
+    );
+  }, [users, suggestionSearch]);
+
+  const selectUserSuggestion = (user: any) => {
+    const lastAtIndex = commentText.lastIndexOf('@');
+    if (lastAtIndex !== -1) {
+      const beforeAt = commentText.substring(0, lastAtIndex);
+      const completed = beforeAt + `@${user.name} `;
+      setCommentText(completed);
+    }
+    setShowSuggestions(false);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setCommentText(value);
+
+    const lastAtIndex = value.lastIndexOf('@');
+    if (lastAtIndex !== -1) {
+      const textAfterAt = value.substring(lastAtIndex + 1);
+      if (!textAfterAt.includes(' ')) {
+        setShowSuggestions(true);
+        setSuggestionSearch(textAfterAt);
+        setSelectedSuggestionIndex(0);
+        return;
+      }
+    }
+    setShowSuggestions(false);
+  };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (showSuggestions && filteredSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => (prev + 1) % filteredSuggestions.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => (prev - 1 + filteredSuggestions.length) % filteredSuggestions.length);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        selectUserSuggestion(filteredSuggestions[selectedSuggestionIndex]);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowSuggestions(false);
+      }
+    }
+  };
+
+  const formatCommentContent = (content: string) => {
+    const usersList = users;
+    if (usersList.length === 0 || !content) return content;
+    
+    const patternStr = '@(' + usersList.map(u => u.name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')).join('|') + ')';
+    const regex = new RegExp(patternStr, 'gi');
+    
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+    
+    while ((match = regex.exec(content)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(content.substring(lastIndex, match.index));
+      }
+      
+      const matchedName = match[1];
+      const matchedUser = usersList.find(u => u.name.toLowerCase() === matchedName.toLowerCase());
+      
+      parts.push(
+        <span 
+          key={match.index} 
+          className="text-primary font-black bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded-md text-[10px] mx-0.5 inline-flex items-center"
+          title={matchedUser?.email || ''}
+        >
+          @{matchedUser?.name || matchedName}
+        </span>
+      );
+      
+      lastIndex = regex.lastIndex;
+    }
+    
+    if (lastIndex < content.length) {
+      parts.push(content.substring(lastIndex));
+    }
+    
+    return parts.length > 0 ? parts : content;
+  };
   const [previewImageUrl, setPreviewImageUrl] = React.useState<string | null>(null);
   
   // Issue conversion form state
@@ -349,7 +446,7 @@ export default function FeedbackDetailPage() {
                             {new Date(comm.created_at).toLocaleString()}
                           </span>
                         </div>
-                        <p className="text-muted-foreground leading-normal">{comm.content}</p>
+                        <p className="text-muted-foreground leading-normal">{formatCommentContent(comm.content)}</p>
                       </div>
                     </div>
                   );
@@ -364,13 +461,39 @@ export default function FeedbackDetailPage() {
                 <Link href="/login" className="text-primary font-bold hover:underline">Sign In</Link> to write a comment.
               </div>
             ) : (
-              <form onSubmit={handleAddComment} className="flex gap-2">
-                <Input
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  placeholder="Ask a question or add details..."
-                  className="flex-1"
-                />
+               <form onSubmit={handleAddComment} className="flex gap-2">
+                <div className="relative flex-1">
+                  {/* Mentions Suggestion Popover */}
+                  {showSuggestions && filteredSuggestions.length > 0 && (
+                    <div className="absolute bottom-full left-0 mb-1 w-64 bg-card border border-border/80 rounded-xl shadow-lg z-50 overflow-hidden max-h-48 overflow-y-auto">
+                      {filteredSuggestions.map((u, idx) => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => selectUserSuggestion(u)}
+                          className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 transition-colors border-b border-border/20 last:border-0 hover:bg-muted/50 ${
+                            selectedSuggestionIndex === idx ? 'bg-muted text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-[9px] shrink-0">
+                            {u.name.charAt(0)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold truncate text-foreground text-[11px]">{u.name}</div>
+                            <div className="text-[9px] text-muted-foreground truncate">{u.email}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <Input
+                    value={commentText}
+                    onChange={handleInputChange}
+                    onKeyDown={handleInputKeyDown}
+                    placeholder="Ask a question, type @ to tag user..."
+                    className="w-full"
+                  />
+                </div>
                 <Button type="submit" size="icon" className="shrink-0 cursor-pointer">
                   <Send className="h-4 w-4" />
                 </Button>

@@ -1474,6 +1474,35 @@ export const useDataStore = create<DataState>((set, get) => {
           return { comments: next };
         });
       }
+
+      // Mentions Notification Engine
+      try {
+        const usersList = get().users;
+        const commenter = usersList.find(u => u.id === userId);
+        const commenterName = commenter ? commenter.name : 'Someone';
+        
+        const mentioned = usersList.filter(u => {
+          const regex = new RegExp(`@${u.name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}(\\s|$)`, 'i');
+          return regex.test(content);
+        });
+
+        for (const targetUser of mentioned) {
+          if (targetUser.id === userId) continue;
+
+          const cleanContent = content.replace(/@\S+/g, '').trim();
+          const snippet = cleanContent.length > 60 ? cleanContent.substring(0, 57) + '...' : cleanContent;
+
+          await get().addNotification({
+            user_id: targetUser.id,
+            title: `Mentioned in ${entityType === 'issue' ? 'Issue' : 'Feedback'}`,
+            content: `${commenterName} tagged you: "${snippet || 'See details'}"`,
+            type: entityType,
+            link: entityType === 'issue' ? `/issues?id=${entityId}` : `/feedback/${entityId}`
+          });
+        }
+      } catch (err) {
+        console.error("Mentions parsing failed:", err);
+      }
     },
 
     // ----------------------------------------------------

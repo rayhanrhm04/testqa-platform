@@ -40,6 +40,103 @@ export default function IssuesPage() {
   const [activeDetailIssue, setActiveDetailIssue] = React.useState<any | null>(null);
   const [commentText, setCommentText] = React.useState('');
 
+  // Mentions autocompleter states
+  const [showSuggestions, setShowSuggestions] = React.useState(false);
+  const [suggestionSearch, setSuggestionSearch] = React.useState('');
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = React.useState(0);
+
+  const filteredSuggestions = React.useMemo(() => {
+    if (!suggestionSearch) return users;
+    return users.filter(u => 
+      u.name.toLowerCase().includes(suggestionSearch.toLowerCase()) ||
+      u.email.toLowerCase().includes(suggestionSearch.toLowerCase())
+    );
+  }, [users, suggestionSearch]);
+
+  const selectUserSuggestion = (user: any) => {
+    const lastAtIndex = commentText.lastIndexOf('@');
+    if (lastAtIndex !== -1) {
+      const beforeAt = commentText.substring(0, lastAtIndex);
+      const completed = beforeAt + `@${user.name} `;
+      setCommentText(completed);
+    }
+    setShowSuggestions(false);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setCommentText(value);
+
+    const lastAtIndex = value.lastIndexOf('@');
+    if (lastAtIndex !== -1) {
+      const textAfterAt = value.substring(lastAtIndex + 1);
+      if (!textAfterAt.includes(' ')) {
+        setShowSuggestions(true);
+        setSuggestionSearch(textAfterAt);
+        setSelectedSuggestionIndex(0);
+        return;
+      }
+    }
+    setShowSuggestions(false);
+  };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (showSuggestions && filteredSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => (prev + 1) % filteredSuggestions.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => (prev - 1 + filteredSuggestions.length) % filteredSuggestions.length);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        selectUserSuggestion(filteredSuggestions[selectedSuggestionIndex]);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowSuggestions(false);
+      }
+    }
+  };
+
+  const formatCommentContent = (content: string) => {
+    const usersList = users;
+    if (usersList.length === 0 || !content) return content;
+    
+    const patternStr = '@(' + usersList.map(u => u.name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')).join('|') + ')';
+    const regex = new RegExp(patternStr, 'gi');
+    
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+    
+    while ((match = regex.exec(content)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(content.substring(lastIndex, match.index));
+      }
+      
+      const matchedName = match[1];
+      const matchedUser = usersList.find(u => u.name.toLowerCase() === matchedName.toLowerCase());
+      
+      parts.push(
+        <span 
+          key={match.index} 
+          className="text-primary font-black bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded-md text-[10px] mx-0.5 inline-flex items-center"
+          title={matchedUser?.email || ''}
+        >
+          @{matchedUser?.name || matchedName}
+        </span>
+      );
+      
+      lastIndex = regex.lastIndex;
+    }
+    
+    if (lastIndex < content.length) {
+      parts.push(content.substring(lastIndex));
+    }
+    
+    return parts.length > 0 ? parts : content;
+  };
+
   const handleOpenDetail = async (issue: any) => {
     setActiveDetailIssue(issue);
     setIsDetailOpen(true);
@@ -140,6 +237,22 @@ export default function IssuesPage() {
       }
     }
   }, [accessibleProjects]);
+
+  // Sync activeDetailIssue with query parameters on load (for notifications links)
+  React.useEffect(() => {
+    if (issues.length > 0) {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const idParam = params.get('id');
+        if (idParam) {
+          const matched = issues.find(i => i.id === idParam);
+          if (matched) {
+            handleOpenDetail(matched);
+          }
+        }
+      }
+    }
+  }, [issues]);
 
   // Sync edit form fields
   React.useEffect(() => {
@@ -1117,7 +1230,7 @@ export default function IssuesPage() {
                         <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">{user?.name.charAt(0)}</div>
                         <div>
                           <p className="font-semibold">{user?.name} <span className="text-[9px] text-muted-foreground font-normal ml-2">{new Date(c.created_at).toLocaleString()}</span></p>
-                          <p className="text-muted-foreground mt-0.5 leading-normal">{c.content}</p>
+                          <p className="text-muted-foreground mt-0.5 leading-normal">{formatCommentContent(c.content)}</p>
                         </div>
                       </div>
                     );
@@ -1131,7 +1244,38 @@ export default function IssuesPage() {
                   </div>
                 ) : (
                   <form onSubmit={handleAddComment} className="flex gap-2">
-                    <Input value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Type a comment..." className="h-8 text-xs" />
+                    <div className="relative flex-1">
+                      {/* Mentions Suggestion Popover */}
+                      {showSuggestions && filteredSuggestions.length > 0 && (
+                        <div className="absolute bottom-full left-0 mb-1 w-64 bg-card border border-border/80 rounded-xl shadow-lg z-50 overflow-hidden max-h-48 overflow-y-auto">
+                          {filteredSuggestions.map((u, idx) => (
+                            <button
+                              key={u.id}
+                              type="button"
+                              onClick={() => selectUserSuggestion(u)}
+                              className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 transition-colors border-b border-border/20 last:border-0 hover:bg-muted/50 ${
+                                selectedSuggestionIndex === idx ? 'bg-muted text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'
+                              }`}
+                            >
+                              <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-[9px] shrink-0">
+                                {u.name.charAt(0)}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="font-bold truncate text-foreground text-[11px]">{u.name}</div>
+                                <div className="text-[9px] text-muted-foreground truncate">{u.email}</div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <Input 
+                        value={commentText} 
+                        onChange={handleInputChange} 
+                        onKeyDown={handleInputKeyDown}
+                        placeholder="Type a comment, type @ to tag user..." 
+                        className="h-8 text-xs" 
+                      />
+                    </div>
                     <Button type="submit" size="sm" className="h-8 cursor-pointer font-bold text-xs">Send</Button>
                   </form>
                 )}
