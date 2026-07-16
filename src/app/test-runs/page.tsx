@@ -37,12 +37,12 @@ export default function TestRunsPage() {
   }, []);
 
   const getReleaseName = React.useCallback((run: any) => {
-    if (!run) return 'No Release';
+    if (!run) return '-';
     if (run.release_id) {
       const rel = releases.find(r => r.id === run.release_id);
-      return rel ? `v${rel.version}` : 'Release';
+      return rel ? `v${rel.version}` : '-';
     }
-    return run.manual_release_name || 'No Release';
+    return run.manual_release_name || '-';
   }, [releases]);
 
   const getRunProjectId = React.useCallback((run: any) => {
@@ -453,6 +453,21 @@ export default function TestRunsPage() {
               color: #a1a1aa;
               font-style: italic;
             }
+            .watermark {
+              position: fixed;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%) rotate(-30deg);
+              font-size: 110px;
+              font-weight: 900;
+              color: rgba(9, 9, 11, 0.04) !important;
+              z-index: -1000;
+              pointer-events: none;
+              white-space: nowrap;
+              text-transform: uppercase;
+              letter-spacing: 0.1em;
+              font-family: ui-sans-serif, system-ui, sans-serif;
+            }
             @media print {
               body {
                 padding: 20px;
@@ -461,6 +476,7 @@ export default function TestRunsPage() {
           </style>
         </head>
         <body>
+          <div class="watermark">MAPID QA</div>
           <div class="header">
             <div class="title-section">
               <div class="report-type">Test Run Execution Report</div>
