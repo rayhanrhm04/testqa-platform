@@ -110,7 +110,7 @@ interface DataState {
   bulkDeleteTestCases: (ids: string[]) => Promise<void>;
 
   // Test Runs
-  addTestRun: (releaseId: string, title: string, testType: string, description?: string) => Promise<void>;
+  addTestRun: (projectId: string, releaseId: string | null, manualReleaseName: string | null, title: string, testType: string, description?: string, testCaseIds?: string[]) => Promise<void>;
   updateTestRunStatus: (id: string, status: TestRunStatus) => Promise<void>;
   deleteTestRun: (id: string) => Promise<void>;
   updateTestRunResult: (runId: string, caseId: string, result: TestResultValue, actualResult?: string, notes?: string, userId?: string) => Promise<void>;
@@ -1259,11 +1259,13 @@ export const useDataStore = create<DataState>((set, get) => {
     // ----------------------------------------------------
     // TEST RUNS CRUD
     // ----------------------------------------------------
-    addTestRun: async (releaseId, title, testType, description) => {
+    addTestRun: async (projectId, releaseId, manualReleaseName, title, testType, description, testCaseIds) => {
       const runId = isSupabaseConfigured() ? undefined : `tr-${Date.now()}`;
       const newRun: TestRun = {
         id: runId as any,
-        release_id: releaseId,
+        project_id: projectId,
+        release_id: releaseId || null,
+        manual_release_name: manualReleaseName || null,
         title,
         description: description || '',
         test_type: testType,
@@ -1271,8 +1273,15 @@ export const useDataStore = create<DataState>((set, get) => {
         created_at: new Date().toISOString(),
       };
 
-      // Load matching test cases
-      const matchedCases = get().testCases.filter((tc) => tc.tags.includes(testType));
+      // Load matching test cases:
+      // If testCaseIds is specified and has items, use those!
+      // Otherwise, filter by tag testType AND projectId!
+      let matchedCases = [];
+      if (testCaseIds && testCaseIds.length > 0) {
+        matchedCases = get().testCases.filter((tc) => testCaseIds.includes(tc.id));
+      } else {
+        matchedCases = get().testCases.filter((tc) => tc.project_id === projectId && tc.tags.includes(testType));
+      }
 
       if (isSupabaseConfigured()) {
         const { data: runRes, error: runErr } = await supabase!.from('test_runs').insert(newRun).select();

@@ -23,6 +23,38 @@ export default function TestRunsPage() {
 
   const [isReportOpen, setIsReportOpen] = React.useState(false);
   const [reportingRun, setReportingRun] = React.useState<any | null>(null);
+  const [projectFilter, setProjectFilter] = React.useState('all');
+
+  // Sync projectFilter with query parameters on load
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const projParam = params.get('project');
+      if (projParam) {
+        setProjectFilter(projParam);
+      }
+    }
+  }, []);
+
+  const getReleaseName = React.useCallback((run: any) => {
+    if (!run) return 'No Release';
+    if (run.release_id) {
+      const rel = releases.find(r => r.id === run.release_id);
+      return rel ? `v${rel.version}` : 'Release';
+    }
+    return run.manual_release_name || 'No Release';
+  }, [releases]);
+
+  const getRunProjectId = React.useCallback((run: any) => {
+    if (run.project_id) return run.project_id;
+    // fallback for legacy test runs: check project from its results
+    const firstResult = testRunResults.find(r => r.test_run_id === run.id);
+    if (firstResult) {
+      const tc = testCases.find(c => c.id === firstResult.test_case_id);
+      if (tc) return tc.project_id;
+    }
+    return null;
+  }, [testRunResults, testCases]);
 
   const canCreate = !currentUser || activeRole === 'Admin' || activeRole === 'QA Engineer';
   const canDelete = !currentUser || activeRole === 'Admin' || activeRole === 'QA Engineer';
@@ -111,7 +143,7 @@ export default function TestRunsPage() {
   const handleExportPDF = React.useCallback((data: any) => {
     if (!data) return;
     const { run, runResults, runCases, total, passed, failed, blocked, notRun, rate } = data;
-    const releaseVersion = releases.find(r => r.id === run.release_id)?.version || 'Backlog';
+    const releaseVersion = getReleaseName(run);
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -526,12 +558,10 @@ export default function TestRunsPage() {
 
   const accessibleProjectIds = React.useMemo(() => accessibleProjects.map(p => p.id), [accessibleProjects]);
 
-  // Calculate stats for each run, filtered by accessible projects
+  // Calculate stats for each run, filtered by accessible projects and projectFilter
   const runsStats = React.useMemo(() => {
     return testRuns
       .map((run) => {
-        const rel = releases.find((r) => r.id === run.release_id);
-        
         // Get all results for this run that belong to accessible projects
         const runResults = testRunResults.filter((r) => {
           if (r.test_run_id !== run.id) return false;
@@ -549,7 +579,7 @@ export default function TestRunsPage() {
 
         return {
           ...run,
-          releaseVersion: rel ? rel.version : 'Backlog',
+          releaseVersion: getReleaseName(run),
           total,
           passed,
           failed,
@@ -558,9 +588,14 @@ export default function TestRunsPage() {
           progressPercent,
         };
       })
-      // Only show runs that have test cases in accessible projects
-      .filter((run) => run.total > 0);
-  }, [testRuns, releases, testRunResults, testCases, accessibleProjectIds]);
+      .filter((run) => {
+        if (projectFilter !== 'all') {
+          const runProjId = getRunProjectId(run);
+          if (runProjId !== projectFilter) return false;
+        }
+        return run.total > 0;
+      });
+  }, [testRuns, testRunResults, testCases, accessibleProjectIds, getReleaseName, projectFilter, getRunProjectId]);
 
   return (
     <div className="space-y-6">
@@ -594,6 +629,23 @@ export default function TestRunsPage() {
         </div>
       </div>
 
+      {/* Filters Toolbar */}
+      <div className="flex flex-wrap items-center gap-3 bg-muted/20 p-3 rounded-xl border border-border/80">
+        <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase">
+          <span>Filter Project:</span>
+        </div>
+        <select 
+          value={projectFilter} 
+          onChange={(e) => setProjectFilter(e.target.value)}
+          className="bg-background border border-border text-foreground text-xs rounded-lg focus:ring-primary focus:border-primary block p-2 w-[220px] focus:outline-none cursor-pointer"
+        >
+          <option value="all">All Projects</option>
+          {accessibleProjects.map((p) => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+      </div>
+
       {/* Grid Runs */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {runsStats.length > 0 ? (
@@ -614,8 +666,11 @@ export default function TestRunsPage() {
                     }`}>
                       {run.status}
                     </span>
-                    <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-1">
-                      <Flame className="h-3.5 w-3.5 text-primary" /> {run.test_type}
+                    <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-1.5 flex-wrap">
+                      <Flame className="h-3.5 w-3.5 text-primary shrink-0" /> 
+                      <span>{run.test_type}</span>
+                      <span className="text-border/60">•</span>
+                      <span className="bg-muted px-1.5 py-0.5 rounded text-[9px] font-bold text-foreground/70">{run.releaseVersion}</span>
                     </span>
                   </div>
 
@@ -702,7 +757,7 @@ export default function TestRunsPage() {
               <div>
                 <h3 className="text-base font-bold text-foreground">{selectedRunData.run.title}</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Release Version: <strong className="text-foreground/80">{releases.find(r => r.id === selectedRunData.run.release_id)?.version || 'Backlog'}</strong>
+                  Release Version: <strong className="text-foreground/80">{getReleaseName(selectedRunData.run)}</strong>
                 </p>
               </div>
               <div className="flex items-center gap-2">

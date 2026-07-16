@@ -321,8 +321,11 @@ try {
                     
                     ALTER TABLE public.test_cases DROP CONSTRAINT IF EXISTS test_cases_project_id_code_key;
                     ALTER TABLE public.test_cases ADD CONSTRAINT test_cases_project_id_code_key UNIQUE (project_id, code);
+                    
+                    ALTER TABLE public.test_runs ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE;
+                    ALTER TABLE public.test_runs ADD COLUMN IF NOT EXISTS manual_release_name TEXT;
                   `)
-                    .then(() => console.log('Database migration: project isolated code uniqueness constraints passed'))
+                    .then(() => console.log('Database migration: project isolated code uniqueness constraints and test_runs fields check passed'))
                     .catch((err) => console.warn('Database migration warning for project unique constraints:', err));
                 })
                 .catch((err) => console.warn('Database migration warning for issues.created_by:', err));

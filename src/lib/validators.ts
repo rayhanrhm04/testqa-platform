@@ -159,7 +159,9 @@ export interface UserFeedback {
 
 export interface TestRun {
   id: string;
-  release_id: string;
+  project_id?: string;
+  release_id: string | null;
+  manual_release_name?: string | null;
   title: string;
   description?: string;
   test_type: string; // Smoke, Regression, Functional
