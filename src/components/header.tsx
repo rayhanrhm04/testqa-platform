@@ -10,7 +10,6 @@ import { Sun, Moon, CloudOff, Cloud, Menu, Bell, ChevronDown, ChevronLeft, Messa
 import { Button } from './ui/button';
 import Link from 'next/link';
 import { Avatar } from '@/components/ui/avatar';
-import { Notification } from '@/lib/validators';
 
 
 export const Header: React.FC = () => {
@@ -36,6 +35,8 @@ export const Header: React.FC = () => {
   const { notifications, markNotificationAsRead, markAllNotificationsAsRead } = useDataStore();
   const [isNotificationsOpen, setIsNotificationsOpen] = React.useState(false);
   const notificationsRef = React.useRef<HTMLDivElement>(null);
+  const seenNotificationIdsRef = React.useRef<Set<string>>(new Set());
+  const hasBootstrappedNotificationsRef = React.useRef(false);
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -55,6 +56,45 @@ export const Header: React.FC = () => {
   const unreadCount = React.useMemo(() => {
     return userNotifications.filter(n => !n.is_read).length;
   }, [userNotifications]);
+
+  React.useEffect(() => {
+    if (!currentUser) return;
+
+    if (!hasBootstrappedNotificationsRef.current) {
+      seenNotificationIdsRef.current = new Set(userNotifications.map((notif) => notif.id));
+      hasBootstrappedNotificationsRef.current = true;
+      return;
+    }
+
+    const newUnread = userNotifications.find((notif) => (
+      !notif.is_read &&
+      notif.user_id === currentUser.id &&
+      !seenNotificationIdsRef.current.has(notif.id)
+    ));
+
+    userNotifications.forEach((notif) => {
+      seenNotificationIdsRef.current.add(notif.id);
+    });
+
+    if (!newUnread || typeof window === 'undefined' || !('Notification' in window)) return;
+
+    const showBrowserNotification = () => {
+      const browserNotification = new Notification(newUnread.title, {
+        body: newUnread.content,
+        tag: newUnread.id,
+      });
+      browserNotification.onclick = () => {
+        window.focus();
+        markNotificationAsRead(newUnread.id);
+        router.push(newUnread.link);
+        browserNotification.close();
+      };
+    };
+
+    if (Notification.permission === 'granted') {
+      showBrowserNotification();
+    }
+  }, [currentUser, markNotificationAsRead, router, userNotifications]);
 
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border bg-white dark:bg-zinc-950 px-4 md:px-6 text-foreground select-none">
@@ -101,7 +141,12 @@ export const Header: React.FC = () => {
         {/* Notification Bell (exactly like image) */}
         <div className="relative shrink-0" ref={notificationsRef}>
           <div 
-            onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+            onClick={() => {
+              if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+              }
+              setIsNotificationsOpen(!isNotificationsOpen);
+            }}
             className="relative p-2 hover:bg-secondary rounded-full text-foreground cursor-pointer transition-all"
             title="Notifications"
           >
@@ -144,6 +189,9 @@ export const Header: React.FC = () => {
                       IconComponent = MessageSquare;
                       iconBg = 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20';
                     } else if (notif.type === 'exploratory') {
+                      IconComponent = Bug;
+                      iconBg = 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20';
+                    } else if (notif.type === 'issue') {
                       IconComponent = Bug;
                       iconBg = 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20';
                     } else if (notif.type === 'report') {

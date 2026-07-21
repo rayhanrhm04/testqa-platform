@@ -367,8 +367,8 @@ export default function IssuesPage() {
             user_id: payload.assigned_to,
             title: 'New Issue Assignment',
             content: `You have been assigned to issue ${editingIssue.code}: "${payload.title}"`,
-            type: 'feedback',
-            link: `/issues?project=${payload.project_id}`
+            type: 'issue',
+            link: `/issues?id=${editingIssue.id}`
           });
         }
         
@@ -381,8 +381,8 @@ export default function IssuesPage() {
             user_id: payload.assigned_to,
             title: 'New Issue Assignment',
             content: `You have been assigned to issue ${newIssueObj.code}: "${payload.title}"`,
-            type: 'feedback',
-            link: `/issues?project=${payload.project_id}`
+            type: 'issue',
+            link: `/issues?id=${newIssueObj.id}`
           });
         }
         
