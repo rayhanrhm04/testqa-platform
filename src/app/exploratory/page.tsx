@@ -338,93 +338,158 @@ export default function ExploratoryPage() {
     const projectName = projects.find(p => p.id === selectedSummarySession.project_id)?.name || 'Unknown Project';
     const generatedAt = new Date().toLocaleString();
     const safeTitle = selectedSummarySession.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'exploratory-session';
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 14;
+    const black: [number, number, number] = [9, 9, 11];
+    const muted: [number, number, number] = [113, 113, 122];
+    const border: [number, number, number] = [228, 228, 231];
+    const blue: [number, number, number] = [37, 99, 235];
+    const red: [number, number, number] = [220, 38, 38];
+    const emerald: [number, number, number] = [5, 150, 105];
 
+    const addFooter = () => {
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setDrawColor(...border);
+        doc.line(margin, pageHeight - 14, pageWidth - margin, pageHeight - 14);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(...muted);
+        doc.text('MAPID QA - Exploratory Testing Report', margin, pageHeight - 8);
+        doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 8, { align: 'right' });
+      }
+    };
+
+    const addSectionTitle = (title: string, y: number, color: [number, number, number] = black) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(...color);
+      doc.text(title.toUpperCase(), margin, y);
+      doc.setDrawColor(...border);
+      doc.line(margin, y + 3, pageWidth - margin, y + 3);
+    };
+
+    const metricCard = (x: number, y: number, width: number, label: string, value: string, color: [number, number, number]) => {
+      doc.setFillColor(250, 250, 250);
+      doc.setDrawColor(...border);
+      doc.roundedRect(x, y, width, 24, 3, 3, 'FD');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.setTextColor(...color);
+      doc.text(value, x + 5, y + 11);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(...muted);
+      doc.text(label.toUpperCase(), x + 5, y + 19);
+    };
+
+    doc.setFillColor(...black);
+    doc.rect(0, 0, pageWidth, 42, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('Exploratory Testing Report', margin, 17);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('MAPID QA', margin, 25);
+    doc.text(`Generated ${generatedAt}`, pageWidth - margin, 25, { align: 'right' });
+
+    doc.setTextColor(...black);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
-    doc.text('MAPID QA - Exploratory Testing Report', 14, 18);
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.text(`Generated: ${generatedAt}`, 14, 25);
+    const titleLines = doc.splitTextToSize(selectedSummarySession.name, pageWidth - margin * 2);
+    doc.text(titleLines, margin, 56);
+    const titleBottom = 56 + (titleLines.length - 1) * 7;
 
     autoTable(doc, {
-      startY: 32,
-      head: [['Session', 'Project', 'Module', 'Status']],
+      startY: titleBottom + 8,
+      theme: 'plain',
       body: [[
-        selectedSummarySession.name,
-        projectName,
-        selectedSummarySession.module || 'General',
-        selectedSummarySession.status,
+        { content: 'Project', styles: { textColor: muted, fontStyle: 'bold' } },
+        { content: projectName, styles: { fontStyle: 'bold' } },
+        { content: 'Module', styles: { textColor: muted, fontStyle: 'bold' } },
+        { content: selectedSummarySession.module || 'General', styles: { fontStyle: 'bold' } },
+      ], [
+        { content: 'Status', styles: { textColor: muted, fontStyle: 'bold' } },
+        { content: selectedSummarySession.status, styles: { fontStyle: 'bold' } },
+        { content: 'Timebox', styles: { textColor: muted, fontStyle: 'bold' } },
+        { content: `${selectedSummarySession.timebox_mins || 0} minutes`, styles: { fontStyle: 'bold' } },
       ]],
-      styles: { fontSize: 8, cellPadding: 3 },
-      headStyles: { fillColor: [9, 9, 11] },
+      styles: { fontSize: 9, cellPadding: 2.5 },
+      columnStyles: { 0: { cellWidth: 22 }, 1: { cellWidth: 70 }, 2: { cellWidth: 22 }, 3: { cellWidth: 62 } },
     });
 
-    autoTable(doc, {
-      startY: (doc as any).lastAutoTable.finalY + 6,
-      head: [['Duration', 'Timebox', 'Notes', 'Bugs', 'Evidence']],
-      body: [[
-        formatTime(selectedSummarySession.elapsed_seconds || 0),
-        `${selectedSummarySession.timebox_mins || 0} minutes`,
-        String(summaryNotes.length),
-        String(summaryBugs.length),
-        String(summaryEvidence.length),
-      ]],
-      styles: { fontSize: 8, cellPadding: 3 },
-      headStyles: { fillColor: [39, 39, 42] },
-    });
+    const metricsY = (doc as any).lastAutoTable.finalY + 10;
+    const cardWidth = (pageWidth - margin * 2 - 9) / 4;
+    metricCard(margin, metricsY, cardWidth, 'Duration', formatTime(selectedSummarySession.elapsed_seconds || 0), black);
+    metricCard(margin + cardWidth + 3, metricsY, cardWidth, 'Notes', String(summaryNotes.length), blue);
+    metricCard(margin + (cardWidth + 3) * 2, metricsY, cardWidth, 'Bugs', String(summaryBugs.length), red);
+    metricCard(margin + (cardWidth + 3) * 3, metricsY, cardWidth, 'Evidence', String(summaryEvidence.length), emerald);
 
+    addSectionTitle('Charter / Objective', metricsY + 36);
     autoTable(doc, {
-      startY: (doc as any).lastAutoTable.finalY + 6,
-      head: [['Objective / Charter']],
+      startY: metricsY + 42,
+      theme: 'plain',
       body: [[selectedSummarySession.objective || 'No objective recorded.']],
-      styles: { fontSize: 8, cellPadding: 3 },
-      headStyles: { fillColor: [63, 63, 70] },
+      styles: { fontSize: 9, cellPadding: 4, lineColor: border, lineWidth: 0.1, fillColor: [250, 250, 250], textColor: black },
     });
 
+    addSectionTitle('Captured Notes', (doc as any).lastAutoTable.finalY + 12, blue);
     autoTable(doc, {
-      startY: (doc as any).lastAutoTable.finalY + 8,
-      head: [['#', 'Captured Notes']],
+      startY: (doc as any).lastAutoTable.finalY + 18,
+      head: [['No.', 'Note']],
       body: summaryNotes.length > 0
         ? summaryNotes.map((note, index) => [String(index + 1), note.note_text])
         : [['-', 'No notes logged.']],
-      styles: { fontSize: 8, cellPadding: 3 },
-      columnStyles: { 0: { cellWidth: 12 } },
-      headStyles: { fillColor: [37, 99, 235] },
+      styles: { fontSize: 8.5, cellPadding: 3, lineColor: border, lineWidth: 0.1, valign: 'top' },
+      headStyles: { fillColor: blue, textColor: [255, 255, 255], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: { 0: { cellWidth: 14, halign: 'center' } },
     });
 
+    addSectionTitle('Bug Findings', (doc as any).lastAutoTable.finalY + 12, red);
     autoTable(doc, {
-      startY: (doc as any).lastAutoTable.finalY + 8,
-      head: [['Time', 'Title', 'Severity', 'Priority', 'Details']],
+      startY: (doc as any).lastAutoTable.finalY + 18,
+      head: [['Found At', 'Finding', 'Risk', 'Details']],
       body: summaryBugs.length > 0
         ? summaryBugs.map((bug) => [
             formatTime(bug.relative_timestamp_seconds || 0),
             bug.title,
-            bug.severity,
-            bug.priority,
+            `Severity: ${bug.severity}\nPriority: ${bug.priority}\nCategory: ${bug.category || 'Functional'}`,
             [
               bug.description ? `Description: ${bug.description}` : '',
-              bug.steps_to_reproduce ? `Steps: ${bug.steps_to_reproduce}` : '',
+              bug.steps_to_reproduce ? `Steps to Reproduce:\n${bug.steps_to_reproduce}` : '',
               bug.expected_result ? `Expected: ${bug.expected_result}` : '',
               bug.actual_result ? `Actual: ${bug.actual_result}` : '',
             ].filter(Boolean).join('\n') || 'No details recorded.',
           ])
-        : [['-', 'No bugs logged.', '-', '-', '-']],
-      styles: { fontSize: 7.5, cellPadding: 3 },
-      headStyles: { fillColor: [220, 38, 38] },
+        : [['-', 'No bugs logged.', '-', '-']],
+      styles: { fontSize: 7.8, cellPadding: 3, lineColor: border, lineWidth: 0.1, valign: 'top' },
+      headStyles: { fillColor: red, textColor: [255, 255, 255], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [254, 242, 242] },
+      columnStyles: {
+        0: { cellWidth: 22 },
+        1: { cellWidth: 40, fontStyle: 'bold' },
+        2: { cellWidth: 34 },
+      },
     });
 
+    addSectionTitle('Evidence Inventory', (doc as any).lastAutoTable.finalY + 12, emerald);
     autoTable(doc, {
-      startY: (doc as any).lastAutoTable.finalY + 8,
-      head: [['#', 'Evidence File', 'Type']],
+      startY: (doc as any).lastAutoTable.finalY + 18,
+      head: [['No.', 'Evidence File', 'Type']],
       body: summaryEvidence.length > 0
         ? summaryEvidence.map((evidence, index) => [String(index + 1), evidence.file_name, evidence.file_type])
         : [['-', 'No evidence uploaded.', '-']],
-      styles: { fontSize: 8, cellPadding: 3 },
+      styles: { fontSize: 8.5, cellPadding: 3, lineColor: border, lineWidth: 0.1 },
+      headStyles: { fillColor: emerald, textColor: [255, 255, 255], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [240, 253, 244] },
       columnStyles: { 0: { cellWidth: 12 } },
-      headStyles: { fillColor: [5, 150, 105] },
     });
 
+    addFooter();
     doc.save(`${safeTitle}-exploratory-report.pdf`);
     addToast('Exploratory session PDF exported.', 'success');
   };
