@@ -53,6 +53,7 @@ export default function ApiTestingHubPage() {
 
   // Selected states
   const [selectedProjectId, setSelectedProjectId] = React.useState('');
+  const [manualProjectScope, setManualProjectScope] = React.useState('');
   const [selectedColId, setSelectedColId] = React.useState('');
   const [selectedEnvId, setSelectedEnvId] = React.useState('');
 
@@ -118,6 +119,9 @@ export default function ApiTestingHubPage() {
     status: number;
     statusText: string;
     time: number;
+    targetTime: number;
+    roundTripTime: number;
+    proxyOverhead: number;
     size: number;
     headers: any;
     body: string;
@@ -458,6 +462,7 @@ ${resolvedBody}
     }
 
     try {
+      const clientStart = performance.now();
       const res = await fetch('/api/proxy', {
         method: 'POST',
         headers: {
@@ -468,8 +473,10 @@ ${resolvedBody}
           method: requestMethod,
           headers: compiledHeaders,
           body: compiledBody || undefined,
+          timeoutMs: Number(requestTimeout) || 30000,
         }),
       });
+      const clientDuration = performance.now() - clientStart;
 
       const data = await res.json();
 
@@ -485,10 +492,17 @@ ${resolvedBody}
         else if (data.status === 404) statusText = 'Not Found';
         else if (data.status === 500) statusText = 'Internal Server Error';
 
+        const targetTime = Number(data.duration_exact_ms ?? data.duration_ms ?? 0);
+        const roundTripTime = Number(clientDuration.toFixed(2));
+        const displayTime = Number(Math.max(targetTime, roundTripTime).toFixed(2));
+
         setRequestResponse({
           status: data.status,
           statusText,
-          time: data.duration_ms || 120,
+          time: displayTime,
+          targetTime,
+          roundTripTime,
+          proxyOverhead: Number(Math.max(roundTripTime - targetTime, 0).toFixed(2)),
           size,
           headers: data.headers || {},
           body: bodyStr,
@@ -499,6 +513,9 @@ ${resolvedBody}
           status: data.status || 500,
           statusText: 'Error',
           time: 0,
+          targetTime: 0,
+          roundTripTime: Number(clientDuration.toFixed(2)),
+          proxyOverhead: 0,
           size: 0,
           headers: {},
           body: data.error || 'Connection failure or host is unreachable',
@@ -510,6 +527,9 @@ ${resolvedBody}
         status: 500,
         statusText: 'Failed',
         time: 0,
+        targetTime: 0,
+        roundTripTime: 0,
+        proxyOverhead: 0,
         size: 0,
         headers: {},
         body: err.message || 'Failed to dispatch request to proxy',
@@ -676,44 +696,57 @@ ${resolvedBody}
   const requestAiAnalysis = React.useMemo(() => {
     if (!requestResponse) return null;
     
-    const insights: { title: string; desc: string; severity: 'low' | 'medium' | 'high' }[] = [];
+    const insights: { title: string; desc: string; severity: 'low' | 'medium' | 'high'; action: string }[] = [];
+    const scopeLabel = manualProjectScope.trim() || projects.find(p => p.id === selectedProjectId)?.name || 'current project';
     
     if (requestResponse.status >= 500) {
       insights.push({
-        title: 'Server-side failure diagnostic',
-        desc: 'The target server returned a 5xx response. Check server application logs, database connection thread pool configurations, or environment route paths.',
+        title: 'Server-side Failure',
+        desc: `The endpoint returned ${requestResponse.status}. Treat this as a backend failure for ${scopeLabel} unless the request intentionally targets an error path.`,
+        action: 'Check API logs, upstream database/API dependencies, and retry with the same payload after confirming the environment is healthy.',
         severity: 'high',
       });
     } else if (requestResponse.status === 401 || requestResponse.status === 403) {
       insights.push({
-        title: 'Authentication Header mismatch',
-        desc: 'Access denied. Verify Bearer tokens or environment secret bindings are resolved correctly on the Environment subtab.',
+        title: 'Authorization Mismatch',
+        desc: `The request was rejected with ${requestResponse.status}. This usually points to a missing token, wrong token scope, expired credential, or environment mismatch.`,
+        action: 'Validate Authorization headers, API key placement, and Environment variable bindings before filing a product bug.',
         severity: 'high',
       });
     } else if (requestResponse.status >= 400) {
       insights.push({
-        title: 'Invalid Request Payload boundary',
-        desc: 'The server rejected the payload format. Double-check request query parameters spelling and raw body JSON brackets structure.',
+        title: 'Request Contract Issue',
+        desc: `The endpoint returned ${requestResponse.status}. The server understood the request but rejected the input or route contract.`,
+        action: 'Review query params, required headers, body schema, and negative test coverage for this endpoint.',
         severity: 'medium',
       });
     }
 
-    if (requestResponse.time > 200) {
+    if (requestResponse.time > 1000) {
       insights.push({
-        title: 'Slow API Response Latency',
-        desc: `API took ${requestResponse.time}ms. Ensure this endpoint is added to regression runs to monitor payload processing durations.`,
+        title: 'High Latency Risk',
+        desc: `Observed ${requestResponse.time}ms total latency (${requestResponse.targetTime}ms target, ${requestResponse.proxyOverhead}ms proxy/client overhead).`,
+        action: 'Add this endpoint to regression monitoring, capture payload size, and compare against a baseline from the same environment.',
         severity: 'medium',
+      });
+    } else if (requestResponse.time > 300) {
+      insights.push({
+        title: 'Latency Watch',
+        desc: `Observed ${requestResponse.time}ms total latency. This is acceptable for many GIS payloads, but should be tracked if it is user-facing.`,
+        action: 'Run the same request three times and compare median latency before opening a performance ticket.',
+        severity: 'low',
       });
     }
 
     insights.push({
-      title: 'Suggested Negative Boundary Testing',
-      desc: 'Attempt running requests with empty payloads or invalid auth credentials to verify proper 4xx validation codes are raised.',
+      title: 'Recommended QA Follow-up',
+      desc: `Use this response as the baseline for ${scopeLabel}. Include status, payload size, and timing when generating a linked test case.`,
+      action: 'Create positive, auth-negative, and malformed-payload cases so future API changes are easier to verify.',
       severity: 'low',
     });
 
     return insights;
-  }, [requestResponse]);
+  }, [manualProjectScope, projects, requestResponse, selectedProjectId]);
 
   const playwrightCodeSnippet = React.useMemo(() => {
     const headers: any = {};
@@ -869,7 +902,7 @@ test('HTTP Request Validation', async ({ request }) => {
         </div>
 
         {/* Project Selector mapping */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex flex-wrap items-center justify-end gap-3 shrink-0">
           <span className="text-xs font-bold text-muted-foreground">Scope:</span>
           <Select 
             value={selectedProjectId} 
@@ -880,6 +913,12 @@ test('HTTP Request Validation', async ({ request }) => {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </Select>
+          <Input
+            value={manualProjectScope}
+            onChange={(e) => setManualProjectScope(e.target.value)}
+            placeholder="Custom scope label"
+            className="h-9 w-56 text-xs"
+          />
 
           {activeTab === 'collections' && (
             <Button 
@@ -1181,7 +1220,7 @@ test('HTTP Request Validation', async ({ request }) => {
                                 <td className="px-4 py-3 min-w-0">
                                   <div className="space-y-0.5">
                                     <p className="font-bold text-foreground">{endpoint.name}</p>
-                                    <p className="text-[10px] text-muted-foreground font-mono truncate max-w-sm" title={endpoint.path}>
+                                    <p className="text-[10px] text-muted-foreground font-sans truncate max-w-sm" title={endpoint.path}>
                                       {endpoint.path}
                                     </p>
                                   </div>
@@ -1273,7 +1312,7 @@ test('HTTP Request Validation', async ({ request }) => {
                 value={requestUrl}
                 onChange={(e) => setRequestUrl(e.target.value)}
                 placeholder="https://httpbin.org/post"
-                className="font-mono text-xs flex-1"
+                className="font-sans text-xs flex-1"
               />
 
               <Button 
@@ -1353,7 +1392,7 @@ test('HTTP Request Validation', async ({ request }) => {
                         value={requestBearerToken} 
                         onChange={(e) => setRequestBearerToken(e.target.value)} 
                         placeholder="mapid-secret"
-                        className="font-mono text-xs h-8.5"
+                        className="font-sans text-xs h-8.5"
                       />
                     </FormGroup>
                   )}
@@ -1387,7 +1426,7 @@ test('HTTP Request Validation', async ({ request }) => {
                           value={requestApiKeyName} 
                           onChange={(e) => setRequestApiKeyName(e.target.value)} 
                           placeholder="e.g. X-API-KEY"
-                          className="font-mono text-xs h-8.5"
+                          className="font-sans text-xs h-8.5"
                         />
                       </FormGroup>
                       <FormGroup label="Key Value">
@@ -1395,7 +1434,7 @@ test('HTTP Request Validation', async ({ request }) => {
                           value={requestApiKeyValue} 
                           onChange={(e) => setRequestApiKeyValue(e.target.value)} 
                           placeholder="e.g. mapid-value"
-                          className="font-mono text-xs h-8.5"
+                          className="font-sans text-xs h-8.5"
                         />
                       </FormGroup>
                     </div>
@@ -1418,8 +1457,8 @@ test('HTTP Request Validation', async ({ request }) => {
                         <tbody className="divide-y divide-border/60">
                           {requestHeaders.map((h, idx) => (
                             <tr key={idx} className="hover:bg-muted/5">
-                              <td className="px-3 py-2 font-mono">{h.key}</td>
-                              <td className="px-3 py-2 font-mono text-muted-foreground">{h.value}</td>
+                              <td className="px-3 py-2 font-sans">{h.key}</td>
+                              <td className="px-3 py-2 font-sans text-muted-foreground">{h.value}</td>
                               <td className="px-3 py-2 text-center">
                                 <button 
                                   onClick={() => setRequestHeaders(requestHeaders.filter((_, i) => i !== idx))}
@@ -1475,8 +1514,8 @@ test('HTTP Request Validation', async ({ request }) => {
                         <tbody className="divide-y divide-border/60">
                           {requestParams.map((p, idx) => (
                             <tr key={idx} className="hover:bg-muted/5">
-                              <td className="px-3 py-2 font-mono">{p.key}</td>
-                              <td className="px-3 py-2 font-mono text-muted-foreground">{p.value}</td>
+                              <td className="px-3 py-2 font-sans">{p.key}</td>
+                              <td className="px-3 py-2 font-sans text-muted-foreground">{p.value}</td>
                               <td className="px-3 py-2 text-center">
                                 <button 
                                   onClick={() => setRequestParams(requestParams.filter((_, i) => i !== idx))}
@@ -1541,7 +1580,7 @@ test('HTTP Request Validation', async ({ request }) => {
                         onChange={(e) => setRequestBodyContent(e.target.value)}
                         placeholder={requestBodyType === 'json' ? '{\n  "email": "qa@mapid.io"\n}' : 'email=qa@mapid.io'}
                         rows={6}
-                        className="font-mono text-xs"
+                        className="font-sans text-xs"
                       />
                     </FormGroup>
                   )}
@@ -1577,8 +1616,22 @@ test('HTTP Request Validation', async ({ request }) => {
                     }`}>
                       {requestResponse.status} {requestResponse.statusText}
                     </span>
-                    <span className="text-muted-foreground">{requestResponse.time} ms</span>
+                    <span className="rounded-md border border-border bg-muted/30 px-2.5 py-1 text-foreground">{requestResponse.time} ms</span>
                     <span className="text-muted-foreground">{(requestResponse.size / 1024).toFixed(2)} KB</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-[10px] font-bold text-muted-foreground">
+                    <div className="rounded-lg border border-border bg-muted/20 px-2.5 py-2">
+                      <span className="block uppercase">Target</span>
+                      <strong className="text-foreground">{requestResponse.targetTime} ms</strong>
+                    </div>
+                    <div className="rounded-lg border border-border bg-muted/20 px-2.5 py-2">
+                      <span className="block uppercase">Round Trip</span>
+                      <strong className="text-foreground">{requestResponse.roundTripTime} ms</strong>
+                    </div>
+                    <div className="rounded-lg border border-border bg-muted/20 px-2.5 py-2">
+                      <span className="block uppercase">Proxy</span>
+                      <strong className="text-foreground">{requestResponse.proxyOverhead} ms</strong>
+                    </div>
                   </div>
                 </div>
 
@@ -1641,7 +1694,7 @@ test('HTTP Request Validation', async ({ request }) => {
                       Copy JSON
                     </button>
                   </div>
-                  <pre className="p-3 bg-zinc-900 text-zinc-100 rounded-lg overflow-x-auto font-mono text-[10px] leading-relaxed max-h-[300px] text-left">
+                  <pre className="p-3 bg-zinc-900 text-zinc-100 rounded-lg overflow-x-auto font-sans text-[10px] leading-relaxed max-h-[300px] text-left">
                     {(() => {
                       try {
                         return JSON.stringify(JSON.parse(requestResponse.body), null, 2);
@@ -1661,14 +1714,23 @@ test('HTTP Request Validation', async ({ request }) => {
                     </span>
                     <div className="space-y-2.5">
                       {requestAiAnalysis.map((ins, i) => (
-                        <div key={i} className="text-xs leading-normal">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`w-1.5 h-1.5 rounded-full ${
+                        <div key={i} className={`rounded-lg border p-3 text-xs leading-normal ${
+                          ins.severity === 'high'
+                            ? 'border-red-500/20 bg-red-500/5'
+                            : ins.severity === 'medium'
+                              ? 'border-amber-500/20 bg-amber-500/5'
+                              : 'border-blue-500/20 bg-blue-500/5'
+                        }`}>
+                          <div className="flex items-center gap-2">
+                            <span className={`h-2 w-2 rounded-full ${
                               ins.severity === 'high' ? 'bg-red-500' : ins.severity === 'medium' ? 'bg-amber-500' : 'bg-blue-500'
                             }`} />
-                            <p className="font-bold text-foreground">{ins.title}</p>
+                            <p className="font-black text-foreground">{ins.title}</p>
                           </div>
-                          <p className="text-muted-foreground pl-3 mt-0.5 text-[11px]">{ins.desc}</p>
+                          <p className="mt-1.5 text-[11px] text-muted-foreground">{ins.desc}</p>
+                          <p className="mt-2 rounded-md bg-white/60 px-2 py-1.5 text-[10px] font-bold text-foreground dark:bg-zinc-950/40">
+                            Recommended action: {ins.action}
+                          </p>
                         </div>
                       ))}
                     </div>
@@ -1751,8 +1813,8 @@ test('HTTP Request Validation', async ({ request }) => {
                       <tbody className="divide-y divide-border/60">
                         {envVariables.map((v) => (
                           <tr key={v.key} className="hover:bg-muted/5">
-                            <td className="px-4 py-2.5 font-bold font-mono text-foreground">{v.key}</td>
-                            <td className="px-4 py-2.5 font-mono text-muted-foreground break-all">{v.value}</td>
+                            <td className="px-4 py-2.5 font-bold font-sans text-foreground">{v.key}</td>
+                            <td className="px-4 py-2.5 font-sans text-muted-foreground break-all">{v.value}</td>
                             <td className="px-4 py-2.5 text-center">
                               <button 
                                 onClick={() => handleRemoveVariable(v.key)}
@@ -2034,7 +2096,7 @@ test('HTTP Request Validation', async ({ request }) => {
           </FormGroup>
           
           <FormGroup label="Bug Description (Pre-filled Logs)">
-            <Textarea value={issueDesc} onChange={(e) => setIssueDesc(e.target.value)} rows={6} className="font-mono text-xs leading-normal" />
+            <Textarea value={issueDesc} onChange={(e) => setIssueDesc(e.target.value)} rows={6} className="font-sans text-xs leading-normal" />
           </FormGroup>
 
           <FormGroup label="Severity Priority">
@@ -2107,13 +2169,13 @@ test('HTTP Request Validation', async ({ request }) => {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1">
                 <span className="text-[10px] uppercase font-bold text-muted-foreground">Request Headers</span>
-                <pre className="p-2.5 bg-muted/15 border border-border/40 rounded-lg overflow-x-auto font-mono text-[10px] leading-normal max-h-[100px]">
+                <pre className="p-2.5 bg-muted/15 border border-border/40 rounded-lg overflow-x-auto font-sans text-[10px] leading-normal max-h-[100px]">
                   {activeEndpointResult.request_headers || 'N/A'}
                 </pre>
               </div>
               <div className="space-y-1">
                 <span className="text-[10px] uppercase font-bold text-muted-foreground">Response Headers</span>
-                <pre className="p-2.5 bg-muted/15 border border-border/40 rounded-lg overflow-x-auto font-mono text-[10px] leading-normal max-h-[100px]">
+                <pre className="p-2.5 bg-muted/15 border border-border/40 rounded-lg overflow-x-auto font-sans text-[10px] leading-normal max-h-[100px]">
                   {activeEndpointResult.response_headers || 'N/A'}
                 </pre>
               </div>
@@ -2123,14 +2185,14 @@ test('HTTP Request Validation', async ({ request }) => {
             <div className="space-y-3">
               <div className="space-y-1">
                 <span className="text-[10px] uppercase font-bold text-muted-foreground">Request Payload</span>
-                <pre className="p-2.5 bg-muted/15 border border-border/40 rounded-lg overflow-x-auto font-mono text-[10px] leading-normal max-h-[80px]">
+                <pre className="p-2.5 bg-muted/15 border border-border/40 rounded-lg overflow-x-auto font-sans text-[10px] leading-normal max-h-[80px]">
                   {activeEndpointResult.request_payload || 'Empty Body'}
                 </pre>
               </div>
 
               <div className="space-y-1">
                 <span className="text-[10px] uppercase font-bold text-muted-foreground">Response Body</span>
-                <pre className="p-2.5 bg-zinc-900 text-zinc-100 rounded-lg overflow-x-auto font-mono text-[10px] leading-normal max-h-[220px]">
+                <pre className="p-2.5 bg-zinc-900 text-zinc-100 rounded-lg overflow-x-auto font-sans text-[10px] leading-normal max-h-[220px]">
                   {(() => {
                     try {
                       return JSON.stringify(JSON.parse(activeEndpointResult.response_payload || ''), null, 2);
@@ -2201,7 +2263,7 @@ test('HTTP Request Validation', async ({ request }) => {
                             </span>
                             <span className="font-bold text-foreground truncate">{endpoint.name}</span>
                           </div>
-                          <p className="text-[10px] text-muted-foreground font-mono truncate max-w-md">{endpoint.path}</p>
+                          <p className="text-[10px] text-muted-foreground font-sans truncate max-w-md">{endpoint.path}</p>
                           {res.error_message && (
                             <p className="text-[10px] text-red-500 font-semibold">Error: {res.error_message}</p>
                           )}

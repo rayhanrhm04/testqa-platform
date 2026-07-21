@@ -10,7 +10,7 @@ import { useSyncStore } from '@/store/useSyncStore';
 import { 
   LayoutDashboard, MessageSquare, Bug, Rocket, FolderHeart, 
   FileSpreadsheet, PlayCircle, FileText, BarChart3, Settings, 
-  ChevronLeft, ChevronRight, UserCheck, LogOut, MessageCircle,
+  ChevronLeft, ChevronRight, UserCheck, LogOut,
   Compass, ClipboardList, Video, Layers, Calendar, Briefcase, TestTube2
 } from 'lucide-react';
 import { Button } from './ui/button';
@@ -29,7 +29,6 @@ export const Sidebar: React.FC = () => {
     'Project Status': 'project-status',
     'Calendar Hub': 'calendar',
     'Feedback': 'feedback',
-    'User Feedback': 'feedback',
     'Issues': 'issues',
     'Releases': 'releases',
     'Release Notes': 'release-notes',
@@ -52,7 +51,6 @@ export const Sidebar: React.FC = () => {
     { name: 'Project Status', path: '/project-status', icon: <Briefcase className="h-4.5 w-4.5" /> },
     { name: 'Calendar Hub', path: '/calendar', icon: <Calendar className="h-4.5 w-4.5" /> },
     { name: 'Feedback', path: '/feedback', icon: <MessageSquare className="h-4.5 w-4.5" /> },
-    { name: 'User Feedback', path: '/user-feedback', icon: <MessageCircle className="h-4.5 w-4.5" /> },
     { name: 'Issues', path: '/issues', icon: <Bug className="h-4.5 w-4.5" /> },
     { name: 'Releases', path: '/releases', icon: <Rocket className="h-4.5 w-4.5" /> },
     { name: 'Release Notes', path: '/release-notes', icon: <FileText className="h-4.5 w-4.5" /> },
@@ -76,13 +74,13 @@ export const Sidebar: React.FC = () => {
       if (activeRole === 'Admin') return true;
       if (activeRole === 'QA Engineer') return item.name !== 'Settings' && item.name !== 'Analytics';
       if (activeRole === 'Developer') {
-        return item.name === 'Dashboard' || item.name === 'Feedback' || item.name === 'User Feedback' ||
+        return item.name === 'Dashboard' || item.name === 'Feedback' ||
                item.name === 'Issues' || item.name === 'Releases' || item.name === 'Release Notes' || item.name === 'API Testing Hub';
       }
       if (activeRole === 'PSE') {
         return item.name === 'Release Notes' || item.name === 'Calendar Hub' || item.name === 'Projects (QA)' || item.name === 'Project Status';
       }
-      return item.name === 'Reports' || item.name === 'Analytics' || item.name === 'Feedback' || item.name === 'User Feedback' || item.name === 'Release Notes';
+      return item.name === 'Reports' || item.name === 'Analytics' || item.name === 'Feedback' || item.name === 'Release Notes';
     }
     const allowed = currentPermissions.allowed_modules.split(',');
     const moduleKey = itemModuleMap[item.name];
@@ -154,11 +152,6 @@ export const Sidebar: React.FC = () => {
               {sidebarOpen && (
                 <div className="flex items-center justify-between flex-1 min-w-0">
                   <span className="truncate">{item.name}</span>
-                  {item.name === 'User Feedback' && (
-                    <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 whitespace-nowrap ml-2">
-                      Coming Soon
-                    </span>
-                  )}
                 </div>
               )}
             </Link>
