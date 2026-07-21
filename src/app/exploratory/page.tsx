@@ -8,7 +8,8 @@ import {
   Play, Pause, CheckSquare, Plus, Trash2, Clock, 
   StickyNote, Bug, Paperclip, ArrowLeft, CheckCircle2, 
   AlertCircle, Calendar, LayoutGrid, Folder, Compass, 
-  Loader2, AlertTriangle, ExternalLink, PlaySquare, Video, Image as ImageIcon
+  Loader2, AlertTriangle, ExternalLink, PlaySquare, Video, Image as ImageIcon,
+  Download
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -326,6 +327,106 @@ export default function ExploratoryPage() {
   const handleOpenSummary = (session: any) => {
     setSelectedSummarySession(session);
     setCurrentView('summary');
+  };
+
+  const handleExportSessionPDF = async () => {
+    if (!selectedSummarySession) return;
+
+    const jsPDF = (await import('jspdf')).jsPDF;
+    const autoTable = (await import('jspdf-autotable')).default;
+    const doc = new jsPDF() as any;
+    const projectName = projects.find(p => p.id === selectedSummarySession.project_id)?.name || 'Unknown Project';
+    const generatedAt = new Date().toLocaleString();
+    const safeTitle = selectedSummarySession.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'exploratory-session';
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('MAPID QA - Exploratory Testing Report', 14, 18);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(`Generated: ${generatedAt}`, 14, 25);
+
+    autoTable(doc, {
+      startY: 32,
+      head: [['Session', 'Project', 'Module', 'Status']],
+      body: [[
+        selectedSummarySession.name,
+        projectName,
+        selectedSummarySession.module || 'General',
+        selectedSummarySession.status,
+      ]],
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [9, 9, 11] },
+    });
+
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 6,
+      head: [['Duration', 'Timebox', 'Notes', 'Bugs', 'Evidence']],
+      body: [[
+        formatTime(selectedSummarySession.elapsed_seconds || 0),
+        `${selectedSummarySession.timebox_mins || 0} minutes`,
+        String(summaryNotes.length),
+        String(summaryBugs.length),
+        String(summaryEvidence.length),
+      ]],
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [39, 39, 42] },
+    });
+
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 6,
+      head: [['Objective / Charter']],
+      body: [[selectedSummarySession.objective || 'No objective recorded.']],
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [63, 63, 70] },
+    });
+
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 8,
+      head: [['#', 'Captured Notes']],
+      body: summaryNotes.length > 0
+        ? summaryNotes.map((note, index) => [String(index + 1), note.note_text])
+        : [['-', 'No notes logged.']],
+      styles: { fontSize: 8, cellPadding: 3 },
+      columnStyles: { 0: { cellWidth: 12 } },
+      headStyles: { fillColor: [37, 99, 235] },
+    });
+
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 8,
+      head: [['Time', 'Title', 'Severity', 'Priority', 'Details']],
+      body: summaryBugs.length > 0
+        ? summaryBugs.map((bug) => [
+            formatTime(bug.relative_timestamp_seconds || 0),
+            bug.title,
+            bug.severity,
+            bug.priority,
+            [
+              bug.description ? `Description: ${bug.description}` : '',
+              bug.steps_to_reproduce ? `Steps: ${bug.steps_to_reproduce}` : '',
+              bug.expected_result ? `Expected: ${bug.expected_result}` : '',
+              bug.actual_result ? `Actual: ${bug.actual_result}` : '',
+            ].filter(Boolean).join('\n') || 'No details recorded.',
+          ])
+        : [['-', 'No bugs logged.', '-', '-', '-']],
+      styles: { fontSize: 7.5, cellPadding: 3 },
+      headStyles: { fillColor: [220, 38, 38] },
+    });
+
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 8,
+      head: [['#', 'Evidence File', 'Type']],
+      body: summaryEvidence.length > 0
+        ? summaryEvidence.map((evidence, index) => [String(index + 1), evidence.file_name, evidence.file_type])
+        : [['-', 'No evidence uploaded.', '-']],
+      styles: { fontSize: 8, cellPadding: 3 },
+      columnStyles: { 0: { cellWidth: 12 } },
+      headStyles: { fillColor: [5, 150, 105] },
+    });
+
+    doc.save(`${safeTitle}-exploratory-report.pdf`);
+    addToast('Exploratory session PDF exported.', 'success');
   };
 
   // Back to list helper
@@ -828,22 +929,31 @@ ${bug.actual_result || 'No actual result provided.'}
       {/* ======================================================== */}
       {currentView === 'summary' && selectedSummarySession && (
         <>
-          <div className="flex items-center gap-3 pb-3">
-            <Button 
-              variant="outline" 
-              onClick={handleBackToDashboard}
-              className="cursor-pointer font-bold text-xs h-8 px-2.5 flex items-center gap-1"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" /> Back to Dashboard
-            </Button>
-            <div>
-              <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
-                Session Summary
-              </span>
-              <h2 className="text-lg font-bold text-foreground leading-none mt-0.5">
-                {selectedSummarySession.name}
-              </h2>
+          <div className="flex flex-col gap-3 pb-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-3">
+              <Button 
+                variant="outline" 
+                onClick={handleBackToDashboard}
+                className="cursor-pointer font-bold text-xs h-8 px-2.5 flex items-center gap-1"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" /> Back to Dashboard
+              </Button>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                  Session Summary
+                </span>
+                <h2 className="text-lg font-bold text-foreground leading-none mt-0.5">
+                  {selectedSummarySession.name}
+                </h2>
+              </div>
             </div>
+            <Button
+              variant="outline"
+              onClick={handleExportSessionPDF}
+              className="cursor-pointer font-bold text-xs h-8 px-3 flex items-center gap-1.5"
+            >
+              <Download className="h-3.5 w-3.5" /> Export PDF
+            </Button>
           </div>
 
           {/* Quick Metrics Grid */}

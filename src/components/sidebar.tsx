@@ -39,7 +39,6 @@ export const Sidebar: React.FC = () => {
     'Exploratory Testing': 'exploratory',
     'Smart Recorder': 'smart-recorder',
     'API Testing Hub': 'api-hub',
-    'Reports': 'reports',
     'Implementation Reports': 'reports',
     'Analytics': 'analytics',
     'Settings': 'settings',
@@ -61,7 +60,6 @@ export const Sidebar: React.FC = () => {
     { name: 'Exploratory Testing', path: '/exploratory', icon: <Compass className="h-4.5 w-4.5" /> },
     { name: 'Smart Recorder', path: '/smart-recorder', icon: <Video className="h-4.5 w-4.5" /> },
     { name: 'API Testing Hub', path: '/api-hub', icon: <Layers className="h-4.5 w-4.5" /> },
-    { name: 'Reports', path: '/reports', icon: <FileText className="h-4.5 w-4.5" /> },
     { name: 'Analytics', path: '/analytics', icon: <BarChart3 className="h-4.5 w-4.5" /> },
     { name: 'Implementation Reports', path: '/implementation-reports', icon: <ClipboardList className="h-4.5 w-4.5" /> },
     { name: 'Settings', path: '/settings', icon: <Settings className="h-4.5 w-4.5" /> },
@@ -80,7 +78,7 @@ export const Sidebar: React.FC = () => {
       if (activeRole === 'PSE') {
         return item.name === 'Release Notes' || item.name === 'Calendar Hub' || item.name === 'Projects (QA)' || item.name === 'Project Status';
       }
-      return item.name === 'Reports' || item.name === 'Analytics' || item.name === 'Feedback' || item.name === 'Release Notes';
+      return item.name === 'Analytics' || item.name === 'Feedback' || item.name === 'Release Notes';
     }
     const allowed = currentPermissions.allowed_modules.split(',');
     const moduleKey = itemModuleMap[item.name];
