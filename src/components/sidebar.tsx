@@ -11,7 +11,7 @@ import {
   LayoutDashboard, MessageSquare, Bug, Rocket, FolderHeart, 
   FileSpreadsheet, PlayCircle, FileText, BarChart3, Settings, 
   ChevronLeft, ChevronRight, UserCheck, LogOut, MessageCircle,
-  Compass, ClipboardList, Video, Layers, Calendar, Briefcase
+  Compass, ClipboardList, Video, Layers, Calendar, Briefcase, TestTube2
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Avatar } from '@/components/ui/avatar';
@@ -36,6 +36,7 @@ export const Sidebar: React.FC = () => {
     'Test Suites': 'test-suites',
     'Test Cases': 'test-cases',
     'Test Runs': 'test-runs',
+    'Automation Testing': 'test-runs',
     'Exploratory Testing': 'exploratory',
     'Smart Recorder': 'smart-recorder',
     'API Testing Hub': 'api-hub',
@@ -58,6 +59,7 @@ export const Sidebar: React.FC = () => {
     { name: 'Test Suites', path: '/test-suites', icon: <FolderHeart className="h-4.5 w-4.5" /> },
     { name: 'Test Cases', path: '/test-cases', icon: <FileSpreadsheet className="h-4.5 w-4.5" /> },
     { name: 'Test Runs', path: '/test-runs', icon: <PlayCircle className="h-4.5 w-4.5" /> },
+    { name: 'Automation Testing', path: '/automation', icon: <TestTube2 className="h-4.5 w-4.5" /> },
     { name: 'Exploratory Testing', path: '/exploratory', icon: <Compass className="h-4.5 w-4.5" /> },
     { name: 'Smart Recorder', path: '/smart-recorder', icon: <Video className="h-4.5 w-4.5" /> },
     { name: 'API Testing Hub', path: '/api-hub', icon: <Layers className="h-4.5 w-4.5" /> },
