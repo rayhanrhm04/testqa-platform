@@ -40,6 +40,7 @@ export default function SmartRecorderPage() {
   // Script and preview states
   const [selectedFramework, setSelectedFramework] = React.useState<'playwright' | 'cypress' | 'selenium'>('playwright');
   const [isConverting, setIsConverting] = React.useState(false);
+  const [selectedConvertSession, setSelectedConvertSession] = React.useState<RecorderSession | null>(null);
   const [targetSuite, setTargetSuite] = React.useState('');
 
   // Recording config form
@@ -141,7 +142,25 @@ export default function SmartRecorderPage() {
     }
   };
 
-  const handleAddStep = async (type: any) => {
+  const jsLiteral = (value: string | null | undefined) => JSON.stringify(value || '');
+
+  const getSelectorQualityWarning = (step: RecorderStep) => {
+    const selector = (step.target_element || '').trim();
+    if (!selector || step.action_type === 'Navigate' || step.action_type === 'Scroll' || selector === 'Browser') return null;
+    const weakSelectors = ['button', 'input', 'select', 'textarea', 'a', 'div', 'span', 'body'];
+    if (weakSelectors.includes(selector.toLowerCase())) {
+      return 'Selector is too broad. Prefer data-testid, id, role, label, or a unique CSS selector.';
+    }
+    if (selector.includes(':nth-child') || selector.includes(':nth-of-type')) {
+      return 'Selector depends on element position and may break when layout changes.';
+    }
+    if (selector.length > 120) {
+      return 'Selector is very long. Consider replacing it with a stable test id.';
+    }
+    return null;
+  };
+
+  const handleAddStep = async (type: RecorderStep['action_type']) => {
     if (!activeSession) return;
     const sessionSteps = recorderSteps.filter(st => st.session_id === activeSession.id);
     const nextNum = sessionSteps.length + 1;
@@ -214,31 +233,31 @@ export default function SmartRecorderPage() {
 
     if (selectedFramework === 'playwright') {
       let code = `import { test, expect } from '@playwright/test';\n\n`;
-      code += `test('Smart Recorder: ${sess.title}', async ({ page }) => {\n`;
+      code += `test(${jsLiteral(`Smart Recorder: ${sess.title}`)}, async ({ page }) => {\n`;
       code += `  // Environment: ${sess.environment} | Browser: ${sess.browser}\n`;
       steps.forEach((st) => {
         code += `  // Step ${st.step_number}: ${st.action_type}\n`;
         switch (st.action_type) {
           case 'Navigate':
-            code += `  await page.goto('${st.value || sess.start_url}');\n`;
+            code += `  await page.goto(${jsLiteral(st.value || sess.start_url)});\n`;
             break;
           case 'Click':
-            code += `  await page.locator('${st.target_element || 'button'}').click();\n`;
+            code += `  await page.locator(${jsLiteral(st.target_element || 'button')}).click();\n`;
             break;
           case 'Input':
-            code += `  await page.locator('${st.target_element || 'input'}').fill('${st.value || ''}');\n`;
+            code += `  await page.locator(${jsLiteral(st.target_element || 'input')}).fill(${jsLiteral(st.value)});\n`;
             break;
           case 'Dropdown':
-            code += `  await page.locator('${st.target_element || 'select'}').selectOption('${st.value || ''}');\n`;
+            code += `  await page.locator(${jsLiteral(st.target_element || 'select')}).selectOption(${jsLiteral(st.value)});\n`;
             break;
           case 'Upload':
-            code += `  await page.locator('${st.target_element || 'input[type=file]'}').setInputFiles('${st.attachment_name || 'file.txt'}');\n`;
+            code += `  await page.locator(${jsLiteral(st.target_element || 'input[type=file]')}).setInputFiles(${jsLiteral(st.attachment_name || 'file.txt')});\n`;
             break;
           case 'Scroll':
             code += `  await page.evaluate(() => window.scrollBy(0, 500));\n`;
             break;
           case 'Assert':
-            code += `  await expect(page.locator('${st.target_element || 'body'}')).toBeVisible();\n`;
+            code += `  await expect(page.locator(${jsLiteral(st.target_element || 'body')})).toBeVisible();\n`;
             break;
           default:
             code += `  // ${st.notes || 'Custom Step Execution'}\n`;
@@ -247,32 +266,32 @@ export default function SmartRecorderPage() {
       code += `});\n`;
       return code;
     } else if (selectedFramework === 'cypress') {
-      let code = `describe('Smart Recorder: ${sess.title}', () => {\n`;
-      code += `  it('executes recorded steps', () => {\n`;
+      let code = `describe(${jsLiteral(`Smart Recorder: ${sess.title}`)}, () => {\n`;
+      code += `  it(${jsLiteral('executes recorded steps')}, () => {\n`;
       code += `    // Environment: ${sess.environment} | Browser: ${sess.browser}\n`;
       steps.forEach((st) => {
         code += `    // Step ${st.step_number}: ${st.action_type}\n`;
         switch (st.action_type) {
           case 'Navigate':
-            code += `    cy.visit('${st.value || sess.start_url}');\n`;
+            code += `    cy.visit(${jsLiteral(st.value || sess.start_url)});\n`;
             break;
           case 'Click':
-            code += `    cy.get('${st.target_element || 'button'}').click();\n`;
+            code += `    cy.get(${jsLiteral(st.target_element || 'button')}).click();\n`;
             break;
           case 'Input':
-            code += `    cy.get('${st.target_element || 'input'}').type('${st.value || ''}');\n`;
+            code += `    cy.get(${jsLiteral(st.target_element || 'input')}).type(${jsLiteral(st.value)});\n`;
             break;
           case 'Dropdown':
-            code += `    cy.get('${st.target_element || 'select'}').select('${st.value || ''}');\n`;
+            code += `    cy.get(${jsLiteral(st.target_element || 'select')}).select(${jsLiteral(st.value)});\n`;
             break;
           case 'Upload':
-            code += `    cy.get('${st.target_element || 'input[type=file]'}').selectFile('${st.attachment_name || 'file.txt'}');\n`;
+            code += `    cy.get(${jsLiteral(st.target_element || 'input[type=file]')}).selectFile(${jsLiteral(st.attachment_name || 'file.txt')});\n`;
             break;
           case 'Scroll':
             code += `    cy.scrollTo('bottom');\n`;
             break;
           case 'Assert':
-            code += `    cy.get('${st.target_element || 'body'}').should('be.visible');\n`;
+            code += `    cy.get(${jsLiteral(st.target_element || 'body')}).should('be.visible');\n`;
             break;
           default:
             code += `    // ${st.notes || 'Custom Step Execution'}\n`;
@@ -291,25 +310,25 @@ export default function SmartRecorderPage() {
         code += `    // Step ${st.step_number}: ${st.action_type}\n`;
         switch (st.action_type) {
           case 'Navigate':
-            code += `    await driver.get('${st.value || sess.start_url}');\n`;
+            code += `    await driver.get(${jsLiteral(st.value || sess.start_url)});\n`;
             break;
           case 'Click':
-            code += `    await driver.findElement(By.css('${st.target_element || 'button'}')).click();\n`;
+            code += `    await driver.findElement(By.css(${jsLiteral(st.target_element || 'button')})).click();\n`;
             break;
           case 'Input':
-            code += `    await driver.findElement(By.css('${st.target_element || 'input'}')).sendKeys('${st.value || ''}');\n`;
+            code += `    await driver.findElement(By.css(${jsLiteral(st.target_element || 'input')})).sendKeys(${jsLiteral(st.value)});\n`;
             break;
           case 'Dropdown':
-            code += `    await driver.findElement(By.css('${st.target_element || 'select'}')).sendKeys('${st.value || ''}');\n`;
+            code += `    await driver.findElement(By.css(${jsLiteral(st.target_element || 'select')})).sendKeys(${jsLiteral(st.value)});\n`;
             break;
           case 'Upload':
-            code += `    await driver.findElement(By.css('${st.target_element || 'input[type=file]'}')).sendKeys('${st.attachment_name || 'file.txt'}');\n`;
+            code += `    await driver.findElement(By.css(${jsLiteral(st.target_element || 'input[type=file]')})).sendKeys(${jsLiteral(st.attachment_name || 'file.txt')});\n`;
             break;
           case 'Scroll':
             code += `    await driver.executeScript("window.scrollBy(0, 500)");\n`;
             break;
           case 'Assert':
-            code += `    await driver.wait(until.elementLocated(By.css('${st.target_element || 'body'}')), 5000);\n`;
+            code += `    await driver.wait(until.elementLocated(By.css(${jsLiteral(st.target_element || 'body')})), 5000);\n`;
             break;
           default:
             code += `    // ${st.notes || 'Custom Step Execution'}\n`;
@@ -434,6 +453,7 @@ export default function SmartRecorderPage() {
   };
 
   const handleConvertClick = (sess: RecorderSession) => {
+    setSelectedConvertSession(sess);
     const filteredSuites = testSuites.filter(s => s.project_id === sess.project_id);
     if (filteredSuites.length > 0) {
       setTargetSuite(filteredSuites[0].id);
@@ -443,18 +463,131 @@ export default function SmartRecorderPage() {
     setIsConverting(true);
   };
 
-  const handleConvertSubmit = async (sessId: string) => {
+  const handleConvertSubmit = async () => {
+    if (!selectedConvertSession) {
+      addToast('No recorder session selected.', 'warning');
+      return;
+    }
     if (!targetSuite) {
       addToast('Please select a target Test Suite.', 'warning');
       return;
     }
     try {
-      await convertSessionToTestCase(sessId, targetSuite);
+      await convertSessionToTestCase(selectedConvertSession.id, targetSuite);
       setIsConverting(false);
+      setSelectedConvertSession(null);
       addToast('Smart Recorder session converted to standard Test Case successfully!', 'success');
     } catch (e) {
       addToast('Failed to convert session.', 'error');
     }
+  };
+
+  const handleExportSessionPDF = async (sess: RecorderSession) => {
+    const jsPDF = (await import('jspdf')).jsPDF;
+    const autoTable = (await import('jspdf-autotable')).default;
+    const doc = new jsPDF() as any;
+    const steps = recorderSteps
+      .filter(s => s.session_id === sess.id)
+      .sort((a, b) => a.step_number - b.step_number);
+    const suggestions = generateAISuggestions(sess);
+    const projectName = projects.find(p => p.id === sess.project_id)?.name || 'Unknown Project';
+    const suiteName = testSuites.find(s => s.id === sess.suite_id)?.name || 'No Suite Mapping';
+    const safeTitle = sess.title.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'smart-recorder-session';
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 14;
+
+    doc.setFillColor(9, 9, 11);
+    doc.rect(0, 0, pageWidth, 38, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(17);
+    doc.text('Smart Recorder Session Report', margin, 16);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('MAPID QA', margin, 24);
+    doc.text(new Date().toLocaleString(), pageWidth - margin, 24, { align: 'right' });
+
+    doc.setTextColor(9, 9, 11);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.text(doc.splitTextToSize(sess.title, pageWidth - margin * 2), margin, 50);
+
+    autoTable(doc, {
+      startY: 60,
+      theme: 'plain',
+      body: [[
+        { content: 'Project', styles: { textColor: [113, 113, 122], fontStyle: 'bold' } },
+        { content: projectName, styles: { fontStyle: 'bold' } },
+        { content: 'Suite', styles: { textColor: [113, 113, 122], fontStyle: 'bold' } },
+        { content: suiteName, styles: { fontStyle: 'bold' } },
+      ], [
+        { content: 'Environment', styles: { textColor: [113, 113, 122], fontStyle: 'bold' } },
+        { content: sess.environment, styles: { fontStyle: 'bold' } },
+        { content: 'Browser', styles: { textColor: [113, 113, 122], fontStyle: 'bold' } },
+        { content: sess.browser, styles: { fontStyle: 'bold' } },
+      ], [
+        { content: 'Status', styles: { textColor: [113, 113, 122], fontStyle: 'bold' } },
+        { content: sess.status, styles: { fontStyle: 'bold' } },
+        { content: 'Steps', styles: { textColor: [113, 113, 122], fontStyle: 'bold' } },
+        { content: String(steps.length), styles: { fontStyle: 'bold' } },
+      ]],
+      styles: { fontSize: 8.5, cellPadding: 2.5 },
+    });
+
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 8,
+      head: [['Start URL']],
+      body: [[sess.start_url]],
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [39, 39, 42] },
+    });
+
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 8,
+      head: [['No.', 'Action', 'Target', 'Value / Expected', 'Notes', 'Evidence']],
+      body: steps.length > 0
+        ? steps.map(step => [
+          String(step.step_number),
+          step.action_type,
+          step.target_element || '-',
+          step.value || '-',
+          step.notes || '-',
+          step.attachment_name || '-',
+        ])
+        : [['-', 'No steps recorded.', '-', '-', '-', '-']],
+      styles: { fontSize: 7.5, cellPadding: 2.5, valign: 'top' },
+      headStyles: { fillColor: [220, 38, 38], textColor: [255, 255, 255] },
+      alternateRowStyles: { fillColor: [250, 250, 250] },
+      columnStyles: { 0: { cellWidth: 10 }, 1: { cellWidth: 22 }, 2: { cellWidth: 42 }, 5: { cellWidth: 24 } },
+    });
+
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 8,
+      head: [['Type', 'Recommendation', 'Why It Matters']],
+      body: suggestions.length > 0
+        ? suggestions.map(suggestion => [suggestion.type, suggestion.title, suggestion.desc])
+        : [['Coverage', 'No extra risks detected', 'The recorded flow does not currently trigger additional AI recommendations.']],
+      styles: { fontSize: 7.5, cellPadding: 2.5, valign: 'top' },
+      headStyles: { fillColor: [245, 158, 11], textColor: [255, 255, 255] },
+      alternateRowStyles: { fillColor: [255, 251, 235] },
+      columnStyles: { 0: { cellWidth: 28 }, 1: { cellWidth: 45 } },
+    });
+
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setDrawColor(228, 228, 231);
+      doc.line(margin, pageHeight - 14, pageWidth - margin, pageHeight - 14);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(113, 113, 122);
+      doc.text('MAPID QA - Smart Recorder', margin, pageHeight - 8);
+      doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 8, { align: 'right' });
+    }
+
+    doc.save(`${safeTitle}-smart-recorder-report.pdf`);
+    addToast('Smart Recorder PDF report exported.', 'success');
   };
 
   const formatDuration = (sec: number) => {
@@ -590,7 +723,9 @@ export default function SmartRecorderPage() {
                     {recorderSteps
                       .filter(s => s.session_id === activeSession.id)
                       .sort((a, b) => a.step_number - b.step_number)
-                      .map((st) => (
+                      .map((st) => {
+                        const selectorWarning = getSelectorQualityWarning(st);
+                        return (
                         <tr key={st.id} className="hover:bg-muted/10 transition-colors">
                           <td className="px-4 py-3 text-center font-bold text-muted-foreground">{st.step_number}</td>
                           <td className="px-4 py-3">
@@ -616,6 +751,11 @@ export default function SmartRecorderPage() {
                               placeholder="e.g. #login-btn"
                               className="h-7 text-xs"
                             />
+                            {selectorWarning && (
+                              <p className="mt-1 text-[10px] font-semibold leading-snug text-amber-600">
+                                {selectorWarning}
+                              </p>
+                            )}
                           </td>
                           <td className="px-4 py-3">
                             <Input 
@@ -664,7 +804,8 @@ export default function SmartRecorderPage() {
                             </button>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -717,6 +858,15 @@ export default function SmartRecorderPage() {
                           </div>
 
                           <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleExportSessionPDF(sess)}
+                              className="cursor-pointer text-[10px] font-bold py-1 h-7 gap-1.5"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                              Export PDF
+                            </Button>
                             <Button 
                               variant="outline" 
                               size="sm" 
@@ -948,14 +1098,20 @@ export default function SmartRecorderPage() {
       {/* CONVERT TO TEST CASE SUITE MAP MODAL */}
       <Dialog
         isOpen={isConverting}
-        onClose={() => setIsConverting(false)}
-        title="Convert Session to Test Case"
+        onClose={() => {
+          setIsConverting(false);
+          setSelectedConvertSession(null);
+        }}
+        title={selectedConvertSession ? `Convert "${selectedConvertSession.title}" to Test Case` : 'Convert Session to Test Case'}
         footer={
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setIsConverting(false)} className="cursor-pointer text-xs font-bold">
+            <Button variant="outline" onClick={() => {
+              setIsConverting(false);
+              setSelectedConvertSession(null);
+            }} className="cursor-pointer text-xs font-bold">
               Cancel
             </Button>
-            <Button onClick={() => handleConvertSubmit(recorderSessions[0]?.id)} className="cursor-pointer text-xs font-bold">
+            <Button onClick={handleConvertSubmit} className="cursor-pointer text-xs font-bold">
               Confirm & Save
             </Button>
           </div>
