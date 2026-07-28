@@ -149,6 +149,7 @@ export const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ childre
       { prefix: '/release-notes', module: 'release-notes' },
       { prefix: '/test-suites', module: 'test-suites' },
       { prefix: '/test-cases', module: 'test-cases' },
+      { prefix: '/test-planning', module: 'test-cases' },
       { prefix: '/test-runs', module: 'test-runs' },
       { prefix: '/automation', module: 'test-runs' },
       { prefix: '/exploratory', module: 'exploratory' },

@@ -11,7 +11,7 @@ import {
   LayoutDashboard, MessageSquare, Bug, Rocket, FolderHeart, 
   FileSpreadsheet, PlayCircle, FileText, BarChart3, Settings, 
   ChevronLeft, ChevronRight, UserCheck, LogOut,
-  Compass, ClipboardList, Video, Layers, Calendar, Briefcase, TestTube2
+  Compass, ClipboardList, Video, Layers, Calendar, Briefcase, TestTube2, ListChecks
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Avatar } from '@/components/ui/avatar';
@@ -34,6 +34,7 @@ export const Sidebar: React.FC = () => {
     'Release Notes': 'release-notes',
     'Test Suites': 'test-suites',
     'Test Cases': 'test-cases',
+    'Test Planning': 'test-cases',
     'Test Runs': 'test-runs',
     'Automation Testing': 'test-runs',
     'Exploratory Testing': 'exploratory',
@@ -55,6 +56,7 @@ export const Sidebar: React.FC = () => {
     { name: 'Release Notes', path: '/release-notes', icon: <FileText className="h-4.5 w-4.5" /> },
     { name: 'Test Suites', path: '/test-suites', icon: <FolderHeart className="h-4.5 w-4.5" /> },
     { name: 'Test Cases', path: '/test-cases', icon: <FileSpreadsheet className="h-4.5 w-4.5" /> },
+    { name: 'Test Planning', path: '/test-planning', icon: <ListChecks className="h-4.5 w-4.5" /> },
     { name: 'Test Runs', path: '/test-runs', icon: <PlayCircle className="h-4.5 w-4.5" /> },
     { name: 'Automation Testing', path: '/automation', icon: <TestTube2 className="h-4.5 w-4.5" /> },
     { name: 'Exploratory Testing', path: '/exploratory', icon: <Compass className="h-4.5 w-4.5" /> },
