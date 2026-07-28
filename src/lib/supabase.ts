@@ -1,3 +1,8 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
 class MockQueryBuilder {
   private table: string;
   private action: string = 'select';
@@ -196,7 +201,9 @@ class MockSupabaseClient {
 }
 
 export const isSupabaseConfigured = (): boolean => {
-  return true; // Always return true to run database mode!
+  return Boolean(supabaseUrl && supabaseAnonKey);
 };
 
-export const supabase = new MockSupabaseClient() as any;
+export const supabase = isSupabaseConfigured()
+  ? createClient(supabaseUrl!, supabaseAnonKey!)
+  : new MockSupabaseClient() as any;

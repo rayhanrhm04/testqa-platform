@@ -40,13 +40,27 @@ export default function LoginPage() {
       router.push(nextRole === 'Reporter' ? '/reports' : '/');
     } catch (err: any) {
       console.error(err);
-      if (err.message?.toLowerCase().includes('email not confirmed')) {
+      const message = err.message || '';
+      const lowerMessage = message.toLowerCase();
+      if (lowerMessage.includes('email not confirmed')) {
         addToast(
           'Email belum dikonfirmasi! Cek inbox email Anda untuk verifikasi, atau matikan "Confirm email" di dashboard Supabase (Authentication -> Providers -> Email).',
           'warning'
         );
+      } else if (
+        lowerMessage.includes('ecircuitbreaker') ||
+        lowerMessage.includes('database service') ||
+        lowerMessage.includes('temporarily unavailable') ||
+        lowerMessage.includes('failed to fetch')
+      ) {
+        addToast('Layanan login sedang tidak stabil. Coba lagi beberapa saat lagi atau hubungi admin.', 'error');
+      } else if (
+        lowerMessage.includes('invalid login credentials') ||
+        lowerMessage.includes('invalid credentials')
+      ) {
+        addToast('Email atau password salah.', 'error');
       } else {
-        addToast(err.message || 'Login failed.', 'error');
+        addToast(message || 'Login failed.', 'error');
       }
     } finally {
       setLoading(false);
