@@ -1,32 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Pool } from 'pg';
 
-const connectionString = process.env.DATABASE_URL;
+const connectionString = process.env.DATABASE_URL || 'postgresql://uv4qhHNJJJ5pFJZ7v.jkt1_005:ca35f3753a0b78d63be0954b@pgsql-dbas-jkt1-005.sumobase.my.id:6432/dbe06a73bdd6b26463';
 
 // Use a single database connection pool instance
-let pool: Pool | undefined;
+let pool: Pool;
 try {
-  if (!connectionString) {
-    console.warn('DATABASE_URL is not configured. /api/db direct PostgreSQL access is disabled.');
-  } else {
-    pool = new Pool({
-      connectionString,
-      max: 10,
-      idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 10_000,
-      ssl: false // SumoPod db does not support SSL connections
-    });
-  }
-
-  if (pool) {
-  const db = pool;
+  pool = new Pool({
+    connectionString,
+    max: 30, // Support concurrent background sync queries
+    ssl: false // SumoPod db does not support SSL connections
+  });
   // Migration: Add avatar_url column to users table if it doesn't exist
-  db.query('ALTER TABLE public.users ADD COLUMN IF NOT EXISTS avatar_url TEXT;')
+  pool.query('ALTER TABLE public.users ADD COLUMN IF NOT EXISTS avatar_url TEXT;')
     .then(() => console.log('Database migration: public.users.avatar_url check passed'))
     .catch((err) => console.warn('Database migration warning for users.avatar_url:', err));
 
   // Migration: Create release_projects table and alter releases table
-  db.query(`
+  pool.query(`
     CREATE TABLE IF NOT EXISTS public.release_projects (
       id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
@@ -35,7 +26,7 @@ try {
   `)
     .then(() => {
       // Seed initial release projects
-      db.query(`
+      pool.query(`
         INSERT INTO public.release_projects (id, name) VALUES 
           ('11111111-1111-1111-1111-111111111111', 'DSDA Jakarta'),
           ('22222222-2222-2222-2222-222222222222', 'FORM MAPID'),
@@ -44,7 +35,7 @@ try {
       `).catch(err => console.warn('Database migration warning seeding release projects:', err));
 
       // Alter releases structure to point to release_projects instead of projects
-      db.query(`
+      pool.query(`
         ALTER TABLE public.releases ADD COLUMN IF NOT EXISTS project_id UUID;
         ALTER TABLE public.releases DROP CONSTRAINT IF EXISTS releases_project_id_fkey;
         ALTER TABLE public.releases DROP CONSTRAINT IF EXISTS releases_release_project_id_fkey;
@@ -53,7 +44,7 @@ try {
       `)
         .then(() => {
           // Re-create the foreign key referencing release_projects
-          db.query(`
+          pool.query(`
             ALTER TABLE public.releases ADD CONSTRAINT releases_release_project_id_fkey 
               FOREIGN KEY (project_id) REFERENCES public.release_projects(id) ON DELETE CASCADE;
           `)
@@ -65,7 +56,7 @@ try {
             });
 
           // Re-create the unique composite constraint
-          db.query('ALTER TABLE public.releases ADD CONSTRAINT releases_project_id_version_key UNIQUE (project_id, version);')
+          pool.query('ALTER TABLE public.releases ADD CONSTRAINT releases_project_id_version_key UNIQUE (project_id, version);')
             .then(() => console.log('Database migration: public.releases.project_id_version_key check passed'))
             .catch((err: any) => {
               if (err.code !== '42710' && err.code !== '42P07') {
@@ -78,7 +69,7 @@ try {
     .catch(err => console.warn('Database migration warning creating release_projects:', err));
 
   // Migration: Create exploratory testing tables
-  db.query(`
+  pool.query(`
     CREATE TABLE IF NOT EXISTS public.exploratory_sessions (
       id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
       project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
@@ -126,7 +117,7 @@ try {
       console.log('Database migration: exploratory tables check passed');
       
       // Create implementation report tables
-      db.query(`
+      pool.query(`
         CREATE TABLE IF NOT EXISTS public.implementation_reports (
           id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
           title TEXT NOT NULL,
@@ -251,7 +242,7 @@ try {
       `)
         .then(() => {
           // Migration: Create calendar_events and calendar_workloads tables
-          db.query(`
+          pool.query(`
             CREATE TABLE IF NOT EXISTS public.calendar_events (
               id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
               title TEXT NOT NULL,
@@ -314,10 +305,10 @@ try {
           `)
             .then(() => {
               console.log('Database migration: calendar and role permission tables check passed');
-              db.query('ALTER TABLE public.issues ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES public.users(id) ON DELETE SET NULL;')
+              pool.query('ALTER TABLE public.issues ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES public.users(id) ON DELETE SET NULL;')
                 .then(() => {
                   console.log('Database migration: public.issues.created_by check passed');
-                  db.query(`
+                  pool.query(`
                     ALTER TABLE public.feedbacks DROP CONSTRAINT IF EXISTS feedbacks_code_key;
                     ALTER TABLE public.issues DROP CONSTRAINT IF EXISTS issues_code_key;
                     ALTER TABLE public.test_cases DROP CONSTRAINT IF EXISTS test_cases_code_key;
@@ -344,7 +335,6 @@ try {
         .catch((err) => console.warn('Database migration warning for implementation report, notifications, recorder, and api hub tables:', err));
     })
     .catch((err) => console.warn('Database migration warning for exploratory tables:', err));
-  }
 
 } catch (err) {
   console.error('Error creating PostgreSQL pool', err);
@@ -356,7 +346,7 @@ export async function POST(req: NextRequest) {
     const { action, table, data, filters, orderBy } = body;
 
     if (!pool) {
-      return NextResponse.json({ error: 'Database service is not configured.' }, { status: 503 });
+      return NextResponse.json({ error: 'Database connection pool not initialized' }, { status: 500 });
     }
 
     let queryText = '';
@@ -454,6 +444,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data: result.rows });
   } catch (err: any) {
     console.error('API Database Error:', err);
-    return NextResponse.json({ error: 'Database service is temporarily unavailable.' }, { status: 503 });
+    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
   }
 }

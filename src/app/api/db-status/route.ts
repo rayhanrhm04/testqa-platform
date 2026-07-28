@@ -1,24 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Pool } from 'pg';
 
-const connectionString = process.env.DATABASE_URL;
+const connectionString = process.env.DATABASE_URL || 'postgresql://uv4qhHNJJJ5pFJZ7v.jkt1_005:ca35f3753a0b78d63be0954b@pgsql-dbas-jkt1-005.sumobase.my.id:6432/dbe06a73bdd6b26463';
 
 export async function GET(req: NextRequest) {
   let pool: Pool | null = null;
   try {
-    if (!connectionString) {
-      return NextResponse.json({
-        success: false,
-        envSet: false,
-        error: 'Database service is not configured.'
-      }, { status: 503 });
-    }
-
     pool = new Pool({
       connectionString,
-      max: 1,
-      idleTimeoutMillis: 10_000,
-      connectionTimeoutMillis: 10_000,
       ssl: false
     });
 
@@ -50,8 +39,8 @@ export async function GET(req: NextRequest) {
     }
     return NextResponse.json({
       success: false,
-      error: 'Database service is temporarily unavailable.',
-      connectionStringRedacted: connectionString ? connectionString.replace(/:([^@:]+)@/, ':******@') : null
-    }, { status: 503 });
+      error: err.message || 'Failed to connect to database',
+      connectionStringRedacted: connectionString.replace(/:([^@:]+)@/, ':******@')
+    }, { status: 500 });
   }
 }

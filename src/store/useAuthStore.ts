@@ -167,9 +167,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         password,
       });
       if (error) throw error;
-      if (!data.user) {
-        throw new Error('Login failed. Please check your email and password.');
-      }
       
       let { data: profile } = await supabase!
         .from('users')
