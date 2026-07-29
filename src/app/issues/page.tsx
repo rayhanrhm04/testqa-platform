@@ -7,7 +7,8 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useUIStore } from '@/store/useUIStore';
 import { 
   Plus, Search, Filter, Kanban, List, ShieldAlert,
-  ArrowRight, Trash2, Edit, Bug, Award, User, Tag, Calendar
+  ArrowRight, Trash2, Edit, Bug, Award, User, Tag, Calendar,
+  Paperclip, X, Image as ImageIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -39,6 +40,8 @@ export default function IssuesPage() {
   const [isDetailOpen, setIsDetailOpen] = React.useState(false);
   const [activeDetailIssue, setActiveDetailIssue] = React.useState<any | null>(null);
   const [commentText, setCommentText] = React.useState('');
+  const [commentAttachment, setCommentAttachment] = React.useState<{ url: string; name: string } | null>(null);
+  const commentFileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Mentions autocompleter states
   const [showSuggestions, setShowSuggestions] = React.useState(false);
@@ -137,8 +140,48 @@ export default function IssuesPage() {
     return parts.length > 0 ? parts : content;
   };
 
+  const attachCommentImage = React.useCallback((file: File) => {
+    if (!file.type.startsWith('image/')) {
+      addToast('Only image attachments are supported for comments.', 'warning');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      addToast('Image size too large (Max 5MB).', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setCommentAttachment({
+        url: reader.result as string,
+        name: file.name || `pasted-image-${Date.now()}.png`
+      });
+      addToast('Image attached to comment.', 'success');
+    };
+    reader.onerror = () => addToast('Failed to read image attachment.', 'error');
+    reader.readAsDataURL(file);
+  }, [addToast]);
+
+  const handleCommentFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) attachCommentImage(file);
+    e.target.value = '';
+  };
+
+  const handleCommentPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const imageItem = Array.from(e.clipboardData.items).find((item) => item.type.startsWith('image/'));
+    if (!imageItem) return;
+    const file = imageItem.getAsFile();
+    if (!file) return;
+    e.preventDefault();
+    attachCommentImage(file);
+  };
+
   const handleOpenDetail = async (issue: any) => {
     setActiveDetailIssue(issue);
+    setCommentText('');
+    setCommentAttachment(null);
+    setShowSuggestions(false);
     setIsDetailOpen(true);
     try {
       const { data, error } = await supabase!
@@ -463,10 +506,17 @@ export default function IssuesPage() {
 
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!commentText.trim() || !currentUser || !activeDetailIssue) return;
+    if ((!commentText.trim() && !commentAttachment) || !currentUser || !activeDetailIssue) return;
     try {
-      await addComment('issue', activeDetailIssue.id, currentUser.id, commentText);
+      await addComment(
+        'issue',
+        activeDetailIssue.id,
+        currentUser.id,
+        commentText.trim() || 'Attached an image.',
+        commentAttachment
+      );
       setCommentText('');
+      setCommentAttachment(null);
       addToast('Comment added!', 'success');
     } catch (e) {
       addToast('Failed to add comment.', 'error');
@@ -1037,7 +1087,13 @@ export default function IssuesPage() {
       {/* DETAIL MODAL WITH COMMENTS */}
       <Dialog
         isOpen={isDetailOpen && activeDetailIssue !== null}
-        onClose={() => { setIsDetailOpen(false); setActiveDetailIssue(null); }}
+        onClose={() => {
+          setIsDetailOpen(false);
+          setActiveDetailIssue(null);
+          setCommentText('');
+          setCommentAttachment(null);
+          setShowSuggestions(false);
+        }}
         title={
           activeDetailIssue ? (
             <div className="flex items-center justify-between w-[92%]">
@@ -1228,9 +1284,39 @@ export default function IssuesPage() {
                     return (
                       <div key={c.id} className="flex gap-2 text-xs bg-muted/10 p-2 border border-border/40 rounded-lg">
                         <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">{user?.name.charAt(0)}</div>
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <p className="font-semibold">{user?.name} <span className="text-[9px] text-muted-foreground font-normal ml-2">{new Date(c.created_at).toLocaleString()}</span></p>
                           <p className="text-muted-foreground mt-0.5 leading-normal">{formatCommentContent(c.content)}</p>
+                          {c.attachment_url && (
+                            <div className="mt-2 inline-flex max-w-full flex-col gap-1.5 rounded-lg border border-border bg-white p-2 dark:bg-zinc-950">
+                              {c.attachment_url.startsWith('data:image/') ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewImageUrl(c.attachment_url || null)}
+                                  className="block overflow-hidden rounded-md border border-border bg-zinc-50 cursor-zoom-in"
+                                  title="Click to preview image"
+                                >
+                                  <img
+                                    src={c.attachment_url}
+                                    alt={c.attachment_name || 'Comment attachment'}
+                                    className="max-h-32 max-w-full object-contain"
+                                  />
+                                </button>
+                              ) : (
+                                <div className="flex items-center gap-2 text-muted-foreground">
+                                  <ImageIcon className="h-4 w-4" />
+                                  <span className="truncate">{c.attachment_name || 'Attachment'}</span>
+                                </div>
+                              )}
+                              <a
+                                href={c.attachment_url}
+                                download={c.attachment_name || 'comment-attachment'}
+                                className="text-[10px] font-bold text-primary hover:underline"
+                              >
+                                Download Image ({c.attachment_name || 'attachment'})
+                              </a>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -1243,40 +1329,94 @@ export default function IssuesPage() {
                     <Link href="/login" className="text-primary font-bold hover:underline">Sign In</Link> to write a comment.
                   </div>
                 ) : (
-                  <form onSubmit={handleAddComment} className="flex gap-2">
-                    <div className="relative flex-1">
-                      {/* Mentions Suggestion Popover */}
-                      {showSuggestions && filteredSuggestions.length > 0 && (
-                        <div className="absolute bottom-full left-0 mb-1 w-64 bg-card border border-border/80 rounded-xl shadow-lg z-50 overflow-hidden max-h-48 overflow-y-auto">
-                          {filteredSuggestions.map((u, idx) => (
-                            <button
-                              key={u.id}
-                              type="button"
-                              onClick={() => selectUserSuggestion(u)}
-                              className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 transition-colors border-b border-border/20 last:border-0 hover:bg-muted/50 ${
-                                selectedSuggestionIndex === idx ? 'bg-muted text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'
-                              }`}
-                            >
-                              <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-[9px] shrink-0">
-                                {u.name.charAt(0)}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="font-bold truncate text-foreground text-[11px]">{u.name}</div>
-                                <div className="text-[9px] text-muted-foreground truncate">{u.email}</div>
-                              </div>
-                            </button>
-                          ))}
+                  <form onSubmit={handleAddComment} className="space-y-2">
+                    {commentAttachment && (
+                      <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/20 p-2">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewImageUrl(commentAttachment.url)}
+                          className="h-14 w-20 overflow-hidden rounded-md border border-border bg-white cursor-zoom-in"
+                          title="Preview image"
+                        >
+                          <img src={commentAttachment.url} alt={commentAttachment.name} className="h-full w-full object-contain" />
+                        </button>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-bold text-foreground">{commentAttachment.name}</p>
+                          <p className="text-[10px] text-muted-foreground">Ready to send with this comment.</p>
                         </div>
-                      )}
-                      <Input 
-                        value={commentText} 
-                        onChange={handleInputChange} 
-                        onKeyDown={handleInputKeyDown}
-                        placeholder="Type a comment, type @ to tag user..." 
-                        className="h-8 text-xs" 
+                        <button
+                          type="button"
+                          onClick={() => setCommentAttachment(null)}
+                          className="rounded-md p-1 text-muted-foreground hover:bg-red-500/10 hover:text-red-500"
+                          title="Remove attachment"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <input
+                        ref={commentFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleCommentFileChange}
+                        className="hidden"
                       />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => commentFileInputRef.current?.click()}
+                        className="h-8 w-8 shrink-0 cursor-pointer"
+                        title="Attach image"
+                      >
+                        <Paperclip className="h-4 w-4" />
+                      </Button>
+                      <div className="relative flex-1">
+                        {/* Mentions Suggestion Popover */}
+                        {showSuggestions && filteredSuggestions.length > 0 && (
+                          <div className="absolute bottom-full left-0 mb-1 w-64 bg-card border border-border/80 rounded-xl shadow-lg z-50 overflow-hidden max-h-48 overflow-y-auto">
+                            {filteredSuggestions.map((u, idx) => (
+                              <button
+                                key={u.id}
+                                type="button"
+                                onClick={() => selectUserSuggestion(u)}
+                                className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 transition-colors border-b border-border/20 last:border-0 hover:bg-muted/50 ${
+                                  selectedSuggestionIndex === idx ? 'bg-muted text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                              >
+                                <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-[9px] shrink-0">
+                                  {u.name.charAt(0)}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-bold truncate text-foreground text-[11px]">{u.name}</div>
+                                  <div className="text-[9px] text-muted-foreground truncate">{u.email}</div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <Input
+                          value={commentText}
+                          onChange={handleInputChange}
+                          onKeyDown={handleInputKeyDown}
+                          onPaste={handleCommentPaste}
+                          placeholder="Type a comment, paste image, or @ tag user..."
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                      <Button
+                        type="submit"
+                        size="sm"
+                        className="h-8 cursor-pointer font-bold text-xs"
+                        disabled={!commentText.trim() && !commentAttachment}
+                      >
+                        Send
+                      </Button>
                     </div>
-                    <Button type="submit" size="sm" className="h-8 cursor-pointer font-bold text-xs">Send</Button>
+                    <p className="text-[10px] font-medium text-muted-foreground">
+                      Attach image from file or paste screenshot directly. PNG, JPG, GIF, WebP up to 5MB.
+                    </p>
                   </form>
                 )}
               </div>

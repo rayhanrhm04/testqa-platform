@@ -186,6 +186,8 @@ export interface Comment {
   entity_id: string;
   user_id: string | null;
   content: string;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
   created_at: string;
 }
 

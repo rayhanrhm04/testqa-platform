@@ -245,6 +245,8 @@ CREATE TABLE public.comments (
   entity_id UUID NOT NULL,
   user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
+  attachment_url TEXT,
+  attachment_name TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

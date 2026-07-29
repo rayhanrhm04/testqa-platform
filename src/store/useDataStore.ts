@@ -117,7 +117,13 @@ interface DataState {
   resetTestRun: (runId: string) => Promise<void>;
 
   // Comments
-  addComment: (entityType: 'feedback' | 'issue', entityId: string, userId: string, content: string) => Promise<void>;
+  addComment: (
+    entityType: 'feedback' | 'issue',
+    entityId: string,
+    userId: string,
+    content: string,
+    attachment?: { url: string; name: string } | null
+  ) => Promise<void>;
   
   // Activity Logging
   logActivity: (userId: string, action: string, details?: string) => Promise<void>;
@@ -1463,13 +1469,15 @@ export const useDataStore = create<DataState>((set, get) => {
     // ----------------------------------------------------
     // COMMENTS CRUD
     // ----------------------------------------------------
-    addComment: async (entityType, entityId, userId, content) => {
+    addComment: async (entityType, entityId, userId, content, attachment = null) => {
       const newComment: Comment = {
         id: isSupabaseConfigured() ? undefined : `c-${Date.now()}` as any,
         entity_type: entityType,
         entity_id: entityId,
         user_id: userId,
         content,
+        attachment_url: attachment?.url || null,
+        attachment_name: attachment?.name || null,
         created_at: new Date().toISOString(),
       };
 

@@ -135,6 +135,9 @@ try {
         
         ALTER TABLE public.issues ADD COLUMN IF NOT EXISTS attachment_url TEXT;
         ALTER TABLE public.issues ADD COLUMN IF NOT EXISTS attachment_name TEXT;
+
+        ALTER TABLE public.comments ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+        ALTER TABLE public.comments ADD COLUMN IF NOT EXISTS attachment_name TEXT;
         
         CREATE TABLE IF NOT EXISTS public.implementation_report_items (
           id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
