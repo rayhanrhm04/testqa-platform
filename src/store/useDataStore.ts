@@ -124,6 +124,7 @@ interface DataState {
     content: string,
     attachment?: { url: string; name: string } | null
   ) => Promise<void>;
+  deleteComment: (id: string) => Promise<void>;
   
   // Activity Logging
   logActivity: (userId: string, action: string, details?: string) => Promise<void>;
@@ -1487,7 +1488,10 @@ export const useDataStore = create<DataState>((set, get) => {
           user_id: toUuidOrNull(newComment.user_id)
         };
         const { data, error } = await supabase!.from('comments').insert(dbComment).select();
-        if (!error && data) {
+        if (error) {
+          throw new Error(error.message || 'Failed to add comment.');
+        }
+        if (data) {
           set((state) => ({ comments: [...state.comments, data[0]] }));
         }
       } else {
@@ -1499,33 +1503,50 @@ export const useDataStore = create<DataState>((set, get) => {
       }
 
       // Mentions Notification Engine
-      try {
-        const usersList = get().users;
-        const commenter = usersList.find(u => u.id === userId);
-        const commenterName = commenter ? commenter.name : 'Someone';
-        
-        const mentioned = usersList.filter(u => {
-          const regex = new RegExp(`@${u.name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}(\\s|$)`, 'i');
-          return regex.test(content);
-        });
+      void (async () => {
+        try {
+          const usersList = get().users;
+          const commenter = usersList.find(u => u.id === userId);
+          const commenterName = commenter ? commenter.name : 'Someone';
 
-        for (const targetUser of mentioned) {
-          if (targetUser.id === userId) continue;
-
-          const cleanContent = content.replace(/@\S+/g, '').trim();
-          const snippet = cleanContent.length > 60 ? cleanContent.substring(0, 57) + '...' : cleanContent;
-
-          await get().addNotification({
-            user_id: targetUser.id,
-            title: `Mentioned in ${entityType === 'issue' ? 'Issue' : 'Feedback'}`,
-            content: `${commenterName} tagged you: "${snippet || 'See details'}"`,
-            type: entityType,
-            link: entityType === 'issue' ? `/issues?id=${entityId}` : `/feedback/${entityId}`
+          const mentioned = usersList.filter(u => {
+            const regex = new RegExp(`@${u.name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}(\\s|$)`, 'i');
+            return regex.test(content);
           });
+
+          for (const targetUser of mentioned) {
+            if (targetUser.id === userId) continue;
+
+            const cleanContent = content.replace(/@\S+/g, '').trim();
+            const snippet = cleanContent.length > 60 ? cleanContent.substring(0, 57) + '...' : cleanContent;
+
+            await get().addNotification({
+              user_id: targetUser.id,
+              title: `Mentioned in ${entityType === 'issue' ? 'Issue' : 'Feedback'}`,
+              content: `${commenterName} tagged you: "${snippet || 'See details'}"`,
+              type: entityType,
+              link: entityType === 'issue' ? `/issues?id=${entityId}` : `/feedback/${entityId}`
+            });
+          }
+        } catch (err) {
+          console.error("Mentions parsing failed:", err);
         }
-      } catch (err) {
-        console.error("Mentions parsing failed:", err);
+      })();
+    },
+
+    deleteComment: async (id) => {
+      if (isSupabaseConfigured()) {
+        const { error } = await supabase!.from('comments').delete().eq('id', id);
+        if (error) {
+          throw new Error(error.message || 'Failed to delete comment.');
+        }
       }
+
+      set((state) => {
+        const next = state.comments.filter((comment) => comment.id !== id);
+        persist({ comments: next });
+        return { comments: next };
+      });
     },
 
     // ----------------------------------------------------

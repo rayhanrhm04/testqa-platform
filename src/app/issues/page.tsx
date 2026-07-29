@@ -22,7 +22,7 @@ export default function IssuesPage() {
   const router = useRouter();
   const { 
     issues, projects, releases, feedbacks, comments, projectShares,
-    addIssue, updateIssue, deleteIssue, updateIssueStatus, addComment, logActivity, addProject,
+    addIssue, updateIssue, deleteIssue, updateIssueStatus, addComment, deleteComment, logActivity, addProject,
     users, addNotification
   } = useDataStore();
   const { activeRole, currentUser, mockUsers } = useAuthStore();
@@ -41,6 +41,8 @@ export default function IssuesPage() {
   const [activeDetailIssue, setActiveDetailIssue] = React.useState<any | null>(null);
   const [commentText, setCommentText] = React.useState('');
   const [commentAttachment, setCommentAttachment] = React.useState<{ url: string; name: string } | null>(null);
+  const [isSubmittingComment, setIsSubmittingComment] = React.useState(false);
+  const [deletingCommentId, setDeletingCommentId] = React.useState<string | null>(null);
   const commentFileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Mentions autocompleter states
@@ -181,6 +183,8 @@ export default function IssuesPage() {
     setActiveDetailIssue(issue);
     setCommentText('');
     setCommentAttachment(null);
+    setIsSubmittingComment(false);
+    setDeletingCommentId(null);
     setShowSuggestions(false);
     setIsDetailOpen(true);
     try {
@@ -506,7 +510,8 @@ export default function IssuesPage() {
 
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!commentText.trim() && !commentAttachment) || !currentUser || !activeDetailIssue) return;
+    if (isSubmittingComment || (!commentText.trim() && !commentAttachment) || !currentUser || !activeDetailIssue) return;
+    setIsSubmittingComment(true);
     try {
       await addComment(
         'issue',
@@ -520,6 +525,26 @@ export default function IssuesPage() {
       addToast('Comment added!', 'success');
     } catch (e) {
       addToast('Failed to add comment.', 'error');
+    } finally {
+      setIsSubmittingComment(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!currentUser) {
+      router.push('/login');
+      return;
+    }
+    if (!confirm('Delete this comment? This will remove it for everyone.')) return;
+
+    setDeletingCommentId(commentId);
+    try {
+      await deleteComment(commentId);
+      addToast('Comment deleted.', 'success');
+    } catch (error: any) {
+      addToast(error.message || 'Failed to delete comment.', 'error');
+    } finally {
+      setDeletingCommentId(null);
     }
   };
 
@@ -1092,6 +1117,8 @@ export default function IssuesPage() {
           setActiveDetailIssue(null);
           setCommentText('');
           setCommentAttachment(null);
+          setIsSubmittingComment(false);
+          setDeletingCommentId(null);
           setShowSuggestions(false);
         }}
         title={
@@ -1281,11 +1308,28 @@ export default function IssuesPage() {
                 <div className="space-y-3 max-h-[160px] overflow-y-auto pr-1">
                   {comments.filter(c => c.entity_type === 'issue' && c.entity_id === activeDetailIssue.id).map((c) => {
                     const user = users.find(u => u.id === c.user_id);
+                    const canDeleteComment = currentUser && (currentUser.id === c.user_id || activeRole === 'Admin' || activeRole === 'QA Engineer');
                     return (
                       <div key={c.id} className="flex gap-2 text-xs bg-muted/10 p-2 border border-border/40 rounded-lg">
                         <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">{user?.name.charAt(0)}</div>
                         <div className="min-w-0 flex-1">
-                          <p className="font-semibold">{user?.name} <span className="text-[9px] text-muted-foreground font-normal ml-2">{new Date(c.created_at).toLocaleString()}</span></p>
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-semibold">
+                              {user?.name}
+                              <span className="text-[9px] text-muted-foreground font-normal ml-2">{new Date(c.created_at).toLocaleString()}</span>
+                            </p>
+                            {canDeleteComment && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteComment(c.id)}
+                                disabled={deletingCommentId === c.id}
+                                className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold text-red-500 hover:bg-red-500/10 disabled:opacity-50"
+                                title="Delete comment"
+                              >
+                                {deletingCommentId === c.id ? 'Deleting...' : 'Delete'}
+                              </button>
+                            )}
+                          </div>
                           <p className="text-muted-foreground mt-0.5 leading-normal">{formatCommentContent(c.content)}</p>
                           {c.attachment_url && (
                             <div className="mt-2 inline-flex max-w-full flex-col gap-1.5 rounded-lg border border-border bg-white p-2 dark:bg-zinc-950">
@@ -1367,6 +1411,7 @@ export default function IssuesPage() {
                         variant="outline"
                         size="icon"
                         onClick={() => commentFileInputRef.current?.click()}
+                        disabled={isSubmittingComment}
                         className="h-8 w-8 shrink-0 cursor-pointer"
                         title="Attach image"
                       >
@@ -1408,10 +1453,11 @@ export default function IssuesPage() {
                       <Button
                         type="submit"
                         size="sm"
+                        loading={isSubmittingComment}
                         className="h-8 cursor-pointer font-bold text-xs"
-                        disabled={!commentText.trim() && !commentAttachment}
+                        disabled={isSubmittingComment || (!commentText.trim() && !commentAttachment)}
                       >
-                        Send
+                        {isSubmittingComment ? 'Sending' : 'Send'}
                       </Button>
                     </div>
                     <p className="text-[10px] font-medium text-muted-foreground">
