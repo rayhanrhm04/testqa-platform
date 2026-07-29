@@ -1143,12 +1143,14 @@ export default function IssuesPage() {
             </div>
           ) : ''
         }
-        size="lg"
+        size="xl"
+        className="h-[100dvh] max-h-[100dvh] rounded-none border-0 p-4 sm:h-[94vh] sm:max-h-[94vh] sm:max-w-[94vw] sm:rounded-xl sm:border sm:p-6 xl:max-w-[1200px]"
+        bodyClassName="h-[calc(100dvh-96px)] max-h-[calc(100dvh-96px)] sm:h-[calc(94vh-104px)] sm:max-h-[calc(94vh-104px)] overflow-hidden py-4 pr-0"
       >
         {activeDetailIssue && (
-          <div className="grid gap-6 md:grid-cols-3 text-left">
+          <div className="grid h-full min-h-0 gap-6 text-left lg:grid-cols-[minmax(0,1fr)_300px]">
             {/* Details */}
-            <div className="md:col-span-2 space-y-4">
+            <div className="min-h-0 space-y-4 overflow-y-auto pr-1 lg:pr-3">
               <div>
                 <h2 className="text-base font-bold text-foreground">{activeDetailIssue.title}</h2>
                 <div className="flex items-center gap-2 mt-1.5">
@@ -1224,11 +1226,11 @@ export default function IssuesPage() {
                   <div className="p-3 rounded-lg border border-border bg-zinc-50 dark:bg-zinc-900/20 text-xs">
                     {activeDetailIssue.attachment_url.startsWith('data:image/') ? (
                       <div className="space-y-2">
-                        <div className="max-w-md rounded-lg overflow-hidden border border-border bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center p-2">
+                        <div className="w-full max-w-3xl rounded-lg overflow-hidden border border-border bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center p-2">
                           <img 
                             src={activeDetailIssue.attachment_url} 
                             alt="Issue Attachment" 
-                            className="max-h-[220px] object-contain rounded-md cursor-zoom-in hover:opacity-90 transition-opacity"
+                            className="max-h-[44vh] object-contain rounded-md cursor-zoom-in hover:opacity-90 transition-opacity"
                             onClick={() => setPreviewImageUrl(activeDetailIssue.attachment_url)}
                             title="Click to view full size"
                           />
@@ -1305,7 +1307,7 @@ export default function IssuesPage() {
                 </h3>
                 
                 {/* List Comments */}
-                <div className="space-y-3 max-h-[160px] overflow-y-auto pr-1">
+                <div className="space-y-3 max-h-[min(42vh,420px)] overflow-y-auto pr-1">
                   {comments.filter(c => c.entity_type === 'issue' && c.entity_id === activeDetailIssue.id).map((c) => {
                     const user = users.find(u => u.id === c.user_id);
                     const canDeleteComment = currentUser && (currentUser.id === c.user_id || activeRole === 'Admin' || activeRole === 'QA Engineer');
@@ -1469,7 +1471,7 @@ export default function IssuesPage() {
             </div>
 
             {/* Sidebar properties */}
-            <div className="space-y-4 border-l border-border pl-4 text-xs">
+            <div className="min-h-0 space-y-4 border-t border-border pt-4 text-xs lg:overflow-y-auto lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
               <div className="flex items-center justify-between border-b border-border pb-1">
                 <h3 className="text-[10px] uppercase font-bold text-muted-foreground">Ticket Info</h3>
                 {canModifyIssue(activeDetailIssue.project_id) && (

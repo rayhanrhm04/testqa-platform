@@ -9,6 +9,8 @@ interface DialogProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  className?: string;
+  bodyClassName?: string;
 }
 
 export const Dialog: React.FC<DialogProps> = ({
@@ -18,6 +20,8 @@ export const Dialog: React.FC<DialogProps> = ({
   children,
   footer,
   size = 'md',
+  className = '',
+  bodyClassName = '',
 }) => {
   React.useEffect(() => {
     if (isOpen) {
@@ -48,7 +52,7 @@ export const Dialog: React.FC<DialogProps> = ({
       />
       
       {/* Content Container */}
-      <div className={`relative w-full ${sizeClasses[size]} rounded-xl border border-border bg-card p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200 z-10 text-foreground`}>
+      <div className={`relative w-full ${sizeClasses[size]} rounded-xl border border-border bg-card p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200 z-10 text-foreground ${className}`}>
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-border">
           {title && <h3 className="text-lg font-semibold tracking-tight">{title}</h3>}
@@ -58,7 +62,7 @@ export const Dialog: React.FC<DialogProps> = ({
         </div>
 
         {/* Body */}
-        <div className="py-4 max-h-[70vh] overflow-y-auto pr-1">
+        <div className={`py-4 max-h-[70vh] overflow-y-auto pr-1 ${bodyClassName}`}>
           {children}
         </div>
 
