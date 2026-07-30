@@ -1526,7 +1526,7 @@ export const useDataStore = create<DataState>((set, get) => {
               title: `Mentioned in ${entityType === 'issue' ? 'Issue' : 'Feedback'}`,
               content: `${commenterName} tagged you: "${snippet || 'See details'}"`,
               type: entityType,
-              link: entityType === 'issue' ? `/issues?id=${entityId}` : `/feedback/${entityId}`
+              link: entityType === 'issue' ? `/issues?id=${entityId}&focus=card` : `/feedback/${entityId}`
             });
           }
         } catch (err) {

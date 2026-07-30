@@ -44,6 +44,8 @@ export default function IssuesPage() {
   const [isSubmittingComment, setIsSubmittingComment] = React.useState(false);
   const [deletingCommentId, setDeletingCommentId] = React.useState<string | null>(null);
   const commentFileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const issueCardRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
+  const [focusedIssueId, setFocusedIssueId] = React.useState<string | null>(null);
 
   // Mentions autocompleter states
   const [showSuggestions, setShowSuggestions] = React.useState(false);
@@ -294,7 +296,16 @@ export default function IssuesPage() {
         if (idParam) {
           const matched = issues.find(i => i.id === idParam);
           if (matched) {
-            handleOpenDetail(matched);
+            setActiveTab('kanban');
+            setSearch('');
+            setSeverityFilter('all');
+            setReleaseFilter('all');
+            setProjectFilter(matched.project_id);
+            setFocusedIssueId(matched.id);
+
+            if (params.get('open') === 'detail') {
+              handleOpenDetail(matched);
+            }
           }
         }
       }
@@ -353,6 +364,25 @@ export default function IssuesPage() {
       return matchSearch && matchProject && matchSeverity && matchRelease;
     });
   }, [issues, search, projectFilter, severityFilter, releaseFilter, accessibleProjects]);
+
+  React.useEffect(() => {
+    if (!focusedIssueId || activeTab !== 'kanban') return;
+
+    const scrollTimer = window.setTimeout(() => {
+      const target = issueCardRefs.current[focusedIssueId];
+      if (!target) return;
+      target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    }, 150);
+
+    const clearTimer = window.setTimeout(() => {
+      setFocusedIssueId((current) => current === focusedIssueId ? null : current);
+    }, 8000);
+
+    return () => {
+      window.clearTimeout(scrollTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [activeTab, filteredIssues, focusedIssueId]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -415,7 +445,7 @@ export default function IssuesPage() {
             title: 'New Issue Assignment',
             content: `You have been assigned to issue ${editingIssue.code}: "${payload.title}"`,
             type: 'issue',
-            link: `/issues?id=${editingIssue.id}`
+            link: `/issues?id=${editingIssue.id}&focus=card`
           });
         }
         
@@ -429,7 +459,7 @@ export default function IssuesPage() {
             title: 'New Issue Assignment',
             content: `You have been assigned to issue ${newIssueObj.code}: "${payload.title}"`,
             type: 'issue',
-            link: `/issues?id=${newIssueObj.id}`
+            link: `/issues?id=${newIssueObj.id}&focus=card`
           });
         }
         
@@ -713,10 +743,17 @@ export default function IssuesPage() {
                       return (
                         <div 
                           key={issue.id}
+                          ref={(node) => {
+                            issueCardRefs.current[issue.id] = node;
+                          }}
                           draggable
                           onDragStart={(e) => handleDragStart(e, issue.id)}
                           onClick={() => handleOpenDetail(issue)}
-                          className="group relative bg-card rounded-lg border border-border/80 p-3 shadow-sm hover:shadow-md hover:border-primary/20 transition-all cursor-grab active:cursor-grabbing kanban-card text-left"
+                          className={`group relative bg-card rounded-lg border p-3 transition-all cursor-grab active:cursor-grabbing kanban-card text-left ${
+                            focusedIssueId === issue.id
+                              ? 'border-primary ring-2 ring-primary/40 shadow-xl shadow-primary/10'
+                              : 'border-border/80 shadow-sm hover:shadow-md hover:border-primary/20'
+                          }`}
                         >
                           {/* Edit Action button on Hover */}
                           {canModifyIssue(issue.project_id) && (
