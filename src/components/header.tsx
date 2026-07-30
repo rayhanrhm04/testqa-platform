@@ -14,7 +14,7 @@ import { Avatar } from '@/components/ui/avatar';
 
 export const Header: React.FC = () => {
   const pathname = usePathname();
-  const { theme, toggleTheme, toggleSidebar } = useUIStore();
+  const { theme, toggleTheme, toggleSidebar, addToast } = useUIStore();
   const { currentUser } = useAuthStore();
   const [supabaseConnected, setSupabaseConnected] = React.useState(false);
 
@@ -32,7 +32,7 @@ export const Header: React.FC = () => {
   const crumbs = getBreadcrumbs();
 
   const router = useRouter();
-  const { notifications, markNotificationAsRead, markAllNotificationsAsRead } = useDataStore();
+  const { notifications, syncUserNotifications, markNotificationAsRead, markAllNotificationsAsRead } = useDataStore();
   const [isNotificationsOpen, setIsNotificationsOpen] = React.useState(false);
   const notificationsRef = React.useRef<HTMLDivElement>(null);
   const seenNotificationIdsRef = React.useRef<Set<string>>(new Set());
@@ -58,6 +58,40 @@ export const Header: React.FC = () => {
   }, [userNotifications]);
 
   React.useEffect(() => {
+    seenNotificationIdsRef.current = new Set();
+    hasBootstrappedNotificationsRef.current = false;
+  }, [currentUser?.id]);
+
+  React.useEffect(() => {
+    if (!currentUser?.id) return;
+
+    let isDisposed = false;
+    const startedAt = Date.now();
+
+    const pollNotifications = async () => {
+      const latest = await syncUserNotifications(currentUser.id);
+      if (isDisposed) return;
+
+      const staleThreshold = startedAt - 30000;
+      latest.forEach((notification) => {
+        const createdAt = new Date(notification.created_at).getTime();
+        if (createdAt < staleThreshold) {
+          seenNotificationIdsRef.current.add(notification.id);
+        }
+      });
+    };
+
+    const initialPoll = window.setTimeout(pollNotifications, 2000);
+    const interval = window.setInterval(pollNotifications, 10000);
+
+    return () => {
+      isDisposed = true;
+      window.clearTimeout(initialPoll);
+      window.clearInterval(interval);
+    };
+  }, [currentUser?.id, syncUserNotifications]);
+
+  React.useEffect(() => {
     if (!currentUser) return;
 
     if (!hasBootstrappedNotificationsRef.current) {
@@ -76,7 +110,11 @@ export const Header: React.FC = () => {
       seenNotificationIdsRef.current.add(notif.id);
     });
 
-    if (!newUnread || typeof window === 'undefined' || !('Notification' in window)) return;
+    if (!newUnread) return;
+
+    addToast(`${newUnread.title}: ${newUnread.content}`, 'info');
+
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
 
     const showBrowserNotification = () => {
       const browserNotification = new Notification(newUnread.title, {
@@ -94,7 +132,7 @@ export const Header: React.FC = () => {
     if (Notification.permission === 'granted') {
       showBrowserNotification();
     }
-  }, [currentUser, markNotificationAsRead, router, userNotifications]);
+  }, [addToast, currentUser, markNotificationAsRead, router, userNotifications]);
 
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border bg-white dark:bg-zinc-950 px-4 md:px-6 text-foreground select-none">

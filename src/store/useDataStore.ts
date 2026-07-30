@@ -150,6 +150,7 @@ interface DataState {
 
   // Notifications
   addNotification: (notification: Omit<Notification, 'id' | 'is_read' | 'created_at'>) => Promise<void>;
+  syncUserNotifications: (userId: string) => Promise<Notification[]>;
   markNotificationAsRead: (id: string) => Promise<void>;
   markAllNotificationsAsRead: (userId: string | null) => Promise<void>;
   deleteNotification: (id: string) => Promise<void>;
@@ -1995,6 +1996,48 @@ export const useDataStore = create<DataState>((set, get) => {
           return { notifications: next };
         });
       }
+    },
+
+    syncUserNotifications: async (userId) => {
+      if (!userId) return [];
+
+      if (isSupabaseConfigured() && toUuidOrNull(userId)) {
+        try {
+          const { data, error } = await supabase!
+            .from('notifications')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+
+          if (error) throw error;
+
+          const latest = (data || []) as Notification[];
+          set((state) => {
+            const byId = new Map<string, Notification>();
+
+            state.notifications
+              .filter((notification) => notification.user_id !== userId)
+              .forEach((notification) => byId.set(notification.id, notification));
+
+            latest.forEach((notification) => byId.set(notification.id, notification));
+
+            return {
+              notifications: Array.from(byId.values()).sort(
+                (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+              ),
+            };
+          });
+
+          return latest;
+        } catch (e) {
+          console.warn('Failed to sync user notifications:', e);
+        }
+      }
+
+      return get()
+        .notifications
+        .filter((notification) => notification.user_id === userId)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     },
 
     markNotificationAsRead: async (id) => {
