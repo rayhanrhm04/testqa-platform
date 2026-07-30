@@ -18,6 +18,31 @@ import { Tabs } from '@/components/ui/tabs';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+type KanbanColumnConfig = {
+  id: string;
+  label: string;
+  color: string;
+};
+
+const KANBAN_COLUMNS_STORAGE_KEY = 'qa_issue_kanban_columns';
+const KANBAN_COLUMN_COLORS = [
+  'border-t-sky-500 bg-sky-500/5',
+  'border-t-yellow-500 bg-yellow-500/5',
+  'border-t-indigo-500 bg-indigo-500/5',
+  'border-t-emerald-500 bg-emerald-500/5',
+  'border-t-zinc-500 bg-zinc-500/5',
+  'border-t-rose-500 bg-rose-500/5',
+  'border-t-cyan-500 bg-cyan-500/5',
+  'border-t-violet-500 bg-violet-500/5',
+];
+const DEFAULT_KANBAN_COLUMNS: KanbanColumnConfig[] = [
+  { id: 'Open', label: 'Open', color: KANBAN_COLUMN_COLORS[0] },
+  { id: 'In Progress', label: 'In Progress', color: KANBAN_COLUMN_COLORS[1] },
+  { id: 'Ready QA', label: 'Ready QA', color: KANBAN_COLUMN_COLORS[2] },
+  { id: 'Verified', label: 'Verified', color: KANBAN_COLUMN_COLORS[3] },
+  { id: 'Closed', label: 'Closed', color: KANBAN_COLUMN_COLORS[4] },
+];
+
 export default function IssuesPage() {
   const router = useRouter();
   const { 
@@ -46,6 +71,9 @@ export default function IssuesPage() {
   const commentFileInputRef = React.useRef<HTMLInputElement | null>(null);
   const issueCardRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
   const [focusedIssueId, setFocusedIssueId] = React.useState<string | null>(null);
+  const [kanbanColumns, setKanbanColumns] = React.useState<KanbanColumnConfig[]>(DEFAULT_KANBAN_COLUMNS);
+  const [newKanbanColumnName, setNewKanbanColumnName] = React.useState('');
+  const [areKanbanColumnsReady, setAreKanbanColumnsReady] = React.useState(false);
 
   // Mentions autocompleter states
   const [showSuggestions, setShowSuggestions] = React.useState(false);
@@ -180,6 +208,43 @@ export default function IssuesPage() {
     e.preventDefault();
     attachCommentImage(file);
   };
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const raw = window.localStorage.getItem(KANBAN_COLUMNS_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const normalized = parsed
+          .filter((column) => typeof column?.id === 'string' && typeof column?.label === 'string')
+          .map((column, index) => ({
+            id: column.id.trim(),
+            label: column.label.trim(),
+            color: typeof column.color === 'string' ? column.color : KANBAN_COLUMN_COLORS[index % KANBAN_COLUMN_COLORS.length],
+          }))
+          .filter((column) => column.id && column.label);
+
+        if (normalized.length > 0) {
+          setKanbanColumns(normalized);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load kanban columns:', error);
+    } finally {
+      setAreKanbanColumnsReady(true);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!areKanbanColumnsReady || typeof window === 'undefined') return;
+
+    try {
+      window.localStorage.setItem(KANBAN_COLUMNS_STORAGE_KEY, JSON.stringify(kanbanColumns));
+    } catch (error) {
+      console.warn('Failed to save kanban columns:', error);
+    }
+  }, [areKanbanColumnsReady, kanbanColumns]);
 
   const handleOpenDetail = async (issue: any) => {
     setActiveDetailIssue(issue);
@@ -578,6 +643,54 @@ export default function IssuesPage() {
     }
   };
 
+  const handleAddKanbanColumn = () => {
+    const label = newKanbanColumnName.trim().replace(/\s+/g, ' ');
+    if (!label) {
+      addToast('Column name is required.', 'warning');
+      return;
+    }
+
+    const isDuplicate = kanbanColumns.some((column) => column.id.toLowerCase() === label.toLowerCase());
+    if (isDuplicate) {
+      addToast('Column already exists.', 'warning');
+      return;
+    }
+
+    setKanbanColumns((current) => [
+      ...current,
+      {
+        id: label,
+        label,
+        color: KANBAN_COLUMN_COLORS[current.length % KANBAN_COLUMN_COLORS.length],
+      },
+    ]);
+    setNewKanbanColumnName('');
+    addToast(`Column "${label}" added.`, 'success');
+  };
+
+  const handleDeleteKanbanColumn = (column: KanbanColumnConfig) => {
+    if (kanbanColumns.length <= 1) {
+      addToast('Keep at least one Kanban column.', 'warning');
+      return;
+    }
+
+    const issueCount = issues.filter((issue) => issue.status === column.id).length;
+    const message = issueCount > 0
+      ? `Remove "${column.label}" column? ${issueCount} issue(s) with this status will stay in data and can be shown again by adding the same column name.`
+      : `Remove "${column.label}" column?`;
+
+    if (!confirm(message)) return;
+
+    setKanbanColumns((current) => current.filter((item) => item.id !== column.id));
+    addToast(`Column "${column.label}" removed.`, 'info');
+  };
+
+  const handleResetKanbanColumns = () => {
+    if (!confirm('Reset Kanban columns to default?')) return;
+    setKanbanColumns(DEFAULT_KANBAN_COLUMNS);
+    addToast('Kanban columns reset to default.', 'success');
+  };
+
   // Badge Stylings
   const getSeverityBadge = (s: string) => {
     const styles = {
@@ -592,15 +705,6 @@ export default function IssuesPage() {
       </span>
     );
   };
-
-  // Columns for Kanban
-  const kanbanColumns = [
-    { id: 'Open', label: 'Open', color: 'border-t-sky-500 bg-sky-500/5' },
-    { id: 'In Progress', label: 'In Progress', color: 'border-t-yellow-500 bg-yellow-500/5' },
-    { id: 'Ready QA', label: 'Ready QA', color: 'border-t-indigo-500 bg-indigo-500/5' },
-    { id: 'Verified', label: 'Verified', color: 'border-t-emerald-500 bg-emerald-500/5' },
-    { id: 'Closed', label: 'Closed', color: 'border-t-zinc-500 bg-zinc-500/5' },
-  ];
 
   return (
     <div className="space-y-6">
@@ -649,6 +753,40 @@ export default function IssuesPage() {
               <span>List</span>
             </button>
           </div>
+
+          {activeTab === 'kanban' && (
+            <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-1.5">
+              <Input
+                value={newKanbanColumnName}
+                onChange={(e) => setNewKanbanColumnName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddKanbanColumn();
+                  }
+                }}
+                placeholder="New column"
+                className="h-8 w-36 text-xs"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleAddKanbanColumn}
+                className="h-8 px-3 text-xs font-semibold"
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Add
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleResetKanbanColumns}
+                className="h-8 px-3 text-xs font-semibold text-muted-foreground"
+              >
+                Reset
+              </Button>
+            </div>
+          )}
 
           {canCreateAnyIssue ? (
             <Button 
@@ -714,27 +852,38 @@ export default function IssuesPage() {
       {/* Main Content Layout */}
       {activeTab === 'kanban' ? (
         /* KANBAN BOARD VIEW */
-        <div className="overflow-x-auto w-full pb-4">
-          <div className="grid gap-4 grid-cols-5 min-w-[1000px]">
+        <div className="w-full overflow-x-auto overscroll-x-contain pb-4">
+          <div className="flex w-max min-w-full gap-5 pr-2">
           {kanbanColumns.map((col) => {
             const colIssues = filteredIssues.filter((i) => i.status === col.id);
             return (
               <div 
                 key={col.id} 
-                className={`flex flex-col h-[75vh] rounded-xl border border-border p-3 space-y-3 kanban-column ${col.color}`}
+                className={`flex h-[78vh] w-[340px] shrink-0 flex-col rounded-xl border border-border p-4 space-y-3 kanban-column ${col.color}`}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => handleDrop(e, col.id)}
               >
                 {/* Column header */}
-                <div className="flex items-center justify-between border-b border-border pb-2 shrink-0">
-                  <span className="text-xs font-bold text-foreground uppercase tracking-wider">{col.label}</span>
-                  <span className="text-xs font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                    {colIssues.length}
-                  </span>
+                <div className="flex items-center justify-between gap-2 border-b border-border pb-2 shrink-0">
+                  <span className="min-w-0 truncate text-sm font-bold text-foreground uppercase tracking-wider">{col.label}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                      {colIssues.length}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 rounded-md text-muted-foreground hover:bg-red-500/10 hover:text-red-500"
+                      onClick={() => handleDeleteKanbanColumn(col)}
+                      title={`Remove ${col.label} column`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Card stack container */}
-                <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
+                <div className="flex-1 overflow-y-auto space-y-3 pr-1">
                   {colIssues.length > 0 ? (
                     colIssues.map((issue) => {
                       const proj = projects.find((p) => p.id === issue.project_id);
@@ -749,7 +898,7 @@ export default function IssuesPage() {
                           draggable
                           onDragStart={(e) => handleDragStart(e, issue.id)}
                           onClick={() => handleOpenDetail(issue)}
-                          className={`group relative bg-card rounded-lg border p-3 transition-all cursor-grab active:cursor-grabbing kanban-card text-left ${
+                          className={`group relative bg-card rounded-lg border p-4 transition-all cursor-grab active:cursor-grabbing kanban-card text-left ${
                             focusedIssueId === issue.id
                               ? 'border-primary ring-2 ring-primary/40 shadow-xl shadow-primary/10'
                               : 'border-border/80 shadow-sm hover:shadow-md hover:border-primary/20'
@@ -808,12 +957,12 @@ export default function IssuesPage() {
                             </span>
                           </div>
 
-                          <h4 className="text-xs font-semibold text-foreground mt-2 line-clamp-2 leading-snug">
+                          <h4 className="mt-3 min-h-[40px] text-sm font-semibold text-foreground line-clamp-2 leading-snug">
                             {issue.title}
                           </h4>
 
                           {/* Footer */}
-                          <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/40 text-[10px]">
+                          <div className="flex items-center justify-between mt-4 pt-3 border-t border-border/40 text-[10px]">
                             {/* Release */}
                             <span className="text-muted-foreground font-semibold">
                               {rel ? `v${rel.version}` : 'Backlog'}
@@ -1063,11 +1212,9 @@ export default function IssuesPage() {
 
           <FormGroup label="Status">
             <Select value={status} onChange={(e: any) => setStatus(e.target.value)}>
-              <option value="Open">Open</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Ready QA">Ready QA</option>
-              <option value="Verified">Verified</option>
-              <option value="Closed">Closed</option>
+              {kanbanColumns.map((column) => (
+                <option key={column.id} value={column.id}>{column.label}</option>
+              ))}
             </Select>
           </FormGroup>
 
@@ -1586,11 +1733,9 @@ export default function IssuesPage() {
                       addToast('Status updated!', 'success');
                     }}
                   >
-                    <option value="Open">Open</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="Ready QA">Ready QA</option>
-                    <option value="Verified">Verified</option>
-                    <option value="Closed">Closed</option>
+                    {kanbanColumns.map((column) => (
+                      <option key={column.id} value={column.id}>{column.label}</option>
+                    ))}
                   </Select>
                 </div>
               </div>
