@@ -3,12 +3,15 @@
 import * as React from 'react';
 import Link from 'next/link';
 import {
+  Activity,
   AlertTriangle,
   CheckCircle,
   ChevronDown,
+  Clipboard,
   Download,
   FileJson,
   Play,
+  RefreshCw,
   Search,
   ShieldAlert,
   TestTube2,
@@ -24,6 +27,7 @@ import { useUIStore } from '@/store/useUIStore';
 import { TestCase } from '@/lib/validators';
 
 type CypressResultStatus = 'Pass' | 'Fail' | 'Skipped' | 'Not Matched';
+type AutomationRunStatus = 'Planned' | 'Queued' | 'Running' | 'Passed' | 'Failed' | 'Needs Config';
 
 interface CypressCaseResult {
   testCaseId: string;
@@ -55,6 +59,26 @@ interface CypressRunReport {
   createdAt: string;
 }
 
+interface AutomationDashboardRun {
+  id: string;
+  title: string;
+  projectId: string;
+  projectName: string;
+  environment: string;
+  browser: string;
+  specPattern: string;
+  command: string;
+  selectedCaseIds: string[];
+  selectedCaseCodes: string[];
+  status: AutomationRunStatus;
+  startedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  workflowMode?: string;
+  workflowMessage?: string;
+  workflowPayload?: unknown;
+}
+
 interface MochawesomeError {
   message?: string;
   estack?: string;
@@ -76,6 +100,7 @@ interface MochawesomeNode {
 }
 
 const STORAGE_KEY = 'qa_cypress_automation_reports';
+const RUNS_STORAGE_KEY = 'qa_automation_dashboard_runs';
 
 const readReports = (): CypressRunReport[] => {
   if (typeof window === 'undefined') return [];
@@ -89,6 +114,20 @@ const readReports = (): CypressRunReport[] => {
 const writeReports = (reports: CypressRunReport[]) => {
   if (typeof window === 'undefined') return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(reports));
+};
+
+const readDashboardRuns = (): AutomationDashboardRun[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    return JSON.parse(localStorage.getItem(RUNS_STORAGE_KEY) || '[]');
+  } catch {
+    return [];
+  }
+};
+
+const writeDashboardRuns = (runs: AutomationDashboardRun[]) => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(RUNS_STORAGE_KEY, JSON.stringify(runs));
 };
 
 const collectMochawesomeTests = (input: unknown): MochawesomeTest[] => {
@@ -125,6 +164,13 @@ const buildCommand = (specPattern: string, browser: string, environment: string)
   return `npx cypress run${specPart}${browserPart}${envPart}`;
 };
 
+const extractSpecPath = (automationLink?: string) => {
+  if (!automationLink) return '';
+  const cypressIndex = automationLink.indexOf('cypress/');
+  if (cypressIndex >= 0) return automationLink.slice(cypressIndex);
+  return automationLink;
+};
+
 export default function AutomationTestingPage() {
   const {
     projects,
@@ -142,11 +188,14 @@ export default function AutomationTestingPage() {
   const [environment, setEnvironment] = React.useState('Staging');
   const [browser, setBrowser] = React.useState('Chrome');
   const [specPattern, setSpecPattern] = React.useState('cypress/e2e/**/*.cy.ts');
+  const [baseUrl, setBaseUrl] = React.useState('https://mapidqa-platform-git-staging-rayhanrhm04s-projects.vercel.app');
   const [notes, setNotes] = React.useState('');
   const [search, setSearch] = React.useState('');
   const [selectedCaseIds, setSelectedCaseIds] = React.useState<string[]>([]);
   const [reportJson, setReportJson] = React.useState('');
   const [reports, setReports] = React.useState<CypressRunReport[]>(() => readReports());
+  const [dashboardRuns, setDashboardRuns] = React.useState<AutomationDashboardRun[]>(() => readDashboardRuns());
+  const [isDispatching, setIsDispatching] = React.useState(false);
 
   const accessibleProjects = React.useMemo(() => {
     if (!currentUser || activeRole === 'Admin' || activeRole === 'QA Engineer') return projects;
@@ -178,6 +227,30 @@ export default function AutomationTestingPage() {
 
   const latestReport = reports[0];
   const command = buildCommand(specPattern, browser, environment);
+  const currentProject = accessibleProjects.find((project) => project.id === currentProjectId);
+  const workflowPreview = React.useMemo(() => ({
+    project: currentProject?.name || 'Selected project',
+    environment,
+    baseUrl,
+    browser,
+    specPattern,
+    testCaseCodes: selectedCases.map((testCase) => testCase.code),
+    command,
+  }), [baseUrl, browser, command, currentProject?.name, environment, selectedCases, specPattern]);
+
+  React.useEffect(() => {
+    const automatedSpecs = Array.from(new Set(
+      selectedCases
+        .map((testCase) => extractSpecPath(testCase.automation_link))
+        .filter(Boolean)
+    ));
+
+    if (automatedSpecs.length === 1) {
+      setSpecPattern(automatedSpecs[0]);
+    } else if (automatedSpecs.length > 1) {
+      setSpecPattern(automatedSpecs.join(','));
+    }
+  }, [selectedCases]);
 
   const toggleCase = (id: string) => {
     setSelectedCaseIds((current) => (
@@ -194,6 +267,97 @@ export default function AutomationTestingPage() {
       }
       return Array.from(new Set([...current, ...visibleIds]));
     });
+  };
+
+  const persistDashboardRuns = (runs: AutomationDashboardRun[]) => {
+    const nextRuns = runs.slice(0, 30);
+    setDashboardRuns(nextRuns);
+    writeDashboardRuns(nextRuns);
+  };
+
+  const dispatchAutomationRun = async () => {
+    if (selectedCases.length === 0) {
+      addToast('Please select test cases first.', 'warning');
+      return;
+    }
+    if (!runTitle.trim()) {
+      addToast('Run title is required.', 'warning');
+      return;
+    }
+
+    const runId = `auto-${Date.now()}`;
+    const now = new Date().toISOString();
+    const runBase: AutomationDashboardRun = {
+      id: runId,
+      title: runTitle.trim(),
+      projectId: currentProjectId,
+      projectName: currentProject?.name || 'Selected project',
+      environment,
+      browser,
+      specPattern,
+      command,
+      selectedCaseIds,
+      selectedCaseCodes: selectedCases.map((testCase) => testCase.code),
+      status: 'Queued',
+      startedBy: currentUser?.name,
+      createdAt: now,
+      updatedAt: now,
+      workflowPayload: workflowPreview,
+    };
+
+    persistDashboardRuns([runBase, ...dashboardRuns]);
+    setIsDispatching(true);
+
+    try {
+      const response = await fetch('/api/automation/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          runId,
+          projectName: runBase.projectName,
+          environment,
+          browser,
+          specPattern,
+          testCaseCodes: runBase.selectedCaseCodes,
+          baseUrl,
+          notes,
+        }),
+      });
+      const payload = await response.json();
+      const nextStatus: AutomationRunStatus = payload.mode === 'dispatched' ? 'Running' : 'Needs Config';
+      const updatedRun: AutomationDashboardRun = {
+        ...runBase,
+        status: nextStatus,
+        workflowMode: payload.mode,
+        workflowMessage: payload.message,
+        workflowPayload: payload.payload || workflowPreview,
+        updatedAt: new Date().toISOString(),
+      };
+      persistDashboardRuns([updatedRun, ...dashboardRuns]);
+      addToast(payload.mode === 'dispatched' ? 'Automation workflow dispatched.' : 'Automation run prepared. GitHub Actions env is not configured yet.', payload.mode === 'dispatched' ? 'success' : 'info');
+
+      if (currentUser) {
+        logActivity(currentUser.id, `Started automation dashboard run: ${updatedRun.title}`, notes);
+      }
+    } catch (error: any) {
+      const failedRun: AutomationDashboardRun = {
+        ...runBase,
+        status: 'Failed',
+        workflowMode: 'request_failed',
+        workflowMessage: error?.message || 'Failed to dispatch automation run.',
+        updatedAt: new Date().toISOString(),
+      };
+      persistDashboardRuns([failedRun, ...dashboardRuns]);
+      addToast('Failed to dispatch automation run.', 'error');
+    } finally {
+      setIsDispatching(false);
+    }
+  };
+
+  const copyWorkflowPayload = async () => {
+    if (typeof navigator === 'undefined') return;
+    await navigator.clipboard.writeText(JSON.stringify(workflowPreview, null, 2));
+    addToast('Workflow payload copied.', 'success');
   };
 
   const parseReport = () => {
@@ -304,11 +468,15 @@ export default function AutomationTestingPage() {
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight text-foreground">
             <TestTube2 className="h-6 w-6 text-primary" />
-            Automation Testing
+            Automation Dashboard
           </h1>
-          <p className="mt-1 text-xs text-muted-foreground">Prepare Cypress runs, choose test cases first, and import results into a report.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Control panel untuk memilih test case, trigger Cypress runner, dan membaca hasil automation per project.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button type="button" onClick={dispatchAutomationRun} disabled={isDispatching || selectedCaseIds.length === 0}>
+            {isDispatching ? <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" /> : <Play className="mr-1.5 h-4 w-4" />}
+            Run Automation
+          </Button>
           <Button type="button" variant="outline" onClick={exportLatestReport} disabled={!latestReport}>
             <Download className="mr-1.5 h-4 w-4" />
             Export Report
@@ -328,9 +496,9 @@ export default function AutomationTestingPage() {
             <div className="mb-5 flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-base font-bold text-foreground">Run Setup</h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">This prepares a Cypress command and report scope; it does not execute code on the production server.</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Dashboard ini menyiapkan scope run dan mengirim dispatch ke runner terpisah, bukan menjalankan Cypress di Vercel.</p>
               </div>
-              <span className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-black uppercase text-emerald-600">Staging Safe</span>
+              <span className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-black uppercase text-emerald-600">GitHub Actions Ready</span>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -367,6 +535,9 @@ export default function AutomationTestingPage() {
                   <option value="Electron">Electron</option>
                 </Select>
               </FormGroup>
+              <FormGroup label="Target Base URL">
+                <Input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://staging.example.com" />
+              </FormGroup>
             </div>
 
             <div className="mt-4 grid gap-4 md:grid-cols-[1fr_1fr]">
@@ -381,6 +552,21 @@ export default function AutomationTestingPage() {
             <div className="mt-4 rounded-lg border border-border bg-muted/30 p-3">
               <div className="mb-1 text-[10px] font-black uppercase text-muted-foreground">Generated Cypress Command</div>
               <code className="block overflow-x-auto whitespace-nowrap text-xs font-semibold text-foreground">{command}</code>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="rounded-lg border border-border bg-muted/20 p-3">
+                <div className="text-2xl font-black text-foreground">{selectedCaseIds.length}</div>
+                <div className="text-[10px] font-bold uppercase text-muted-foreground">Selected Cases</div>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/20 p-3">
+                <div className="text-2xl font-black text-foreground">{selectedCases.filter((testCase) => testCase.automation_link).length}</div>
+                <div className="text-[10px] font-bold uppercase text-muted-foreground">Mapped Specs</div>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/20 p-3">
+                <div className="truncate text-sm font-black text-foreground">{environment}</div>
+                <div className="text-[10px] font-bold uppercase text-muted-foreground">Environment</div>
+              </div>
             </div>
           </div>
 
@@ -449,6 +635,37 @@ export default function AutomationTestingPage() {
 
         <aside className="space-y-6">
           <div className="rounded-xl border border-border bg-card p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-foreground">Execution Layer</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">Runner dipisah dari Vercel. Dashboard hanya trigger dan membaca result.</p>
+              </div>
+              <FileJson className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div className="mt-4 space-y-3">
+              <div className="rounded-lg border border-border bg-muted/20 p-3">
+                <div className="mb-2 flex items-center gap-2 text-xs font-black text-foreground">
+                  <Activity className="h-4 w-4 text-primary" />
+                  GitHub Actions Dispatch
+                </div>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  Saat env `GITHUB_AUTOMATION_TOKEN` dan repo sudah diset di Vercel, tombol Run Automation akan trigger workflow Cypress.
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-zinc-950 p-3 text-zinc-100">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-black uppercase text-zinc-400">Workflow Payload</span>
+                  <button type="button" onClick={copyWorkflowPayload} className="inline-flex items-center gap-1 text-[10px] font-bold text-zinc-200 hover:text-white">
+                    <Clipboard className="h-3 w-3" />
+                    Copy
+                  </button>
+                </div>
+                <pre className="max-h-44 overflow-auto whitespace-pre-wrap text-[10px] leading-relaxed">{JSON.stringify(workflowPreview, null, 2)}</pre>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-5">
             <h2 className="text-base font-bold text-foreground">Selected Scope</h2>
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div className="rounded-lg border border-border bg-muted/20 p-3">
@@ -497,6 +714,40 @@ export default function AutomationTestingPage() {
                 <Play className="mr-1.5 h-4 w-4" />
                 Generate Report
               </Button>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-foreground">Run History</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">Riwayat dispatch dari dashboard automation.</p>
+              </div>
+              <span className="rounded-md border border-border bg-muted/30 px-2 py-1 text-[10px] font-black text-muted-foreground">{dashboardRuns.length} runs</span>
+            </div>
+            <div className="mt-4 max-h-[320px] space-y-3 overflow-y-auto">
+              {dashboardRuns.length > 0 ? dashboardRuns.map((run) => (
+                <div key={run.id} className="rounded-lg border border-border p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="truncate text-xs font-black text-foreground">{run.title}</div>
+                      <div className="mt-1 text-[10px] text-muted-foreground">{run.projectName} · {run.environment} · {new Date(run.createdAt).toLocaleString()}</div>
+                    </div>
+                    <RunStatusBadge status={run.status} />
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {run.selectedCaseCodes.slice(0, 5).map((code) => (
+                      <span key={code} className="rounded border border-primary/20 bg-primary/10 px-1.5 py-0.5 font-mono text-[9px] font-black text-primary">{code}</span>
+                    ))}
+                    {run.selectedCaseCodes.length > 5 && (
+                      <span className="rounded border border-border bg-muted/30 px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">+{run.selectedCaseCodes.length - 5}</span>
+                    )}
+                  </div>
+                  {run.workflowMessage && <p className="mt-2 line-clamp-2 text-[10px] text-muted-foreground">{run.workflowMessage}</p>}
+                </div>
+              )) : (
+                <p className="rounded-lg border border-border bg-muted/20 p-5 text-center text-xs text-muted-foreground">Belum ada automation run dari dashboard.</p>
+              )}
             </div>
           </div>
 
@@ -564,4 +815,21 @@ function StatusBadge({ status }: { status: CypressResultStatus }) {
     return <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-2 py-0.5 text-[10px] font-black text-amber-600"><AlertTriangle className="h-3 w-3" />Skipped</span>;
   }
   return <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-black text-muted-foreground">Not Matched</span>;
+}
+
+function RunStatusBadge({ status }: { status: AutomationRunStatus }) {
+  const styles: Record<AutomationRunStatus, string> = {
+    Planned: 'bg-muted text-muted-foreground border-border',
+    Queued: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+    Running: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20',
+    Passed: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+    Failed: 'bg-red-500/10 text-red-600 border-red-500/20',
+    'Needs Config': 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  };
+
+  return (
+    <span className={`shrink-0 rounded border px-2 py-0.5 text-[10px] font-black ${styles[status]}`}>
+      {status}
+    </span>
+  );
 }

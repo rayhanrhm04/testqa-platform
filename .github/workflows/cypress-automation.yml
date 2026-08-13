@@ -1,0 +1,105 @@
+name: Cypress Automation
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Dashboard automation run id
+        required: true
+        type: string
+      project_name:
+        description: QA project name
+        required: true
+        type: string
+      environment:
+        description: Target environment label
+        required: true
+        default: Staging
+        type: string
+      browser:
+        description: Browser for Cypress
+        required: true
+        default: Chrome
+        type: choice
+        options:
+          - Chrome
+          - Edge
+          - Firefox
+          - Electron
+      spec_pattern:
+        description: Cypress spec path or glob
+        required: true
+        default: cypress/e2e/**/*.cy.ts
+        type: string
+      test_case_codes:
+        description: Comma-separated test case codes selected in dashboard
+        required: false
+        type: string
+      base_url:
+        description: Target app base URL
+        required: false
+        type: string
+      notes:
+        description: Run notes
+        required: false
+        type: string
+
+jobs:
+  cypress:
+    name: Run Cypress
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Print dashboard scope
+        run: |
+          echo "Run ID: ${{ inputs.run_id }}"
+          echo "Project: ${{ inputs.project_name }}"
+          echo "Environment: ${{ inputs.environment }}"
+          echo "Browser: ${{ inputs.browser }}"
+          echo "Spec: ${{ inputs.spec_pattern }}"
+          echo "Test cases: ${{ inputs.test_case_codes }}"
+          echo "Base URL: ${{ inputs.base_url }}"
+          echo "Notes: ${{ inputs.notes }}"
+
+      - name: Check Cypress specs
+        id: specs
+        shell: bash
+        run: |
+          if [ -d "cypress/e2e" ] && find cypress/e2e -type f \( -name "*.cy.ts" -o -name "*.cy.js" -o -name "*.cy.tsx" -o -name "*.cy.jsx" \) | grep -q .; then
+            echo "has_specs=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_specs=false" >> "$GITHUB_OUTPUT"
+            echo "No Cypress specs found yet. Add specs under cypress/e2e to enable real execution."
+          fi
+
+      - name: Run Cypress
+        if: steps.specs.outputs.has_specs == 'true'
+        run: |
+          npx --yes cypress run \
+            --spec "${{ inputs.spec_pattern }}" \
+            --browser "${{ inputs.browser }}" \
+            --config "baseUrl=${{ inputs.base_url }}" \
+            --env "qaEnvironment=${{ inputs.environment }},testCaseCodes=${{ inputs.test_case_codes }},dashboardRunId=${{ inputs.run_id }}"
+
+      - name: Upload Cypress artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-artifacts-${{ inputs.run_id }}
+          path: |
+            cypress/screenshots
+            cypress/videos
+            cypress/results
+            mochawesome-report
+          if-no-files-found: ignore
