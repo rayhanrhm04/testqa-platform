@@ -71,7 +71,18 @@ CREATE TABLE IF NOT EXISTS public.pm_task_comments (
   task_id UUID NOT NULL REFERENCES public.pm_tasks(id) ON DELETE CASCADE,
   author_id UUID NOT NULL REFERENCES public.users(id) ON DELETE RESTRICT,
   body TEXT NOT NULL,
+  image_url TEXT,
+  image_name TEXT,
+  client_request_id UUID,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE public.pm_task_comments ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE public.pm_task_comments ADD COLUMN IF NOT EXISTS image_name TEXT;
+ALTER TABLE public.pm_task_comments ADD COLUMN IF NOT EXISTS client_request_id UUID;
+CREATE TABLE IF NOT EXISTS public.pm_task_comment_mentions (
+  comment_id UUID NOT NULL REFERENCES public.pm_task_comments(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  PRIMARY KEY (comment_id, user_id)
 );
 CREATE TABLE IF NOT EXISTS public.pm_task_checklists (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -97,6 +108,8 @@ CREATE INDEX IF NOT EXISTS pm_tasks_due_idx ON public.pm_tasks(project_id, due_d
 CREATE INDEX IF NOT EXISTS pm_assignees_user_idx ON public.pm_task_assignees(user_id, task_id);
 CREATE INDEX IF NOT EXISTS pm_links_task_idx ON public.pm_task_links(task_id);
 CREATE INDEX IF NOT EXISTS pm_comments_task_idx ON public.pm_task_comments(task_id, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS pm_comments_request_idx ON public.pm_task_comments(client_request_id) WHERE client_request_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS pm_comment_mentions_user_idx ON public.pm_task_comment_mentions(user_id, comment_id);
 CREATE INDEX IF NOT EXISTS pm_checklists_task_idx ON public.pm_task_checklists(task_id, position);
 CREATE INDEX IF NOT EXISTS pm_activity_project_idx ON public.pm_activity(project_id, created_at DESC);
 `;
@@ -183,7 +196,10 @@ export async function GET(req: NextRequest) {
         const task = await taskProject(client, taskId);
         await membership(client, task.project_id, userId);
         const [comments, checklist, activities] = await Promise.all([
-          client.query('SELECT c.*, u.name AS author_name FROM public.pm_task_comments c JOIN public.users u ON u.id=c.author_id WHERE c.task_id=$1 ORDER BY c.created_at', [taskId]),
+          client.query(`SELECT c.*, u.name AS author_name,
+            COALESCE((SELECT json_agg(json_build_object('id',mu.id,'name',mu.name,'email',mu.email,'avatar_url',mu.avatar_url) ORDER BY mu.name)
+              FROM public.pm_task_comment_mentions cm JOIN public.users mu ON mu.id=cm.user_id WHERE cm.comment_id=c.id),'[]') AS mentions
+            FROM public.pm_task_comments c JOIN public.users u ON u.id=c.author_id WHERE c.task_id=$1 ORDER BY c.created_at`, [taskId]),
           client.query('SELECT * FROM public.pm_task_checklists WHERE task_id=$1 ORDER BY position, created_at', [taskId]),
           client.query('SELECT a.*, u.name AS actor_name FROM public.pm_activity a JOIN public.users u ON u.id=a.actor_id WHERE a.task_id=$1 ORDER BY a.created_at DESC LIMIT 50', [taskId]),
         ]);
@@ -277,10 +293,27 @@ export async function POST(req: NextRequest) {
       }
       if (action === 'addComment') {
         const taskId=idSchema.parse(body.taskId); const task=await taskProject(client,taskId); if(task.project_id!==projectId) throw new Error('Not found');
-        await membership(client,projectId,userId,true); const text=z.string().trim().min(1).max(3000).parse(body.text);
-        await client.query('INSERT INTO public.pm_task_comments (task_id,author_id,body) VALUES ($1,$2,$3)',[taskId,userId,text]);
-        await logActivity(client,projectId,taskId,userId,'comment.created','Added a comment');
-        await client.query('COMMIT'); return NextResponse.json({success:true},{status:201});
+        await membership(client,projectId,userId,true);
+        const input=z.object({
+          text:z.string().trim().max(3000).default(''),
+          mentionIds:z.array(idSchema).max(20).default([]),
+          imageUrl:z.string().max(2_900_000).regex(/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+=*$/).nullable().optional(),
+          imageName:z.string().trim().max(255).nullable().optional(),
+          clientRequestId:idSchema,
+        }).parse(body);
+        if(!input.text && !input.imageUrl) throw new Error('Write a comment or attach a screenshot');
+        const mentionIds=[...new Set(input.mentionIds)];
+        if(mentionIds.length) {
+          const validMentions=await client.query('SELECT user_id FROM public.pm_project_members WHERE project_id=$1 AND user_id = ANY($2::uuid[])',[projectId,mentionIds]);
+          if(validMentions.rowCount!==mentionIds.length) throw new Error('One or more tagged users are not project members');
+        }
+        const inserted=await client.query('INSERT INTO public.pm_task_comments (task_id,author_id,body,image_url,image_name,client_request_id) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING RETURNING id',[taskId,userId,input.text,input.imageUrl||null,input.imageName||null,input.clientRequestId]);
+        if(inserted.rowCount) {
+          const commentId=inserted.rows[0].id;
+          for(const mentionedUserId of mentionIds) await client.query('INSERT INTO public.pm_task_comment_mentions (comment_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',[commentId,mentionedUserId]);
+          await logActivity(client,projectId,taskId,userId,'comment.created',input.imageUrl?'Added a comment with a screenshot':'Added a comment');
+        }
+        await client.query('COMMIT'); return NextResponse.json({success:true,created:Boolean(inserted.rowCount)},{status:inserted.rowCount?201:200});
       }
       if (action === 'addChecklist') {
         const taskId=idSchema.parse(body.taskId); const task=await taskProject(client,taskId); if(task.project_id!==projectId) throw new Error('Not found');
@@ -355,6 +388,7 @@ export async function DELETE(req: NextRequest) {
       if(type==='project'){await membership(client,projectId,userId,false,true); const deleted=await client.query('DELETE FROM public.pm_projects WHERE id=$1 RETURNING id',[projectId]); if(!deleted.rowCount) throw new Error('Not found');}
       else if(type==='task'){const id=idSchema.parse(req.nextUrl.searchParams.get('id')); await membership(client,projectId,userId,true); const task=await taskProject(client,id); if(task.project_id!==projectId) throw new Error('Not found'); await logActivity(client,projectId,null,userId,'task.deleted',`Deleted task ${task.title}`); await client.query('DELETE FROM public.pm_tasks WHERE id=$1',[id]);}
       else if(type==='column'){const id=idSchema.parse(req.nextUrl.searchParams.get('id')); await membership(client,projectId,userId,false,true); const count=await client.query('SELECT COUNT(*)::int AS count FROM public.pm_tasks WHERE column_id=$1',[id]); if(count.rows[0].count>0) throw new Error('Move tasks before deleting this column'); await client.query('DELETE FROM public.pm_columns WHERE id=$1 AND project_id=$2',[id,projectId]); await logActivity(client,projectId,null,userId,'column.deleted','Deleted a board column');}
+      else if(type==='comment'){const id=idSchema.parse(req.nextUrl.searchParams.get('id')); const comment=await client.query('SELECT c.author_id,c.task_id,t.project_id FROM public.pm_task_comments c JOIN public.pm_tasks t ON t.id=c.task_id WHERE c.id=$1',[id]); if(!comment.rowCount||comment.rows[0].project_id!==projectId) throw new Error('Not found'); const role=await membership(client,projectId,userId); if(comment.rows[0].author_id!==userId&&role!=='Project Lead') throw new Error('Forbidden'); await client.query('DELETE FROM public.pm_task_comments WHERE id=$1',[id]); await logActivity(client,projectId,comment.rows[0].task_id,userId,'comment.deleted','Deleted a comment');}
       else throw new Error('Unsupported type');
       await client.query('COMMIT'); return NextResponse.json({success:true});
     }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}

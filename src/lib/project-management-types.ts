@@ -78,7 +78,11 @@ export interface PMActivity {
 export interface PMComment {
   id: string;
   body: string;
+  author_id: string;
   author_name: string;
+  image_url: string | null;
+  image_name: string | null;
+  mentions: PMUser[];
   created_at: string;
 }
 
