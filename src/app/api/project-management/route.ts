@@ -115,7 +115,18 @@ CREATE INDEX IF NOT EXISTS pm_activity_project_idx ON public.pm_activity(project
 `;
 
 async function ensureSchema() {
-  globalForPm.pmSchemaPromise ??= pool.query(schemaSql).then(() => undefined);
+  globalForPm.pmSchemaPromise ??= pool.query(`
+    SELECT
+      to_regclass('public.pm_projects') IS NOT NULL AS has_projects,
+      to_regclass('public.pm_task_comment_mentions') IS NOT NULL AS has_comment_mentions,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema='public' AND table_name='pm_task_comments' AND column_name='client_request_id'
+      ) AS has_comment_idempotency
+  `).then(async(result) => {
+    const ready=result.rows[0]?.has_projects&&result.rows[0]?.has_comment_mentions&&result.rows[0]?.has_comment_idempotency;
+    if(!ready) await pool.query(schemaSql);
+  });
   await globalForPm.pmSchemaPromise;
 }
 
@@ -318,9 +329,9 @@ export async function POST(req: NextRequest) {
       if (action === 'addChecklist') {
         const taskId=idSchema.parse(body.taskId); const task=await taskProject(client,taskId); if(task.project_id!==projectId) throw new Error('Not found');
         await membership(client,projectId,userId,true); const text=z.string().trim().min(1).max(300).parse(body.text);
-        await client.query('INSERT INTO public.pm_task_checklists (task_id,text,position) VALUES ($1,$2,(SELECT COALESCE(MAX(position),-1)+1 FROM public.pm_task_checklists WHERE task_id=$1))',[taskId,text]);
+        const inserted=await client.query('INSERT INTO public.pm_task_checklists (task_id,text,position) VALUES ($1,$2,(SELECT COALESCE(MAX(position),-1)+1 FROM public.pm_task_checklists WHERE task_id=$1)) RETURNING id,text,is_done,position,created_at',[taskId,text]);
         await logActivity(client,projectId,taskId,userId,'checklist.created',`Added checklist item ${text}`);
-        await client.query('COMMIT'); return NextResponse.json({success:true},{status:201});
+        await client.query('COMMIT'); return NextResponse.json({success:true,checklist:inserted.rows[0]},{status:201});
       }
       throw new Error('Unsupported action');
     } catch(error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }

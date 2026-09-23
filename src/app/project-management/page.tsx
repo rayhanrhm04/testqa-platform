@@ -268,7 +268,70 @@ export default function ProjectManagementPage() {
       {board && <EditProjectDialog key={`${board.project.id}:${isEditProjectOpen}`} isOpen={isEditProjectOpen} onClose={() => setIsEditProjectOpen(false)} board={board} users={users} onSubmit={async (payload) => { try { await mutate({action:'updateProject',projectId:board.project.id,...payload},'PATCH'); setIsEditProjectOpen(false); addToast('Project updated.','success'); } catch(error){addToast(error instanceof Error?error.message:'Unable to update project.','error');} }} />}
       {board && <TaskDialog key={editingTask?.id || 'new-task'} isOpen={isTaskOpen} onClose={() => { setIsTaskOpen(false); setEditingTask(null); }} board={board} task={editingTask} onSubmit={async (payload) => { try { await mutate({action:editingTask?'updateTask':'createTask',projectId:board.project.id,...payload},editingTask?'PATCH':'POST'); setIsTaskOpen(false); setEditingTask(null); addToast(editingTask?'Task updated.':'Task created.','success'); } catch(error){addToast(error instanceof Error?error.message:'Unable to save task.','error');} }} />}
       {board && <MemberDialog isOpen={isMemberOpen} onClose={() => setIsMemberOpen(false)} board={board} users={users} onSubmit={async (userId,role) => { try { await mutate({action:'addMember',projectId:board.project.id,userId,role}); setIsMemberOpen(false); addToast('Member assigned.','success'); } catch(error){addToast(error instanceof Error?error.message:'Unable to assign member.','error');} }} />}
-      {board && detailTask && <TaskDetailDialog task={detailTask} data={taskDetail} members={board.members} currentUserId={currentUser.id} projectRole={board.project.role} canWrite={Boolean(canWrite)} onClose={() => {setDetailTask(null);setTaskDetail(null);}} onEdit={() => { setEditingTask(detailTask); setDetailTask(null); setIsTaskOpen(true); }} onDelete={async () => { if(!confirm(`Delete task "${detailTask.title}"?`)) return; try { await api(`/api/project-management?projectId=${board.project.id}&type=task&id=${detailTask.id}`,{method:'DELETE'}); setDetailTask(null); await loadBoard(board.project.id); addToast('Task deleted.','success'); } catch(error){addToast(error instanceof Error?error.message:'Unable to delete task.','error');} }} onAddComment={async (draft) => { await api('/api/project-management',{method:'POST',body:JSON.stringify({action:'addComment',projectId:board.project.id,taskId:detailTask.id,...draft})}); const [nextDetail]=await Promise.all([api(`/api/project-management?taskId=${detailTask.id}`),loadBoard(board.project.id)]); setTaskDetail(nextDetail); }} onDeleteComment={async (commentId) => { await api(`/api/project-management?projectId=${board.project.id}&type=comment&id=${commentId}`,{method:'DELETE'}); const [nextDetail]=await Promise.all([api(`/api/project-management?taskId=${detailTask.id}`),loadBoard(board.project.id)]); setTaskDetail(nextDetail); }} onAddChecklist={async (text) => { await mutate({action:'addChecklist',projectId:board.project.id,taskId:detailTask.id,text}); await openTaskDetail(detailTask); }} onToggleChecklist={async (checklistId) => { await mutate({action:'toggleChecklist',projectId:board.project.id,checklistId},'PATCH'); await openTaskDetail(detailTask); }} />}
+      {board && detailTask && <TaskDetailDialog
+        task={detailTask}
+        data={taskDetail}
+        members={board.members}
+        currentUserId={currentUser.id}
+        projectRole={board.project.role}
+        canWrite={Boolean(canWrite)}
+        onClose={() => {setDetailTask(null);setTaskDetail(null);}}
+        onEdit={() => {setEditingTask(detailTask);setDetailTask(null);setIsTaskOpen(true);}}
+        onDelete={async () => {if(!confirm(`Delete task "${detailTask.title}"?`))return;try{await api(`/api/project-management?projectId=${board.project.id}&type=task&id=${detailTask.id}`,{method:'DELETE'});setDetailTask(null);await loadBoard(board.project.id);addToast('Task deleted.','success');}catch(error){addToast(error instanceof Error?error.message:'Unable to delete task.','error');}}}
+        onAddComment={async (draft) => {
+          const optimisticId=`optimistic-${draft.clientRequestId}`;
+          const optimistic:PMComment={id:optimisticId,body:draft.text,author_id:currentUser.id,author_name:currentUser.name,image_url:draft.imageUrl,image_name:draft.imageName,mentions:board.members.filter((member)=>draft.mentionIds.includes(member.id)),created_at:new Date().toISOString()};
+          setTaskDetail((current)=>current?{...current,comments:[...current.comments,optimistic]}:current);
+          setBoard((current)=>current?{...current,tasks:current.tasks.map((task)=>task.id===detailTask.id?{...task,comment_count:task.comment_count+1}:task)}:current);
+          try {
+            await api('/api/project-management',{method:'POST',body:JSON.stringify({action:'addComment',projectId:board.project.id,taskId:detailTask.id,...draft})});
+            const nextDetail=await api(`/api/project-management?taskId=${detailTask.id}`);
+            setTaskDetail(nextDetail);
+          } catch(error) {
+            setTaskDetail((current)=>current?{...current,comments:current.comments.filter((item)=>item.id!==optimisticId)}:current);
+            setBoard((current)=>current?{...current,tasks:current.tasks.map((task)=>task.id===detailTask.id?{...task,comment_count:Math.max(0,task.comment_count-1)}:task)}:current);
+            throw error;
+          }
+        }}
+        onDeleteComment={async (commentId) => {
+          const deleted=taskDetail?.comments.find((item)=>item.id===commentId);
+          setTaskDetail((current)=>current?{...current,comments:current.comments.filter((item)=>item.id!==commentId)}:current);
+          setBoard((current)=>current?{...current,tasks:current.tasks.map((task)=>task.id===detailTask.id?{...task,comment_count:Math.max(0,task.comment_count-1)}:task)}:current);
+          try { await api(`/api/project-management?projectId=${board.project.id}&type=comment&id=${commentId}`,{method:'DELETE'}); }
+          catch(error) {
+            if(deleted)setTaskDetail((current)=>current?{...current,comments:[...current.comments,deleted].sort((a,b)=>a.created_at.localeCompare(b.created_at))}:current);
+            setBoard((current)=>current?{...current,tasks:current.tasks.map((task)=>task.id===detailTask.id?{...task,comment_count:task.comment_count+1}:task)}:current);
+            throw error;
+          }
+        }}
+        onAddChecklist={async (text) => {
+          const optimisticId=`optimistic-${crypto.randomUUID()}`;
+          const optimistic:PMChecklistItem={id:optimisticId,text,is_done:false,position:taskDetail?.checklist.length||0};
+          setTaskDetail((current)=>current?{...current,checklist:[...current.checklist,optimistic]}:current);
+          setBoard((current)=>current?{...current,tasks:current.tasks.map((task)=>task.id===detailTask.id?{...task,checklist_total:task.checklist_total+1}:task)}:current);
+          try {
+            const result=await api('/api/project-management',{method:'POST',body:JSON.stringify({action:'addChecklist',projectId:board.project.id,taskId:detailTask.id,text})});
+            setTaskDetail((current)=>current?{...current,checklist:current.checklist.map((item)=>item.id===optimisticId?result.checklist:item)}:current);
+          } catch(error) {
+            setTaskDetail((current)=>current?{...current,checklist:current.checklist.filter((item)=>item.id!==optimisticId)}:current);
+            setBoard((current)=>current?{...current,tasks:current.tasks.map((task)=>task.id===detailTask.id?{...task,checklist_total:Math.max(0,task.checklist_total-1)}:task)}:current);
+            throw error;
+          }
+        }}
+        onToggleChecklist={async (checklistId) => {
+          const previous=taskDetail?.checklist.find((item)=>item.id===checklistId);
+          if(!previous)return;
+          const doneDelta=previous.is_done?-1:1;
+          setTaskDetail((current)=>current?{...current,checklist:current.checklist.map((item)=>item.id===checklistId?{...item,is_done:!item.is_done}:item)}:current);
+          setBoard((current)=>current?{...current,tasks:current.tasks.map((task)=>task.id===detailTask.id?{...task,checklist_done:Math.max(0,task.checklist_done+doneDelta)}:task)}:current);
+          try { await api('/api/project-management',{method:'PATCH',body:JSON.stringify({action:'toggleChecklist',projectId:board.project.id,checklistId})}); }
+          catch(error) {
+            setTaskDetail((current)=>current?{...current,checklist:current.checklist.map((item)=>item.id===checklistId?previous:item)}:current);
+            setBoard((current)=>current?{...current,tasks:current.tasks.map((task)=>task.id===detailTask.id?{...task,checklist_done:Math.max(0,task.checklist_done-doneDelta)}:task)}:current);
+            throw error;
+          }
+        }}
+      />}
     </div>
   );
 }
@@ -363,6 +426,9 @@ function MemberDialog({isOpen,onClose,board,users,onSubmit}:{isOpen:boolean;onCl
 function TaskDetailDialog({task,data,members,currentUserId,projectRole,canWrite,onClose,onEdit,onDelete,onAddComment,onDeleteComment,onAddChecklist,onToggleChecklist}:{task:PMTask;data:{comments:PMComment[];checklist:PMChecklistItem[];activities:PMActivity[]}|null;members:PMBoardData['members'];currentUserId:string;projectRole:PMProjectRole;canWrite:boolean;onClose:()=>void;onEdit:()=>void;onDelete:()=>void;onAddComment:(draft:CommentDraft)=>Promise<void>;onDeleteComment:(id:string)=>Promise<void>;onAddChecklist:(text:string)=>Promise<void>;onToggleChecklist:(id:string)=>Promise<void>}) {
   const [comment,setComment]=React.useState('');
   const [checklist,setChecklist]=React.useState('');
+  const [checklistSubmitting,setChecklistSubmitting]=React.useState(false);
+  const [checklistError,setChecklistError]=React.useState('');
+  const [togglingChecklistIds,setTogglingChecklistIds]=React.useState<string[]>([]);
   const [mentionIds,setMentionIds]=React.useState<string[]>([]);
   const [imageUrl,setImageUrl]=React.useState<string|null>(null);
   const [imageName,setImageName]=React.useState<string|null>(null);
@@ -389,17 +455,35 @@ function TaskDetailDialog({task,data,members,currentUserId,projectRole,canWrite,
     finally { setCommentSubmitting(false); }
   }
 
+  async function submitChecklist(event:React.FormEvent) {
+    event.preventDefault();
+    const text=checklist.trim();
+    if(checklistSubmitting||!text)return;
+    setChecklist('');setChecklistError('');setChecklistSubmitting(true);
+    try { await onAddChecklist(text); }
+    catch(error) { setChecklist(text);setChecklistError(error instanceof Error?error.message:'Unable to add checklist item.'); }
+    finally { setChecklistSubmitting(false); }
+  }
+
+  async function toggleChecklist(checklistId:string) {
+    if(togglingChecklistIds.includes(checklistId))return;
+    setChecklistError('');setTogglingChecklistIds((current)=>[...current,checklistId]);
+    try { await onToggleChecklist(checklistId); }
+    catch(error) { setChecklistError(error instanceof Error?error.message:'Unable to update checklist item.'); }
+    finally { setTogglingChecklistIds((current)=>current.filter((id)=>id!==checklistId)); }
+  }
+
   return <Dialog isOpen onClose={onClose} title={task.title} size="xl">
     {canWrite&&<div className="mb-4 flex justify-end gap-2"><Button size="sm" variant="outline" onClick={onEdit}>Edit Task</Button><Button size="sm" variant="destructive" onClick={onDelete}>Delete Task</Button></div>}
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-5 lg:col-span-2">
         <div><p className="text-[9px] font-bold uppercase text-muted-foreground">Description</p><p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed">{task.description||'No description.'}</p></div>
         {task.links.length>0&&<div><p className="mb-2 text-[9px] font-bold uppercase text-muted-foreground">Linked QA Records</p><div className="flex flex-wrap gap-2">{task.links.map((link)=><Link key={link.id} href={linkHref(link.link_type,link.linked_id)} className="flex items-center gap-1 rounded-lg border border-violet-500/20 bg-violet-500/10 px-2.5 py-1.5 text-[10px] font-bold text-violet-600"><Link2 className="h-3 w-3"/>{link.linked_code}</Link>)}</div></div>}
-        <div><p className="mb-2 text-[9px] font-bold uppercase text-muted-foreground">Checklist</p><div className="space-y-2">{data?.checklist.map((item)=><label key={item.id} className="flex items-center gap-2 rounded-lg border border-border p-2.5 text-xs"><input type="checkbox" checked={item.is_done} disabled={!canWrite} onChange={()=>void onToggleChecklist(item.id)}/><span className={item.is_done?'text-muted-foreground line-through':''}>{item.text}</span></label>)}</div>{canWrite&&<form onSubmit={async(event)=>{event.preventDefault();if(!checklist.trim())return;await onAddChecklist(checklist);setChecklist('');}} className="mt-2 flex gap-2"><Input value={checklist} onChange={(event)=>setChecklist(event.target.value)} placeholder="Add checklist item" className="text-xs"/><Button size="sm">Add</Button></form>}</div>
+        <div><p className="mb-2 text-[9px] font-bold uppercase text-muted-foreground">Checklist</p><div className="space-y-2">{data?.checklist.map((item)=><label key={item.id} className={`flex items-center gap-2 rounded-lg border border-border p-2.5 text-xs ${item.id.startsWith('optimistic-')?'opacity-60':''}`}><input type="checkbox" checked={item.is_done} disabled={!canWrite||item.id.startsWith('optimistic-')||togglingChecklistIds.includes(item.id)} onChange={()=>void toggleChecklist(item.id)}/><span className={item.is_done?'text-muted-foreground line-through':''}>{item.text}</span>{item.id.startsWith('optimistic-')&&<span className="ml-auto text-[9px] text-muted-foreground">Saving...</span>}</label>)}</div>{canWrite&&<form onSubmit={submitChecklist} className="mt-2 flex gap-2"><Input value={checklist} disabled={checklistSubmitting} onChange={(event)=>setChecklist(event.target.value)} placeholder="Add checklist item" className="text-xs"/><Button size="sm" loading={checklistSubmitting} disabled={!checklist.trim()}>Add</Button></form>}{checklistError&&<p role="alert" className="mt-2 text-[10px] font-semibold text-red-600">{checklistError}</p>}</div>
         <div>
           <p className="mb-2 text-[9px] font-bold uppercase text-muted-foreground">Comments</p>
           <div className="space-y-2">{data?.comments.map((item)=><div key={item.id} className="rounded-xl border border-border bg-secondary/30 p-3">
-            <div className="flex items-start justify-between gap-3"><div><span className="text-[10px] font-bold">{item.author_name}</span><span className="ml-2 text-[8px] text-muted-foreground">{new Date(item.created_at).toLocaleString('id-ID')}</span></div>{(item.author_id===currentUserId||projectRole==='Project Lead')&&<button type="button" disabled={deletingCommentId===item.id} onClick={async()=>{if(!confirm('Delete this comment?'))return;setDeletingCommentId(item.id);try{await onDeleteComment(item.id);}catch(error){setCommentError(error instanceof Error?error.message:'Unable to delete comment.');}finally{setDeletingCommentId(null);}}} className="rounded-md p-1 text-muted-foreground hover:bg-red-500/10 hover:text-red-600 disabled:opacity-40" aria-label="Delete comment"><Trash2 className="h-3.5 w-3.5"/></button>}</div>
+            <div className="flex items-start justify-between gap-3"><div><span className="text-[10px] font-bold">{item.author_name}</span><span className="ml-2 text-[8px] text-muted-foreground">{new Date(item.created_at).toLocaleString('id-ID')}</span></div>{!item.id.startsWith('optimistic-')&&(item.author_id===currentUserId||projectRole==='Project Lead')&&<button type="button" disabled={deletingCommentId===item.id} onClick={async()=>{if(!confirm('Delete this comment?'))return;setCommentError('');setDeletingCommentId(item.id);try{await onDeleteComment(item.id);setCommentError('');}catch(error){setCommentError(error instanceof Error?error.message:'Unable to delete comment.');}finally{setDeletingCommentId(null);}}} className="rounded-md p-1 text-muted-foreground hover:bg-red-500/10 hover:text-red-600 disabled:opacity-40" aria-label="Delete comment"><Trash2 className="h-3.5 w-3.5"/></button>}</div>
             {item.mentions?.length>0&&<div className="mt-2 flex flex-wrap gap-1">{item.mentions.map((member)=><span key={member.id} className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-bold text-primary">@{member.name}</span>)}</div>}
             {item.body&&<p className="mt-2 whitespace-pre-wrap text-xs">{item.body}</p>}
             {item.image_url&&<a href={item.image_url} download={item.image_name||'screenshot'} className="mt-3 block overflow-hidden rounded-lg border border-border bg-card"><Image src={item.image_url} alt={item.image_name||'Comment screenshot'} width={900} height={520} unoptimized className="max-h-80 w-full object-contain"/></a>}
