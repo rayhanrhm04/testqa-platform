@@ -111,6 +111,13 @@ const roleSchema = z.enum(['Project Lead', 'Member', 'Viewer']);
 const statusSchema = z.enum(['Planning', 'Active', 'On Hold', 'Completed']);
 const prioritySchema = z.enum(['Low', 'Medium', 'High', 'Critical']);
 const linkTypeSchema = z.enum(['Issue', 'Feedback', 'Test Case', 'Test Run', 'Release', 'Exploratory Finding']);
+const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional();
+
+function validateDateRange(startDate?: string | null, targetDate?: string | null) {
+  if (startDate && targetDate && targetDate < startDate) {
+    throw new Error('Target date cannot be earlier than start date');
+  }
+}
 
 function errorResponse(error: unknown) {
   const message = error instanceof Error ? error.message : 'Unexpected error';
@@ -152,7 +159,9 @@ async function logActivity(client: PoolClient, projectId: string, taskId: string
 }
 
 const projectSelect = `
-SELECT p.*, lead.name AS lead_name, m.role,
+SELECT p.*, to_char(p.start_date, 'YYYY-MM-DD') AS start_date,
+  to_char(p.target_date, 'YYYY-MM-DD') AS target_date,
+  lead.name AS lead_name, m.role,
   (SELECT COUNT(*)::int FROM public.pm_project_members pm WHERE pm.project_id = p.id) AS member_count,
   (SELECT COUNT(*)::int FROM public.pm_tasks t WHERE t.project_id = p.id) AS task_count,
   (SELECT COUNT(*)::int FROM public.pm_tasks t JOIN public.pm_columns c ON c.id=t.column_id WHERE t.project_id=p.id AND lower(c.name)='done') AS completed_count
@@ -222,9 +231,10 @@ export async function POST(req: NextRequest) {
       if (action === 'createProject') {
         const input = z.object({
           name: z.string().trim().min(2).max(120), description: z.string().max(3000).default(''),
-          leadUserId: idSchema, memberIds: z.array(idSchema).default([]), startDate: z.string().nullable().optional(),
-          targetDate: z.string().nullable().optional(), status: statusSchema.default('Planning'),
+          leadUserId: idSchema, memberIds: z.array(idSchema).default([]), startDate: dateSchema,
+          targetDate: dateSchema, status: statusSchema.default('Planning'),
         }).parse(body);
+        validateDateRange(input.startDate, input.targetDate);
         const project = await client.query('INSERT INTO public.pm_projects (name,description,lead_user_id,start_date,target_date,status,created_by) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *', [input.name,input.description,input.leadUserId,input.startDate||null,input.targetDate||null,input.status,userId]);
         const id = project.rows[0].id;
         await client.query('INSERT INTO public.pm_project_members (project_id,user_id,role) VALUES ($1,$2,\'Project Lead\')', [id,input.leadUserId]);
@@ -288,7 +298,35 @@ export async function PATCH(req: NextRequest) {
   try {
     await ensureSchema(); const userId=await getUserId(req); const body=await req.json(); const action=z.string().parse(body.action); const projectId=idSchema.parse(body.projectId); const client=await pool.connect();
     try { await client.query('BEGIN');
-      if(action==='updateTask') {
+      if(action==='updateProject') {
+        await membership(client,projectId,userId,false,true);
+        const input=z.object({
+          name:z.string().trim().min(2).max(120),
+          description:z.string().max(3000).default(''),
+          leadUserId:idSchema,
+          members:z.array(z.object({userId:idSchema,role:z.enum(['Member','Viewer'])})).max(500).default([]),
+          startDate:dateSchema,
+          targetDate:dateSchema,
+          status:statusSchema,
+        }).parse(body);
+        validateDateRange(input.startDate,input.targetDate);
+        const membershipMap=new Map<string,'Member'|'Viewer'>();
+        for(const member of input.members) if(member.userId!==input.leadUserId) membershipMap.set(member.userId,member.role);
+        const selectedIds=[input.leadUserId,...membershipMap.keys()];
+        const users=await client.query('SELECT id FROM public.users WHERE id = ANY($1::uuid[])',[selectedIds]);
+        if(users.rowCount!==selectedIds.length) throw new Error('One or more selected users no longer exist');
+        const previous=await client.query('SELECT name,lead_user_id FROM public.pm_projects WHERE id=$1',[projectId]);
+        if(!previous.rowCount) throw new Error('Not found');
+        await client.query('UPDATE public.pm_projects SET name=$1,description=$2,lead_user_id=$3,start_date=$4,target_date=$5,status=$6,updated_at=NOW() WHERE id=$7',[input.name,input.description,input.leadUserId,input.startDate||null,input.targetDate||null,input.status,projectId]);
+        await client.query("INSERT INTO public.pm_project_members (project_id,user_id,role) VALUES ($1,$2,'Project Lead') ON CONFLICT (project_id,user_id) DO UPDATE SET role='Project Lead'",[projectId,input.leadUserId]);
+        for(const [memberId,role] of membershipMap) await client.query('INSERT INTO public.pm_project_members (project_id,user_id,role) VALUES ($1,$2,$3) ON CONFLICT (project_id,user_id) DO UPDATE SET role=EXCLUDED.role',[projectId,memberId,role]);
+        const removed=await client.query('SELECT user_id FROM public.pm_project_members WHERE project_id=$1 AND NOT (user_id = ANY($2::uuid[]))',[projectId,selectedIds]);
+        const removedIds=removed.rows.map((row:{user_id:string})=>row.user_id);
+        if(removedIds.length) await client.query('DELETE FROM public.pm_task_assignees ta USING public.pm_tasks t WHERE ta.task_id=t.id AND t.project_id=$1 AND ta.user_id = ANY($2::uuid[])',[projectId,removedIds]);
+        await client.query('DELETE FROM public.pm_project_members WHERE project_id=$1 AND NOT (user_id = ANY($2::uuid[]))',[projectId,selectedIds]);
+        await logActivity(client,projectId,null,userId,'project.updated',`Updated project ${previous.rows[0].name} to ${input.name}`);
+      }
+      else if(action==='updateTask') {
         await membership(client,projectId,userId,true);
         const input=z.object({taskId:idSchema,columnId:idSchema,title:z.string().trim().min(2).max(200),description:z.string().max(5000).default(''),priority:prioritySchema,dueDate:z.string().nullable().optional(),labels:z.array(z.string().trim().min(1).max(40)).max(10).default([]),assigneeIds:z.array(idSchema).default([]),attachmentUrl:z.string().url().nullable().optional(),attachmentName:z.string().max(255).nullable().optional(),linkType:linkTypeSchema.nullable().optional(),linkedId:z.string().max(120).nullable().optional(),linkedCode:z.string().max(120).nullable().optional()}).parse(body);
         const task=await taskProject(client,input.taskId); if(task.project_id!==projectId) throw new Error('Not found');
@@ -312,10 +350,11 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    await ensureSchema(); const userId=await getUserId(req); const projectId=idSchema.parse(req.nextUrl.searchParams.get('projectId')); const type=req.nextUrl.searchParams.get('type'); const id=idSchema.parse(req.nextUrl.searchParams.get('id')); const client=await pool.connect();
+    await ensureSchema(); const userId=await getUserId(req); const projectId=idSchema.parse(req.nextUrl.searchParams.get('projectId')); const type=req.nextUrl.searchParams.get('type'); const client=await pool.connect();
     try { await client.query('BEGIN');
-      if(type==='task'){await membership(client,projectId,userId,true); const task=await taskProject(client,id); if(task.project_id!==projectId) throw new Error('Not found'); await logActivity(client,projectId,null,userId,'task.deleted',`Deleted task ${task.title}`); await client.query('DELETE FROM public.pm_tasks WHERE id=$1',[id]);}
-      else if(type==='column'){await membership(client,projectId,userId,false,true); const count=await client.query('SELECT COUNT(*)::int AS count FROM public.pm_tasks WHERE column_id=$1',[id]); if(count.rows[0].count>0) throw new Error('Move tasks before deleting this column'); await client.query('DELETE FROM public.pm_columns WHERE id=$1 AND project_id=$2',[id,projectId]); await logActivity(client,projectId,null,userId,'column.deleted','Deleted a board column');}
+      if(type==='project'){await membership(client,projectId,userId,false,true); const deleted=await client.query('DELETE FROM public.pm_projects WHERE id=$1 RETURNING id',[projectId]); if(!deleted.rowCount) throw new Error('Not found');}
+      else if(type==='task'){const id=idSchema.parse(req.nextUrl.searchParams.get('id')); await membership(client,projectId,userId,true); const task=await taskProject(client,id); if(task.project_id!==projectId) throw new Error('Not found'); await logActivity(client,projectId,null,userId,'task.deleted',`Deleted task ${task.title}`); await client.query('DELETE FROM public.pm_tasks WHERE id=$1',[id]);}
+      else if(type==='column'){const id=idSchema.parse(req.nextUrl.searchParams.get('id')); await membership(client,projectId,userId,false,true); const count=await client.query('SELECT COUNT(*)::int AS count FROM public.pm_tasks WHERE column_id=$1',[id]); if(count.rows[0].count>0) throw new Error('Move tasks before deleting this column'); await client.query('DELETE FROM public.pm_columns WHERE id=$1 AND project_id=$2',[id,projectId]); await logActivity(client,projectId,null,userId,'column.deleted','Deleted a board column');}
       else throw new Error('Unsupported type');
       await client.query('COMMIT'); return NextResponse.json({success:true});
     }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
