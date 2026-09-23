@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Pool } from 'pg';
+import { DATABASE_URL } from '@/lib/database-config';
 
-const connectionString = process.env.DATABASE_URL || 'postgresql://uv4qhHNJJJ5pFJZ7v.jkt1_005:ca35f3753a0b78d63be0954b@pgsql-dbas-jkt1-005.sumobase.my.id:6432/dbe06a73bdd6b26463';
+const connectionString = DATABASE_URL;
 
 // Use a single database connection pool instance
 let pool: Pool;

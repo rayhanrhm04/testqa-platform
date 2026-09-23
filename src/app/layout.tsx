@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "MAPID QA",
-  description: "Next-gen QA Management System for GIS and Web Apps",
+  description: "All in One QA Platform",
 };
 
 export default function RootLayout({

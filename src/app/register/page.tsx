@@ -3,28 +3,51 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useDataStore } from '@/store/useDataStore';
 import { useUIStore } from '@/store/useUIStore';
 import { Eye, EyeOff, Info } from 'lucide-react';
 import Link from 'next/link';
 
+const DEFAULT_ROLE_DESCRIPTIONS: Record<string, string> = {
+  Reporter: 'Reports & Analytics access only',
+  Developer: 'Assigned Bugs access',
+  'QA Engineer': 'Full Testing suite access',
+  Admin: 'Full administrator control',
+  PSE: 'Release Notes, Calendar, Projects access',
+};
+
+const formatRoleDescription = (roleName: string, allowedModules: string) => {
+  const defaultDescription = DEFAULT_ROLE_DESCRIPTIONS[roleName];
+  if (defaultDescription) return defaultDescription;
+
+  const moduleCount = allowedModules.split(',').filter(Boolean).length;
+  return moduleCount > 0 ? `${moduleCount} module access` : 'No module access';
+};
+
 export default function RegisterPage() {
   const router = useRouter();
   const { signUp, currentUser } = useAuthStore();
+  const rolePermissions = useDataStore((state) => state.rolePermissions);
+  const rolesLoading = useDataStore((state) => state.isLoading);
   const { addToast } = useUIStore();
 
   const [name, setName] = React.useState('');
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
-  const [role, setRole] = React.useState<any>('Reporter');
+  const [role, setRole] = React.useState('Reporter');
   const [loading, setLoading] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
+  const selectedRole = rolePermissions.some((item) => item.role_name === role)
+    ? role
+    : (rolePermissions.find((item) => item.role_name === 'Reporter')
+      ?? rolePermissions[0])?.role_name ?? '';
 
   // Redirect if already logged in
   React.useEffect(() => {
     if (currentUser) {
-      router.push(role === 'Reporter' ? '/reports' : '/');
+      router.push(selectedRole === 'Reporter' ? '/reports' : '/');
     }
-  }, [currentUser, router, role]);
+  }, [currentUser, router, selectedRole]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,15 +59,19 @@ export default function RegisterPage() {
       addToast('Password must be at least 6 characters.', 'warning');
       return;
     }
+    if (!rolePermissions.some((item) => item.role_name === selectedRole)) {
+      addToast('Please select an available workspace role.', 'warning');
+      return;
+    }
 
     setLoading(true);
     try {
-      await signUp(name, email, password, role);
+      await signUp(name, email, password, selectedRole);
       addToast('Registration successful!', 'success');
-      router.push(role === 'Reporter' ? '/reports' : '/');
-    } catch (err: any) {
+      router.push(selectedRole === 'Reporter' ? '/reports' : '/');
+    } catch (err: unknown) {
       console.error(err);
-      addToast(err.message || 'Registration failed.', 'error');
+      addToast(err instanceof Error ? err.message : 'Registration failed.', 'error');
     } finally {
       setLoading(false);
     }
@@ -176,15 +203,20 @@ export default function RegisterPage() {
                 Workspace Role
               </label>
               <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as any)}
+                value={selectedRole}
+                onChange={(e) => setRole(e.target.value)}
+                disabled={rolesLoading || rolePermissions.length === 0}
                 className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0f141d]/15 focus:border-[#0f141d] transition-all font-medium text-sm cursor-pointer"
               >
-                <option value="Reporter">Reporter (Reports & Analytics access only)</option>
-                <option value="Developer">Developer (Assigned Bugs access)</option>
-                <option value="QA Engineer">QA Engineer (Full Testing suite access)</option>
-                <option value="Admin">Admin (Full administrator control)</option>
-                <option value="PSE">PSE (Release Notes, Calendar, Projects access)</option>
+                {rolePermissions.length === 0 ? (
+                  <option value="">{rolesLoading ? 'Loading roles...' : 'No roles available'}</option>
+                ) : (
+                  rolePermissions.map((item) => (
+                    <option key={item.role_name} value={item.role_name}>
+                      {item.role_name} ({formatRoleDescription(item.role_name, item.allowed_modules)})
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 

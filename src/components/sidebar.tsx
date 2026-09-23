@@ -11,7 +11,7 @@ import {
   LayoutDashboard, MessageSquare, Bug, Rocket, FolderHeart, 
   FileSpreadsheet, PlayCircle, FileText, BarChart3, Settings, 
   ChevronLeft, ChevronRight, UserCheck, LogOut,
-  Compass, ClipboardList, Video, Layers, Calendar, Briefcase, TestTube2, ListChecks
+  Compass, ClipboardList, Video, Layers, Calendar, Briefcase, TestTube2, ListChecks, FolderKanban
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Avatar } from '@/components/ui/avatar';
@@ -26,6 +26,7 @@ export const Sidebar: React.FC = () => {
   const itemModuleMap: Record<string, string> = {
     'Dashboard': 'dashboard',
     'Projects (QA)': 'projects',
+    'Project Management': 'project-management',
     'Project Status': 'project-status',
     'Calendar Hub': 'calendar',
     'Feedback': 'feedback',
@@ -48,6 +49,7 @@ export const Sidebar: React.FC = () => {
   const navItems = [
     { name: 'Dashboard', path: '/', icon: <LayoutDashboard className="h-4.5 w-4.5" /> },
     { name: 'Projects (QA)', path: '/projects', icon: <FolderHeart className="h-4.5 w-4.5" /> },
+    { name: 'Project Management', path: '/project-management', icon: <FolderKanban className="h-4.5 w-4.5" /> },
     { name: 'Project Status', path: '/project-status', icon: <Briefcase className="h-4.5 w-4.5" /> },
     { name: 'Calendar Hub', path: '/calendar', icon: <Calendar className="h-4.5 w-4.5" /> },
     { name: 'Feedback', path: '/feedback', icon: <MessageSquare className="h-4.5 w-4.5" /> },
@@ -69,6 +71,7 @@ export const Sidebar: React.FC = () => {
     if (!currentUser) {
       return item.name === 'Calendar Hub' || item.name === 'Release Notes';
     }
+    if (item.name === 'Project Management') return true;
     const currentPermissions = rolePermissions.find(rp => rp.role_name === activeRole);
     if (!currentPermissions) {
       if (activeRole === 'Admin') return true;
