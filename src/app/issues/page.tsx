@@ -18,6 +18,7 @@ import { Tabs } from '@/components/ui/tabs';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { IssueAttachment, MAX_ISSUE_ATTACHMENT_BYTES, parseIssueAttachments, serializeIssueAttachments } from '@/lib/issue-attachments';
+import type { User as QAUser } from '@/lib/validators';
 
 type KanbanColumnConfig = {
   id: string;
@@ -43,6 +44,36 @@ const DEFAULT_KANBAN_COLUMNS: KanbanColumnConfig[] = [
   { id: 'Verified', label: 'Verified', color: KANBAN_COLUMN_COLORS[3] },
   { id: 'Closed', label: 'Closed', color: KANBAN_COLUMN_COLORS[4] },
 ];
+
+function AssigneePicker({ value, onChange, users }: { value: string; onChange: (id: string) => void; users: QAUser[] }) {
+  const [open, setOpen] = React.useState(false);
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const options = React.useMemo(() => [...users].sort((a, b) => a.name.localeCompare(b.name, 'id')), [users]);
+  const selected = options.find((user) => user.id === value);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    return () => document.removeEventListener('pointerdown', closeOutside);
+  }, [open]);
+
+  return <div ref={rootRef} className="w-full">
+    <button type="button" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((current) => !current)} onKeyDown={(event) => {
+      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'ArrowDown' && !open) { event.preventDefault(); setOpen(true); }
+    }} className="flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-input bg-card px-3 text-left text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+      <span className="truncate">{selected ? `${selected.name} (${selected.email})` : 'Unassigned'}</span>
+      <svg className="h-4 w-4 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m6 9 6 6 6-6" /></svg>
+    </button>
+    {open && <div role="listbox" aria-label="Assignee" className="mt-1 max-h-[200px] overflow-y-auto rounded-lg border border-border bg-card shadow-lg">
+      <button type="button" role="option" aria-selected={!value} onClick={() => { onChange(''); setOpen(false); }} className={`block w-full px-3 py-2 text-left text-xs hover:bg-secondary ${!value ? 'bg-secondary font-semibold' : ''}`}>Unassigned</button>
+      {options.map((user) => <button key={user.id} type="button" role="option" aria-selected={value === user.id} onClick={() => { onChange(user.id); setOpen(false); }} onKeyDown={(event) => { if (event.key === 'Escape') setOpen(false); }} className={`block w-full truncate px-3 py-2 text-left text-xs hover:bg-secondary ${value === user.id ? 'bg-secondary font-semibold' : ''}`} title={`${user.name} (${user.email})`}>{user.name} ({user.email})</button>)}
+    </div>}
+  </div>;
+}
 
 export default function IssuesPage() {
   const router = useRouter();
@@ -1205,12 +1236,7 @@ export default function IssuesPage() {
             </FormGroup>
 
             <FormGroup label="Assignee">
-              <Select value={assignee} onChange={(e) => setAssignee(e.target.value)}>
-                <option value="">Unassigned</option>
-                {[...(assigneeUsers.length ? assigneeUsers : users)].sort((a, b) => a.name.localeCompare(b.name, 'id')).map(u => (
-                  <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
-                ))}
-              </Select>
+              <AssigneePicker value={assignee} onChange={setAssignee} users={assigneeUsers.length ? assigneeUsers : users} />
             </FormGroup>
 
             <FormGroup label="Target Release">
