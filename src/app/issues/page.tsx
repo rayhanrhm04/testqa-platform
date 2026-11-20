@@ -289,6 +289,17 @@ export default function IssuesPage() {
   const [steps, setSteps] = React.useState('');
   const [issueAttachments, setIssueAttachments] = React.useState<IssueAttachment[]>([]);
   const [isSavingIssue, setIsSavingIssue] = React.useState(false);
+  const [assigneeUsers, setAssigneeUsers] = React.useState<typeof users>([]);
+
+  React.useEffect(() => {
+    if (!isFormOpen) return;
+    let active = true;
+    void (async () => {
+      const result = await supabase!.from('users').select('*').order('name');
+      if (active && !result.error && result.data) setAssigneeUsers(result.data as typeof users);
+    })();
+    return () => { active = false; };
+  }, [isFormOpen]);
 
   // Permissions checks
   const accessibleProjects = React.useMemo(() => {
@@ -1196,7 +1207,7 @@ export default function IssuesPage() {
             <FormGroup label="Assignee">
               <Select value={assignee} onChange={(e) => setAssignee(e.target.value)}>
                 <option value="">Unassigned</option>
-                {[...users].sort((a, b) => a.name.localeCompare(b.name, 'id')).map(u => (
+                {[...(assigneeUsers.length ? assigneeUsers : users)].sort((a, b) => a.name.localeCompare(b.name, 'id')).map(u => (
                   <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
                 ))}
               </Select>
