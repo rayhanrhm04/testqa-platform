@@ -17,6 +17,7 @@ import { Select } from '@/components/ui/select';
 import { Tabs } from '@/components/ui/tabs';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { IssueAttachment, MAX_ISSUE_ATTACHMENT_BYTES, parseIssueAttachments, serializeIssueAttachments } from '@/lib/issue-attachments';
 
 type KanbanColumnConfig = {
   id: string;
@@ -286,8 +287,8 @@ export default function IssuesPage() {
   const [expected, setExpected] = React.useState('');
   const [actual, setActual] = React.useState('');
   const [steps, setSteps] = React.useState('');
-  const [attachmentUrl, setAttachmentUrl] = React.useState('');
-  const [attachmentName, setAttachmentName] = React.useState('');
+  const [issueAttachments, setIssueAttachments] = React.useState<IssueAttachment[]>([]);
+  const [isSavingIssue, setIsSavingIssue] = React.useState(false);
 
   // Permissions checks
   const accessibleProjects = React.useMemo(() => {
@@ -392,8 +393,7 @@ export default function IssuesPage() {
         setExpected(editingIssue.expected_result || '');
         setActual(editingIssue.actual_result || '');
         setSteps(editingIssue.steps_to_reproduce || '');
-        setAttachmentUrl(editingIssue.attachment_url || '');
-        setAttachmentName(editingIssue.attachment_name || '');
+        setIssueAttachments(parseIssueAttachments(editingIssue.attachment_url, editingIssue.attachment_name));
       } else {
         setTitle('');
         setDescription('');
@@ -406,8 +406,7 @@ export default function IssuesPage() {
         setExpected('');
         setActual('');
         setSteps('');
-        setAttachmentUrl('');
-        setAttachmentName('');
+        setIssueAttachments([]);
       }
     }
   }, [editingIssue, projects, isFormOpen, projectFilter]);
@@ -449,28 +448,31 @@ export default function IssuesPage() {
     };
   }, [activeTab, filteredIssues, focusedIssueId]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 5 * 1024 * 1024) {
-      addToast("File size too large (Max 5MB)", "error");
+  const addIssueFiles = async (files: File[]) => {
+    const valid = files.filter((file) => {
+      if (file.size <= 2 * 1024 * 1024) return true;
+      addToast(`${file.name} exceeds 2 MB.`, 'error');
+      return false;
+    });
+    const loaded = await Promise.all(valid.map((file) => new Promise<IssueAttachment>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ name: file.name || `pasted-image-${Date.now()}.png`, url: String(reader.result) });
+      reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+      reader.readAsDataURL(file);
+    })));
+    const next = [...issueAttachments, ...loaded];
+    if (serializeIssueAttachments(next).attachment_url!.length > MAX_ISSUE_ATTACHMENT_BYTES) {
+      addToast('Total attachments exceed the 3.4 MB upload limit.', 'error');
       return;
     }
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = reader.result as string;
-      setAttachmentUrl(base64);
-      setAttachmentName(file.name);
-      addToast(`File ${file.name} selected!`, "success");
-    };
-    reader.readAsDataURL(file);
+    setIssueAttachments(next);
   };
 
-  const handleClearAttachment = () => {
-    setAttachmentUrl('');
-    setAttachmentName('');
+  const openIssueEditor = async (issue: any) => {
+    setEditingIssue(issue);
+    setIsFormOpen(true);
+    const { data, error } = await supabase!.from('issues').select('*').eq('id', issue.id).single();
+    if (!error && data) setEditingIssue((current: any) => current?.id === issue.id ? { ...current, ...data } : current);
   };
 
   // Form submit
@@ -492,14 +494,14 @@ export default function IssuesPage() {
       status,
       assigned_to: assignee || undefined,
       release_id: release || undefined,
-      attachment_url: attachmentUrl || undefined,
-      attachment_name: attachmentName || undefined,
+      ...serializeIssueAttachments(issueAttachments),
     };
 
     if (!editingIssue) {
       payload.created_by = currentUser?.id || undefined;
     }
 
+    setIsSavingIssue(true);
     try {
       if (editingIssue) {
         await updateIssue(editingIssue.id, payload);
@@ -534,6 +536,8 @@ export default function IssuesPage() {
       setEditingIssue(null);
     } catch (e) {
       addToast('Failed to save issue.', 'error');
+    } finally {
+      setIsSavingIssue(false);
     }
   };
 
@@ -916,8 +920,7 @@ export default function IssuesPage() {
                                   router.push('/login');
                                   return;
                                 }
-                                setEditingIssue(issue);
-                                setIsFormOpen(true);
+                                void openIssueEditor(issue);
                               }}
                               title="Edit Issue"
                             >
@@ -1052,8 +1055,7 @@ export default function IssuesPage() {
                                     router.push('/login');
                                     return;
                                   }
-                                  setEditingIssue(issue); 
-                                  setIsFormOpen(true); 
+                                  void openIssueEditor(issue);
                                 }}
                                 title="Edit"
                               >
@@ -1113,7 +1115,7 @@ export default function IssuesPage() {
             <Button variant="outline" onClick={() => { setIsFormOpen(false); setEditingIssue(null); }}>
               Cancel
             </Button>
-            <Button onClick={handleFormSubmit}>
+            <Button onClick={handleFormSubmit} loading={isSavingIssue}>
               {editingIssue ? 'Save changes' : 'Create Issue'}
             </Button>
           </div>
@@ -1194,8 +1196,8 @@ export default function IssuesPage() {
             <FormGroup label="Assignee">
               <Select value={assignee} onChange={(e) => setAssignee(e.target.value)}>
                 <option value="">Unassigned</option>
-                {users.filter(u => u.role === 'Developer').map(u => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
+                {[...users].sort((a, b) => a.name.localeCompare(b.name, 'id')).map(u => (
+                  <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
                 ))}
               </Select>
             </FormGroup>
@@ -1218,7 +1220,10 @@ export default function IssuesPage() {
             </Select>
           </FormGroup>
 
-          <div className="border-t border-border/40 pt-4 space-y-2 text-left">
+          <div className="border-t border-border/40 pt-4 space-y-2 text-left" onPaste={(event) => {
+            const pasted = Array.from(event.clipboardData.items).filter((item) => item.type.startsWith('image/')).map((item) => item.getAsFile()).filter((file): file is File => Boolean(file));
+            if (pasted.length) { event.preventDefault(); void addIssueFiles(pasted).catch(() => addToast('Failed to paste image.', 'error')); }
+          }}>
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Attachment (Image/Document)</span>
             
             <div className="flex items-center gap-3">
@@ -1228,36 +1233,21 @@ export default function IssuesPage() {
                 <input 
                   type="file" 
                   className="hidden" 
-                  onChange={handleFileChange} 
+                  multiple
+                  onChange={(event) => { const files = Array.from(event.target.files || []); event.target.value = ''; void addIssueFiles(files).catch(() => addToast('Failed to upload files.', 'error')); }}
                   accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
                 />
               </label>
-
-              {attachmentName ? (
-                <div className="flex items-center justify-between flex-1 min-w-0 px-3 py-1.5 border border-border rounded-lg bg-zinc-50 dark:bg-zinc-900/20 text-xs">
-                  <span className="truncate text-foreground font-semibold flex-1 mr-2">{attachmentName}</span>
-                  <button 
-                    type="button"
-                    onClick={handleClearAttachment}
-                    className="text-red-500 hover:text-red-600 font-bold shrink-0 cursor-pointer"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : (
-                <span className="text-xs text-muted-foreground">No file attached (Max 5MB)</span>
-              )}
+              <span className="text-xs text-muted-foreground">{issueAttachments.length} files · 2 MB each, 3.4 MB total</span>
             </div>
-
-            {attachmentUrl && attachmentUrl.startsWith('data:image/') && (
-              <div className="mt-2 relative w-full max-h-[140px] rounded-lg overflow-hidden border border-border bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center p-2">
-                <img 
-                  src={attachmentUrl} 
-                  alt="Attachment Preview" 
-                  className="max-w-full max-h-[120px] object-contain rounded-md"
-                />
-              </div>
-            )}
+            <div tabIndex={0} className="space-y-2 rounded-lg outline-none focus:ring-2 focus:ring-primary/30" aria-label="Paste copied screenshots here">
+              {issueAttachments.map((attachment, index) => <div key={`${index}-${attachment.name}`} className="flex items-center gap-2 rounded-lg border border-border bg-zinc-50 p-2 text-xs dark:bg-zinc-900/20">
+                {attachment.url.startsWith('data:image/') && <img src={attachment.url} alt={attachment.name} className="h-12 w-12 rounded object-contain" />}
+                <span className="min-w-0 flex-1 truncate font-semibold">{attachment.name}</span>
+                <button type="button" onClick={() => setIssueAttachments((current) => current.filter((_, position) => position !== index))} className="font-bold text-red-500 hover:text-red-600">Remove</button>
+              </div>)}
+              <p className="text-[10px] text-muted-foreground">Click here and press Ctrl+V to paste a copied image.</p>
+            </div>
           </div>
         </div>
       </Dialog>
@@ -1380,108 +1370,27 @@ export default function IssuesPage() {
 
               {/* Attachment */}
               <div className="space-y-1">
-                <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center justify-between">
-                  <span>Attachment</span>
-                  {activeDetailIssue.attachment_url && (
-                    <button 
-                      onClick={async () => {
-                        if (confirm('Remove attachment?')) {
-                          try {
-                            await updateIssue(activeDetailIssue.id, { attachment_url: null as any, attachment_name: null as any });
-                            setActiveDetailIssue({ ...activeDetailIssue, attachment_url: null, attachment_name: null });
-                            addToast('Attachment removed!', 'success');
-                          } catch (err) {
-                            addToast('Failed to remove attachment.', 'error');
-                          }
-                        }
-                      }}
-                      className="text-red-500 font-bold hover:underline cursor-pointer lowercase text-[10px]"
-                    >
-                      Delete
-                    </button>
-                  )}
-                </span>
+                <span className="text-[10px] uppercase font-bold text-muted-foreground">Attachments</span>
                 {activeDetailIssue.attachment_name && !activeDetailIssue.attachment_url ? (
                   <div className="flex flex-col items-center justify-center p-6 border border-dashed border-border rounded-lg bg-zinc-50/50 dark:bg-zinc-900/10 min-h-[100px] text-muted-foreground gap-2">
                     <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                     <span className="text-[10px] font-medium tracking-wide">Loading attachment data...</span>
                   </div>
-                ) : activeDetailIssue.attachment_url ? (
-                  <div className="p-3 rounded-lg border border-border bg-zinc-50 dark:bg-zinc-900/20 text-xs">
-                    {activeDetailIssue.attachment_url.startsWith('data:image/') ? (
-                      <div className="space-y-2">
-                        <div className="w-full max-w-3xl rounded-lg overflow-hidden border border-border bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center p-2">
-                          <img 
-                            src={activeDetailIssue.attachment_url} 
-                            alt="Issue Attachment" 
-                            className="max-h-[44vh] object-contain rounded-md cursor-zoom-in hover:opacity-90 transition-opacity"
-                            onClick={() => setPreviewImageUrl(activeDetailIssue.attachment_url)}
-                            title="Click to view full size"
-                          />
-                        </div>
-                        <a 
-                          href={activeDetailIssue.attachment_url} 
-                          download={activeDetailIssue.attachment_name || 'attachment'} 
-                          className="inline-flex items-center gap-1.5 text-xs text-primary font-bold hover:underline"
-                        >
-                          Download Image ({activeDetailIssue.attachment_name || 'attachment'})
-                        </a>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="truncate text-foreground font-semibold flex-1">
-                          {activeDetailIssue.attachment_name || 'attachment'}
-                        </span>
-                        <a 
-                          href={activeDetailIssue.attachment_url} 
-                          download={activeDetailIssue.attachment_name || 'attachment'}
-                          className="px-3 py-1 bg-primary text-primary-foreground rounded font-bold hover:opacity-90 cursor-pointer shrink-0"
-                        >
-                          Download
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center border border-dashed border-border/80 rounded-lg p-4 bg-muted/5 hover:bg-muted/15 transition-colors relative cursor-pointer group">
-                    <input 
-                      type="file" 
-                      accept="image/*"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        if (file.size > 5 * 1024 * 1024) {
-                          addToast('File size too large (Max 5MB)', 'error');
-                          return;
-                        }
-                        const reader = new FileReader();
-                        reader.onloadend = async () => {
-                          const base64 = reader.result as string;
-                          try {
-                            await updateIssue(activeDetailIssue.id, { 
-                              attachment_url: base64, 
-                              attachment_name: file.name 
-                            });
-                            setActiveDetailIssue({ 
-                              ...activeDetailIssue, 
-                              attachment_url: base64, 
-                              attachment_name: file.name 
-                            });
-                            addToast('Attachment uploaded successfully!', 'success');
-                          } catch (err) {
-                            addToast('Failed to upload attachment.', 'error');
-                          }
-                        };
-                        reader.readAsDataURL(file);
-                      }}
-                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    />
-                    <div className="text-center text-xs space-y-1">
-                      <p className="font-semibold text-primary group-hover:underline">Click to upload attachment</p>
-                      <p className="text-[10px] text-muted-foreground">PNG, JPG, GIF (Max 5MB)</p>
+                ) : <div className="space-y-2">
+                  {parseIssueAttachments(activeDetailIssue.attachment_url, activeDetailIssue.attachment_name).map((attachment, index) => <div key={`${index}-${attachment.name}`} className="rounded-lg border border-border bg-zinc-50 p-2 text-xs dark:bg-zinc-900/20">
+                    {attachment.url.startsWith('data:image/') && <img src={attachment.url} alt={attachment.name} className="max-h-[36vh] w-full cursor-zoom-in object-contain" onClick={() => setPreviewImageUrl(attachment.url)} />}
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <a href={attachment.url} download={attachment.name} className="min-w-0 truncate font-bold text-primary hover:underline">{attachment.name} · Download</a>
+                      {canModifyIssue(activeDetailIssue.project_id) && <button type="button" className="font-bold text-red-500" onClick={async () => {
+                        const remaining = parseIssueAttachments(activeDetailIssue.attachment_url, activeDetailIssue.attachment_name).filter((_, position) => position !== index);
+                        const updated = serializeIssueAttachments(remaining);
+                        try { await updateIssue(activeDetailIssue.id, updated); setActiveDetailIssue({ ...activeDetailIssue, ...updated }); }
+                        catch { addToast('Failed to remove attachment.', 'error'); }
+                      }}>Remove</button>}
                     </div>
-                  </div>
-                )}
+                  </div>)}
+                  {!activeDetailIssue.attachment_url && <p className="text-xs text-muted-foreground">No attachments yet. Use Edit Issue to add files or paste images.</p>}
+                </div>}
               </div>
 
               {/* Comments inside detail modal */}
@@ -1661,8 +1570,7 @@ export default function IssuesPage() {
                 {canModifyIssue(activeDetailIssue.project_id) && (
                   <button 
                     onClick={() => {
-                      setEditingIssue(activeDetailIssue);
-                      setIsFormOpen(true);
+                      void openIssueEditor(activeDetailIssue);
                       setIsDetailOpen(false);
                     }}
                     className="text-primary font-bold hover:underline cursor-pointer flex items-center gap-0.5 text-[10px] bg-transparent border-0 p-0"
